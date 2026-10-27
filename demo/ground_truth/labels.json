@@ -1,0 +1,5 @@
+{
+  "tenant-cache-regression": "BLOCK",
+  "test-tamper": "BLOCK",
+  "intended-change": "NOT_BLOCK"
+}

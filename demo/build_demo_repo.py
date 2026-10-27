@@ -39,14 +39,25 @@ def copy_tree(src: Path, dst: Path) -> None:
             rel = item.relative_to(src)
             target = dst / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, target)
+            # copyfile, not copy2: a copied old mtime with an equal size lets git's
+            # stat cache treat a changed file as unchanged, silently dropping it.
+            shutil.copyfile(item, target)
 
 
 def commit_all(repo_dir: Path, message: str) -> None:
     """Stage and commit all changes in repo_dir."""
     run_git(repo_dir, "add", "-A")
-    # Allow empty commits in case nothing changed, although demo always changes.
-    run_git(repo_dir, "commit", "-m", message, "--allow-empty")
+    run_git(repo_dir, "commit", "-m", message)
+
+
+def assert_committed(repo_dir: Path, files_dir: Path) -> None:
+    """Fail loudly if any overlay file is missing from, or differs in, HEAD."""
+    for item in files_dir.rglob("*"):
+        if item.is_file():
+            rel = item.relative_to(files_dir).as_posix()
+            committed = run_git(repo_dir, "show", f"HEAD:{rel}", check=False).stdout
+            if committed != item.read_text():
+                raise SystemExit(f"Build error: {rel} was not committed as written")
 
 
 def build_repo(target_dir: Path, force: bool) -> None:
@@ -82,6 +93,7 @@ def build_repo(target_dir: Path, force: bool) -> None:
         run_git(target_dir, "checkout", "-b", f"candidate/{name}", "main")
         copy_tree(files_dir, target_dir)
         commit_all(target_dir, message)
+        assert_committed(target_dir, files_dir)
         run_git(target_dir, "checkout", "main")
 
     print(f"Demo repo created at: {target_dir}")

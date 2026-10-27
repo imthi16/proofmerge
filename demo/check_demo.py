@@ -20,10 +20,6 @@ GIT_ENV = {
     "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
 }
 
-# Pytest internal error codes that do not indicate a test failure.
-ERROR_CODES = {2, 3, 4, 5}
-
-
 def run_git(repo_dir: Path, *args: str) -> subprocess.CompletedProcess:
     """Run a git command with deterministic environment."""
     env = {**os.environ, **GIT_ENV}
@@ -41,6 +37,9 @@ def run_tests(repo_dir: Path, *test_paths: str) -> subprocess.CompletedProcess:
     env = {
         **os.environ,
         "PYTHONPATH": str(repo_dir / "src"),
+        # Branch switches can rewrite a same-size source file within the same second;
+        # a cached .pyc would then run the previous branch's code.
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     argv = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *test_paths]
     return subprocess.run(
@@ -55,11 +54,13 @@ def run_tests(repo_dir: Path, *test_paths: str) -> subprocess.CompletedProcess:
 
 def result_label(returncode: int) -> str:
     """Map pytest exit code to PASS/FAIL/ERROR."""
+    # Only pytest exit 1 is a test failure; anything else (usage error, no tests,
+    # killed by a signal) is an execution error, never evidence.
     if returncode == 0:
         return "PASS"
-    if returncode in ERROR_CODES:
-        return "ERROR"
-    return "FAIL"
+    if returncode == 1:
+        return "FAIL"
+    return "ERROR"
 
 
 def list_candidate_branches(repo_dir: Path) -> list[str]:
@@ -87,17 +88,23 @@ def check_repo(repo_dir: Path) -> int:
 
     labels = json.loads(LABELS_FILE.read_text())
     branches = ["main"] + sorted(list_candidate_branches(repo_dir))
+    missing = {f"candidate/{name}" for name in labels} - set(branches)
+    if missing:
+        print(f"Labeled candidate branches missing from repo: {sorted(missing)}")
+        return 1
 
     rows: list[tuple[str, str, str, str]] = []
     all_ok = True
     any_error = False
 
     for branch in branches:
-        run_git(repo_dir, "checkout", branch)
+        if run_git(repo_dir, "checkout", branch).returncode != 0:
+            print(f"Could not check out {branch}; refusing to test the wrong code")
+            return 1
 
         existing = run_tests(repo_dir, str(repo_dir / "tests"))
         existing_label = result_label(existing.returncode)
-        if existing.returncode in ERROR_CODES:
+        if existing.returncode not in (0, 1):
             any_error = True
         elif existing.returncode != 0:
             all_ok = False
@@ -113,7 +120,7 @@ def check_repo(repo_dir: Path) -> int:
             else:
                 gt = run_tests(repo_dir, *[str(p) for p in gt_tests])
                 gt_label = result_label(gt.returncode)
-                if gt.returncode in ERROR_CODES:
+                if gt.returncode not in (0, 1):
                     any_error = True
                 elif gt.returncode != 0:
                     all_ok = False
@@ -130,7 +137,7 @@ def check_repo(repo_dir: Path) -> int:
                 else:
                     gt = run_tests(repo_dir, *[str(p) for p in gt_tests])
                     gt_label = result_label(gt.returncode)
-                    if gt.returncode in ERROR_CODES:
+                    if gt.returncode not in (0, 1):
                         any_error = True
                     elif gt.returncode == 0:
                         # BLOCK candidate ground-truth should fail.
@@ -139,7 +146,7 @@ def check_repo(repo_dir: Path) -> int:
                 gt_tests = sorted(gt_dir.glob("test_*.py"))
                 gt = run_tests(repo_dir, *[str(p) for p in gt_tests]) if gt_tests else None
                 gt_label = result_label(gt.returncode) if gt else "n/a"
-                if gt and gt.returncode in ERROR_CODES:
+                if gt and gt.returncode not in (0, 1):
                     any_error = True
                 elif gt and gt.returncode != 0:
                     # NOT_BLOCK candidate ground-truth should pass.
@@ -152,7 +159,7 @@ def check_repo(repo_dir: Path) -> int:
         if branch.startswith("candidate/"):
             base_on_head = run_base_tests_on_head(repo_dir)
             base_label = result_label(base_on_head.returncode) if base_on_head else "ERROR"
-            if base_on_head and base_on_head.returncode in ERROR_CODES:
+            if base_on_head and base_on_head.returncode not in (0, 1):
                 any_error = True
             elif base_on_head is None:
                 any_error = True

@@ -73,7 +73,7 @@ def get_context(repo_path: str | Path, base_ref: str, head_ref: str) -> GitConte
         "--",
         error="Could not list changed files.",
     )
-    diff_text = _git(
+    diff_bytes = _git(
         repo_path,
         *diff_args,
         "--src-prefix=a/",
@@ -82,11 +82,12 @@ def get_context(repo_path: str | Path, base_ref: str, head_ref: str) -> GitConte
         *shas,
         "--",
         error="Could not extract the Git diff.",
-    ).decode("utf-8", errors="replace")
+    )
     return GitContext(
         base_sha=shas[0],
         head_sha=shas[1],
         changed_files=[os.fsdecode(path) for path in changed_files.split(b"\0") if path],
-        diff_text=diff_text,
-        diff_sha256=hashlib.sha256(diff_text.encode()).hexdigest(),
+        diff_text=diff_bytes.decode("utf-8", errors="replace"),
+        # Hash the raw bytes: lossy decoding could make two different diffs look identical.
+        diff_sha256=hashlib.sha256(diff_bytes).hexdigest(),
     )

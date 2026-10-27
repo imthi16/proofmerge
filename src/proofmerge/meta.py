@@ -34,9 +34,10 @@ class MetaClient:
             key = os.environ.get("MODEL_API_KEY")
             if not key:
                 raise MetaError("MODEL_API_KEY is not set; export it in your shell first")
-            # SDK retries cover 429/5xx and honour Retry-After.
+            # No SDK retries, so every HTTP attempt counts against the call budget.
+            # shortcut: a 429/5xx fails the call; add budgeted retries if live runs flake.
             completions = openai.OpenAI(
-                base_url=BASE_URL, api_key=key, max_retries=2, timeout=180
+                base_url=BASE_URL, api_key=key, max_retries=0, timeout=180
             ).chat.completions
         self._completions = completions
         self.max_calls = max_calls
@@ -60,6 +61,7 @@ class MetaClient:
         if self.calls >= self.max_calls:
             raise MetaError(f"model call budget exhausted ({self.max_calls} calls)")
         self.calls += 1
+        failure = None
         try:
             response = self._completions.create(
                 model=model,
@@ -74,18 +76,21 @@ class MetaClient:
                 reasoning_effort=reasoning_effort,
                 max_completion_tokens=max_completion_tokens,
             )
-        # `from None` drops the SDK exception, whose message may echo request details.
         except openai.AuthenticationError:
-            raise MetaError("Meta API rejected MODEL_API_KEY (HTTP 401)") from None
+            failure = "Meta API rejected MODEL_API_KEY (HTTP 401)"
         except openai.APIStatusError as error:
-            raise MetaError(f"Meta API request failed (HTTP {error.status_code})") from None
+            failure = f"Meta API request failed (HTTP {error.status_code})"
         except openai.APIConnectionError:
-            raise MetaError("could not reach the Meta API") from None
+            failure = "could not reach the Meta API"
+        # Raised outside the except blocks so the SDK exception, whose message may echo
+        # the key, is not attached as __context__.
+        if failure:
+            raise MetaError(failure)
         self.usage.append(response.usage)
         content = response.choices[0].message.content or ""
         try:
-            return schema.model_validate_json(content)
+            # strict: a reply like {"ok": "false"} must fail, not be coerced to False.
+            return schema.model_validate_json(content, strict=True)
         except ValidationError as error:
-            raise MetaError(
-                f"model reply did not match {schema.__name__} ({error.error_count()} errors)"
-            ) from None
+            errors = error.error_count()
+        raise MetaError(f"model reply did not match {schema.__name__} ({errors} errors)")

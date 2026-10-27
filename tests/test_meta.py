@@ -61,6 +61,11 @@ def test_schema_invalid_reply_raises():
         ask(MetaClient(FakeCompletions(content='{"ok": "maybe"}')))
 
 
+def test_coercible_but_wrong_type_reply_raises():
+    with pytest.raises(MetaError, match="did not match Answer"):
+        ask(MetaClient(FakeCompletions(content='{"ok": "false", "note": "hi"}')))
+
+
 def test_non_json_reply_raises():
     with pytest.raises(MetaError, match="did not match Answer"):
         ask(MetaClient(FakeCompletions(content="not json")))
@@ -102,6 +107,7 @@ def test_auth_error_is_clear_and_never_leaks_the_key(monkeypatch):
     assert "401" in str(caught.value)
     assert secret not in str(caught.value)
     assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_smoke_without_key_exits_cleanly():

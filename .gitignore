@@ -1,0 +1,33 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+proofmerge.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+
+# IDE / system
+.DS_Store
+.idea/
+.vscode/
+
+# Local generated verification output
+.evidence/
+proofmerge-runs/
+evidence/runs/
+
+# Do not ignore repo-tracked synthetic demo evidence fixtures.

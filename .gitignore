@@ -30,4 +30,7 @@ htmlcov/
 proofmerge-runs/
 evidence/runs/
 
+# Demo build output
+demo/.build/
+
 # Do not ignore repo-tracked synthetic demo evidence fixtures.

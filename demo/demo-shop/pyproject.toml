@@ -1,0 +1,8 @@
+[project]
+name = "demo-shop"
+version = "0.1.0"
+description = "Synthetic demo shop fixture for PR verification."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

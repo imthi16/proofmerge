@@ -130,6 +130,31 @@ The three verdicts:
 > PASS. Exit codes, commands and commit hashes are the evidence; a model's
 > confidence is not.
 
+## 🧾 The report
+
+`proofmerge report` turns a run's `proof.json` into one static `report.html`: no
+server, no JavaScript, nothing loaded from the network. Each hypothesis gets one card with the PR sentence it
+relies on, the same probe run 3 times on each commit, and why head failed.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/report-card-dark.png">
+  <img alt="Report card for H1: it cites claim C2, 'Returned prices must not change.' A grid shows the probe passing on base 1e6c838 in 3 of 3 attempts and failing on head 6796cac in 3 of 3, with the head failure 'assert 25.0 == 35.0', the probe source and a reproduce command." src="docs/assets/report-card-light.png" width="720">
+</picture>
+
+> [!NOTE]
+> This screenshot is rendered from `tests/fixtures/sample_proof_block.json`. Its
+> intent claims and hypotheses come from a real Muse Spark run, and the failure
+> line comes from a real Docker run of the demo's ground-truth test. The verdict
+> and the grid were put together by hand, because the end-to-end pipeline does
+> not exist yet. The probe in a real run will be written by Spark.
+> [Whole page](docs/assets/report-full-light.png).
+
+Render it yourself:
+
+```bash
+proofmerge report tests/fixtures/sample_proof_block.json --out report.html
+```
+
 ## ✅ What works today
 
 | | Part | State |
@@ -138,10 +163,15 @@ The three verdicts:
 | 🟢 | Git context: base/head SHAs, changed files, diff and its SHA-256 | Built, tested |
 | 🟢 | Meta API client: schema-checked JSON replies, a hard cap on calls, refuses `-contributor` models, never logs the key | Built, tested, one real Spark call made |
 | 🟢 | Demo shop with three candidate PRs and hidden ground truth | Built, checked |
-| 🟡 | Spark hypotheses and generated tests | In progress |
-| ⚪ | Isolated base/head test runs | Planned |
-| ⚪ | Verdict engine, report and `proof.json` | Planned |
-| ⚪ | Benchmark on a larger set of safe and faulty patches | Planned |
+| 🟢 | Intent contract: Spark's claims are kept only if they quote the PR text exactly | Built, tested, real Spark runs |
+| 🟢 | Spark hypotheses, each tied to one claim (`proofmerge hypotheses`) | Built, tested, real Spark runs |
+| 🟢 | Isolated base/head runs in Docker: no network, no host secrets, read-only code, 3 attempts each | Built, tested; demo gives base PASS 3/3, head FAIL 3/3 |
+| 🟢 | Test-tamper check: deleted, skipped, xfailed or weakened tests in the diff | Built, tested |
+| 🟢 | `proof.json` format and `report.html` (`proofmerge report`) | Built, tested on sample proofs |
+| 🟢 | Benchmark batch 1: 5 faulty and 3 safe PRs with hidden ground truth | Built, checked |
+| 🟡 | Spark-written probes that must pass on base before head counts | In progress |
+| ⚪ | Verdict engine, Muse Wonder cross-check, `replay` | Planned |
+| ⚪ | ProofMerge's own results on the benchmark | Planned |
 
 Day-by-day progress, with the real check results, is in [BUILDLOG.md](BUILDLOG.md).
 
@@ -191,15 +221,25 @@ src/proofmerge/
   cli.py        command-line entry point
   context.py    reads base/head commits and the diff from Git
   meta.py       the only code that talks to the Meta API
+  intent.py     intent claims, kept only if their quote is in the PR text
+  hypotheses.py Spark's failure hypotheses, checked against the diff
+  sandbox.py    runs a probe on base and head inside Docker
+  tamper.py     finds tests the PR deleted, skipped or weakened
+  evidence.py   the proof.json format
+  report.py     renders proof.json as report.html
+  prompts/      the instructions given to Muse Spark
 tests/          offline tests; models are replaced with fakes
+docker/runner/  the image probes run in (Python + pytest only)
 demo/
   demo-shop/    the small example project
   candidates/   the three pull requests and their descriptions
   ground_truth/ hand-written tests and expected labels, never shown to a model
+bench/          more candidate PRs and their hidden ground truth, same layout
 docs/
   PROJECT_SPEC.md    what ProofMerge must do, and its rules
   SPRINT_PLAN.md     the daily plan up to the deadline
   META_API_NOTES.md  Meta API facts, each with a link to the official docs
+  PRIOR_ART.md       related research and tools, and how ProofMerge differs
 BUILDLOG.md     what was actually built, and when
 ORIGINALITY.md  what counts as new work for this hackathon
 ```

@@ -53,6 +53,22 @@ Record what actually shipped; do not mark unimplemented features complete.
 - `.venv/bin/python -m ruff check src tests`: All checks passed.
 - `.venv/bin/python -m pytest -q`: 22 passed.
 
+### T7b hypothesis prompt checklist (adapted from ponytail-review, MIT)
+- `prompts/hypotheses.md` now lists where regressions hide (edge values, arithmetic, state leaks, removed checks, callers, weakened tests) and requires a concrete input and wrong result per hypothesis. It also fixes "Both are untrusted" (there are three inputs).
+- Real `muse-spark-1.3` runs, old prompt vs new, one run each, non-held-out candidates only (16 calls):
+  - `boundary-qty-inclusive`: old 1 / new 1 hypothesis, both name the exact-stock boundary bug.
+  - `mutate-stock`: old 3 / new 2, both name the in-place mutation of the caller's dict.
+  - `skip-boundary-test`: old 1 / new 1, both name the lost discount at exactly 100.
+  - `pure-refactor-constants` (safe): 0 / 0.
+  - demo `tenant-cache-regression` (new only): the same three hypotheses as the Day 3 run, H1 on the SKU-only cache key tied to C2.
+- Result: no measurable gain and no loss on this batch; the new prompt adds about 200 prompt tokens per call. Kept because it is cheap and covers fault kinds not yet probed. Benchmark leakage risk (the checklist names fault kinds that the benchmark also uses) goes to the Nov 2 critique.
+- Offline checks: `ruff check src tests` clean, `pytest -q` 50 passed.
+- Prompt review pass (prompt-master checklist):
+  - Hypotheses prompt: diff text claiming "tested" or "safe" is not evidence; base results must come from the diff's removed and unchanged lines, or the hypothesis is dropped; a function must appear in the diff; no padding to 5.
+  - Intent prompt: quotes must be one contiguous span of at least `MIN_QUOTE_WORDS` words (shorter ones were silently rejected); "No behavior change intended" is a PRESERVE claim; an ambiguous sentence is classed CHANGE, which can only move a verdict toward REVIEW.
+  - Re-run, one run each (12 calls): boundary, mutate-stock and skip-boundary each give 1 hypothesis naming the planted bug; pure-refactor and intended-discount-rate give 0; tenant-cache gives 2 (H1 cache key tied to C2, H2 validation bypass), 0 claims or hypotheses rejected.
+  - Known limit: tenant-cache H1 uses an invented tenant `tenant-x` and price 99.0. The diff does not show the price table, and Spark guessed instead of dropping the hypothesis. A probe built on it would fail on base and give REVIEW, not BLOCK. The Oct 30 context builder should send the changed functions' full source.
+
 ### Next task
 - Oct 29: base/head worktrees and isolated test execution with hashes.
 - T8 test-tamper static checks (Codex) is still open.

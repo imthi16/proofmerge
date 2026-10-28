@@ -60,26 +60,30 @@ marked **unverified**.
 - **How ProofMerge differs:** ORION is the closest work found. Like ProofMerge, it
   separates preserved from changed behavior, runs identical tests on both revisions, and
   applies deterministic rules before any model. ORION was posted on 2026-10-26; this page
-  added it on 2026-10-28. The differences, as far as the paper describes ORION:
+  added it on 2026-10-28. The differences, as far as the paper describes ORION, are
+  ProofMerge's design. On 2026-10-28 only the quote check (3) is on `main`; each item
+  says whether it is built or planned.
   1. **Who can call a regression.** In ORION, an LLM's yes/no answers can label a case a
      regression. In ProofMerge, BLOCK needs a probe that passes on base and fails on head
      with an assertion failure, 3 runs out of 3. A model can only move a verdict toward
-     REVIEW.
+     REVIEW. *Planned: the verdict engine (Oct 31).*
   2. **What counts as a difference.** ORION compares captured outputs: status,
      exceptions, return values, stdout, runtime. A ProofMerge probe states its expected
      base result as an assertion, so a head run either passes or fails it. Performance is
-     out of scope.
+     out of scope. *Planned: Spark-written probes (Oct 30).*
   3. **Intent grounding.** ORION normalizes the intent into four fields. The paper does
      not describe checking them against the PR text. Each ProofMerge claim must quote the
-     PR text exactly, which code checks.
+     PR text exactly, which code checks. *Built: `src/proofmerge/intent.py`.*
   4. **Repeated runs and replay.** The paper reports run-to-run variation across whole
      benchmark runs. It does not describe re-running each test to detect flakiness, or a
-     hashed, replayable evidence bundle. ProofMerge does both.
+     hashed, replayable evidence bundle. ProofMerge plans both. *Planned: 3 attempts per
+     revision in the runner (Oct 29), `proofmerge replay` (Nov 1).*
   5. **Test tampering.** The paper does not discuss a PR that edits or deletes its own
-     tests. ProofMerge has a test-tamper check.
+     tests. ProofMerge plans a test-tamper check. *Planned: static check (T8, in review),
+     base tests run on head (Oct 31).*
   6. **Three verdicts.** ORION labels a PR regression or clean, and flags only
      infrastructure-only PRs for review. ProofMerge returns REVIEW whenever the evidence
-     is not conclusive.
+     is not conclusive. *Planned: the verdict engine (Oct 31).*
   ProofMerge has no benchmark at ORION's scale. RegBench-Py is said to be in the ORION
   repository; that was not checked.
 
@@ -252,7 +256,7 @@ the description is **unverified**.
 ## What ProofMerge adds
 
 No single part below is claimed as new. The contribution is the combination, built for
-AI-agent pull requests:
+AI-agent pull requests. Status on 2026-10-28: item 1 is built, except the report that shows it; items 2 to 5 are planned.
 
 1. An explicit intent contract whose claims must quote the PR text exactly, checked by
    code and shown in the report.

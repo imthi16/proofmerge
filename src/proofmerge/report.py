@@ -10,6 +10,9 @@ import shlex
 from pathlib import Path
 
 from proofmerge.evidence import Experiment, Finding, Proof
+from proofmerge.intent import IntentClaim
+
+MAX_FAILURE_LINES = 20
 
 # PASS is scoped, never a claim of safety or correctness (verdict contract).
 _PASS_PHRASE = "No regression found within the tested scope"
@@ -48,6 +51,7 @@ main { margin: 0 auto; padding: 0 1rem 2rem; }
 .banner.block { background: var(--block-bg); color: var(--block-fg); border-color: var(--block-fg); }
 .banner .decision { font-size: 1.6rem; font-weight: 700; letter-spacing: .05em; margin: 0; }
 .banner .headline { font-weight: 600; margin: .25rem 0 0; }
+.banner .run { margin: .25rem 0 0; font-size: .9rem; }
 .banner ul { margin: .5rem 0 0; padding-left: 1.25rem; }
 section { border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; margin: 1rem 0; }
 .claim.rejected { border-style: dashed; }
@@ -76,6 +80,7 @@ def _banner(proof: Proof) -> str:
     return f"""<header class="banner {decision.lower()}">
 <p class="decision">{decision}</p>
 <p class="headline">{e(_HEADLINE[decision])}</p>
+<p class="run">run <code>{e(proof.run_id)}</code></p>
 <ul>{reasons}</ul>
 </header>"""
 
@@ -133,24 +138,64 @@ def _grid(experiment: Experiment | None) -> str:
         cells = []
         for attempt in attempts:
             run = next(
-                (r for r in experiment.executions if r.revision == revision and r.attempt == attempt),
+                (
+                    r
+                    for r in experiment.executions
+                    if r.revision == revision and r.attempt == attempt
+                ),
                 None,
             )
             outcome = run.outcome if run is not None else "—"
             cells.append(f'<td class="outcome {e(outcome).lower()}">{e(outcome)}</td>')
-        rows.append(f'<tr><th scope="row">{revision}</th>{"".join(cells)}</tr>')
-    return f'<table><thead><tr><th></th>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
+        sha = next((r.commit_sha for r in experiment.executions if r.revision == revision), "")
+        label = f"{revision} <code>{e(sha[:7])}</code>" if sha else revision
+        rows.append(f'<tr><th scope="row">{label}</th>{"".join(cells)}</tr>')
+    return f"<table><thead><tr><th></th>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def _read_evidence(evidence_dir: Path, relative: str) -> str | None:
+    root = evidence_dir.resolve()
+    path = (evidence_dir / relative).resolve()
+    # proof.json is untrusted: a path may not point outside the evidence directory.
+    if not path.is_relative_to(root) or not path.is_file():
+        return None
+    return path.read_text(errors="replace")
 
 
 def _probe_source(experiment: Experiment | None, evidence_dir: Path) -> str:
+    source = (
+        None if experiment is None else _read_evidence(evidence_dir, experiment.test_source_path)
+    )
+    if source is None:
+        return '<p class="muted">probe source not captured</p>'
+    return f"<pre>{html.escape(source)}</pre>"
+
+
+def _head_failure(experiment: Experiment | None, evidence_dir: Path) -> str:
+    """The pytest `E ` lines of the first failing head run: why head failed, in its own words."""
     if experiment is None:
-        return '<p class="muted">probe source not captured</p>'
-    root = evidence_dir.resolve()
-    path = (evidence_dir / experiment.test_source_path).resolve()
-    # proof.json is untrusted: a path may not point outside the evidence directory.
-    if not path.is_relative_to(root) or not path.is_file():
-        return '<p class="muted">probe source not captured</p>'
-    return f"<pre>{html.escape(path.read_text(errors='replace'))}</pre>"
+        return ""
+    run = next(
+        (r for r in experiment.executions if r.revision == "head" and r.outcome == "FAIL"), None
+    )
+    log = None if run is None else _read_evidence(evidence_dir, run.stdout_path)
+    lines = [] if log is None else [line for line in log.splitlines() if line.startswith("E ")]
+    if not lines:
+        return ""
+    shown = html.escape("\n".join(lines[:MAX_FAILURE_LINES]))
+    return f"<h4>Why head failed (attempt {run.attempt})</h4><pre>{shown}</pre>"
+
+
+def _cited(claim: IntentClaim | None, claim_id: str) -> str:
+    """The verified quote, not Spark's paraphrase: only the quote was checked against the intent."""
+    e = html.escape
+    if claim is None:
+        return f'<p class="muted">cites unknown claim <code>{e(claim_id)}</code></p>'
+    if claim.source_quote is None:
+        text = '<p class="muted">implicit: behavior the intent does not describe</p>'
+    else:
+        text = f"<blockquote>{e(claim.source_quote)}</blockquote>"
+    return f'<p class="muted">cites <code>{e(claim.id)}</code> · {e(claim.kind)}</p>{text}'
 
 
 def _reproducer(experiment: Experiment | None, finding: Finding | None) -> str:
@@ -173,17 +218,18 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
         experiment = experiments.get(h.id)
         finding = findings.get(h.id)
         claim = claims.get(h.claim_id)
-        cited = e(h.claim_id) + (f": {e(claim.statement)}" if claim is not None else "")
         classification = "no finding recorded" if finding is None else finding.classification
         verified = " (verified)" if finding is not None and finding.verified else ""
         intended = " · possibly intended" if h.possibly_intended else ""
         cards.append(
             f'<section class="card"><h3><code>{e(h.id)}</code> {e(h.title)}</h3>'
-            f'<p class="muted">cites claim {cited} · risk: {e(h.risk_category)}{intended}</p>'
+            f"{_cited(claim, h.claim_id)}"
+            f'<p class="muted">risk: {e(h.risk_category)}{intended}</p>'
             f"<p>{e(h.suspected_behavior)}</p>"
             f"<p><strong>Expected on base:</strong> {e(h.expected_base)}<br>"
             f"<strong>Expected on head:</strong> {e(h.expected_head)}</p>"
             f"{_grid(experiment)}"
+            f"{_head_failure(experiment, evidence_dir)}"
             f"<p>classification: <strong>{e(classification)}</strong>{verified}</p>"
             f"<h4>Probe source</h4>{_probe_source(experiment, evidence_dir)}"
             f"{_reproducer(experiment, finding)}"

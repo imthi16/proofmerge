@@ -98,6 +98,15 @@ Branch `task/T13-report-html` (from `task/T12-proof-schema`).
 - `.venv/bin/pytest -q`: 63 passed (10 new in `tests/test_report.py`: both samples' decision/claim ids/hypothesis ids/quotes, escaped `<script>` claim, probe source captured/missing/outside-evidence-dir, PASS wording, CLI success + missing-file error).
 - Both reports opened and visually checked (banner text, grid, monospace hashes, dark via `prefers-color-scheme`, 375px layout).
 
+### T13b report.html follow-up (Claude took it over from OpenCode)
+- The H1 card now cites the claim's verified quote, not Spark's paraphrase, because only the quote is checked against the intent.
+- The card shows "Why head failed": the pytest `E ` lines of the first failing head run, at most 20 of them. They are read with the same evidence-dir path guard as the probe source.
+- Grid rows carry short SHAs, and the banner shows `run_id`, so a page rendered from a `sample-` proof says so.
+- Sample proofs now use the hypotheses from a real Spark run whose H1 uses the fixture's real tenants. The earlier sample's H1 used an invented `tenant-x`.
+- The sample probe is the demo's ground-truth test, and `tests/fixtures/H1/head-1.stdout` is a real Docker run's head output (`assert 25.0 == 35.0`).
+- README has a report section with light/dark screenshots taken with headless Chrome, labeled as rendered from the sample proof, and an updated "What works today" table.
+- `ruff check src tests` clean; `pytest -q` 116 passed.
+
 ### Next task
 - Oct 29: base/head worktrees and isolated test execution with hashes.
 - T8 test-tamper static checks (Codex) is still open.

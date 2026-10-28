@@ -12,6 +12,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -22,14 +23,16 @@ from proofmerge.evidence import Execution, Experiment, Outcome
 RUNNER_IMAGE = "proofmerge-runner:0.1"
 ATTEMPTS = 3  # a regression must reproduce on every attempt
 TIMEOUT_SECONDS = 60
+MAX_OUTPUT_BYTES = 1_000_000  # per stream; a run that prints more is stopped and is ERROR
+OUTPUT_LIMIT_EXIT = -1  # exit code recorded for a run stopped by the output limit
 # What runs inside the container; recorded in every Execution.
 PYTEST_ARGV = ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 HYPOTHESIS_ID = re.compile(r"H[0-9]+")
 
-# (code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
-Runner = Callable[[Path, Path, str, int], tuple[int | None, bytes, bytes]]
+# (image, code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
+Runner = Callable[[str, Path, Path, str, int], tuple[int | None, bytes, bytes]]
 
 
 class SandboxError(Exception):
@@ -50,6 +53,14 @@ def export_tree(repo: Path, sha: str, dest: Path) -> None:
         raise SandboxError(f"git archive {sha} failed: {archive.stderr.decode(errors='replace')}")
     with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
         tar.extractall(dest, filter="data")  # rejects absolute paths, .. and device files
+
+
+def open_to_runner(root: Path) -> None:
+    """Let the container user read `root`, whatever the host umask was."""
+    for path in [root, *root.rglob("*")]:
+        if path.is_symlink():
+            continue  # chmod would follow it; the data filter keeps links inside the tree
+        path.chmod(0o755 if path.is_dir() else 0o644)
 
 
 def outcome_for(exit_code: int | None) -> Outcome:
@@ -100,18 +111,51 @@ def docker_argv(
     ]  # fmt: skip
 
 
+def _read_capped(stream, chunks: list[bytes], over: threading.Event) -> None:
+    size = 0
+    while chunk := stream.read(65536):
+        if size < MAX_OUTPUT_BYTES:
+            chunks.append(chunk[: MAX_OUTPUT_BYTES - size])
+        size += len(chunk)
+        if size > MAX_OUTPUT_BYTES:
+            over.set()
+
+
 def docker_runner(
-    code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
+    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
 ) -> tuple[int | None, bytes, bytes]:
+    """Run one probe; output is read in bounded chunks so a noisy probe cannot fill host memory."""
     name = f"proofmerge-{uuid.uuid4().hex[:12]}"
-    argv = docker_argv(name, RUNNER_IMAGE, code_dir, probe_dir, probe_name)
-    try:
-        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
-    except subprocess.TimeoutExpired as expired:
-        # Killing the CLI leaves the container running; kill it by name.
+    argv = docker_argv(name, image, code_dir, probe_dir, probe_name)
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out: list[bytes] = []
+    err: list[bytes] = []
+    over = threading.Event()
+    readers = [
+        threading.Thread(target=_read_capped, args=(proc.stdout, out, over)),
+        threading.Thread(target=_read_capped, args=(proc.stderr, err, over)),
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
+    while proc.poll() is None and not over.is_set() and time.monotonic() < deadline:
+        over.wait(0.1)
+    timed_out = proc.poll() is None and not over.is_set()
+    if proc.poll() is None:
+        # Killing the CLI would leave the container running; kill it by name.
         subprocess.run(["docker", "kill", name], capture_output=True, check=False)
-        return None, expired.stdout or b"", expired.stderr or b""
-    return result.returncode, result.stdout, result.stderr
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    for reader in readers:
+        reader.join()
+    stdout, stderr = b"".join(out), b"".join(err)
+    if over.is_set():
+        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
+        return OUTPUT_LIMIT_EXIT, stdout, stderr + note
+    return (None if timed_out else proc.returncode), stdout, stderr
 
 
 def run_experiment(
@@ -131,23 +175,26 @@ def run_experiment(
     if not HYPOTHESIS_ID.fullmatch(hypothesis_id):
         raise SandboxError(f"bad hypothesis id: {hypothesis_id!r}")  # it becomes a file name
     if digest is None:
-        digest = image_digest()
+        digest = image_digest()  # runs use this ID, not the tag, so a rebuild cannot slip in
+    evidence_dir = evidence_dir.resolve()  # docker reads a relative bind source as a volume name
     probe_name = f"test_{hypothesis_id.lower()}.py"
     probe_dir = evidence_dir / "probes"
     probe_dir.mkdir(parents=True, exist_ok=True)
     (probe_dir / probe_name).write_text(probe_source)
+    open_to_runner(probe_dir)
     log_dir = evidence_dir / hypothesis_id
     log_dir.mkdir(exist_ok=True)
 
     executions: list[Execution] = []
     with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
-        Path(tmp).chmod(0o755)  # the container user is not the host user
+        Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
         for revision, sha in (("base", base_sha), ("head", head_sha)):
             code_dir = Path(tmp) / revision
             export_tree(repo, sha, code_dir)
+            open_to_runner(code_dir)
             for attempt in range(1, attempts + 1):
                 start = time.monotonic()
-                exit_code, stdout, stderr = runner(code_dir, probe_dir, probe_name, timeout)
+                exit_code, stdout, stderr = runner(digest, code_dir, probe_dir, probe_name, timeout)
                 duration_ms = round((time.monotonic() - start) * 1000)
                 stem = f"{revision}-{attempt}"
                 (log_dir / f"{stem}.stdout").write_bytes(stdout)

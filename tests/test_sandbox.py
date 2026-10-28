@@ -1,7 +1,10 @@
 import hashlib
+import io
+import os
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -70,7 +73,8 @@ def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path):
     path, base, head = repo
     seen: list[str] = []
 
-    def fake_runner(code_dir, probe_dir, probe_name, timeout):
+    def fake_runner(image, code_dir, probe_dir, probe_name, timeout):
+        assert image == "sha256:img"  # every run uses the recorded image ID, not the tag
         seen.append((code_dir / "calc.py").read_text())
         assert (probe_dir / probe_name).read_text() == "PROBE"
         return (0, b"ok", b"") if "x * 2" in seen[-1] else (1, b"assert 4 == 6", b"")
@@ -89,6 +93,52 @@ def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path):
     assert (evidence / experiment.executions[3].stdout_path).read_bytes() == b"assert 4 == 6"
     assert {e.runner_image_digest for e in experiment.executions} == {"sha256:img"}
     assert {e.commit_sha for e in experiment.executions} == {base, head}
+
+
+def test_run_experiment_mounts_absolute_paths_for_a_relative_evidence_dir(
+    repo, tmp_path, monkeypatch
+):
+    path, base, head = repo
+    monkeypatch.chdir(tmp_path)
+
+    def fake_runner(image, code_dir, probe_dir, probe_name, timeout):
+        assert code_dir.is_absolute() and probe_dir.is_absolute()
+        return 0, b"", b""
+
+    run_experiment(
+        path, base, head, "H1", "P", Path("evidence/run1"), runner=fake_runner, digest="d"
+    )
+    assert (tmp_path / "evidence/run1/H1/base-1.stdout").exists()
+
+
+def test_run_experiment_makes_code_and_probe_readable_under_umask_077(repo, tmp_path):
+    path, base, head = repo
+    modes = []
+
+    def fake_runner(image, code_dir, probe_dir, probe_name, timeout):
+        for target in (code_dir, code_dir / "calc.py", probe_dir, probe_dir / probe_name):
+            modes.append(target.stat().st_mode & 0o007)
+        return 0, b"", b""
+
+    old = os.umask(0o077)
+    try:
+        run_experiment(path, base, head, "H1", "P", tmp_path / "ev", runner=fake_runner, digest="d")
+    finally:
+        os.umask(old)
+    # "other" (uid 65534 in the container) can read every file and enter every directory
+    assert modes and all(mode & 0o004 for mode in modes)
+    assert all(mode & 0o001 for mode in modes[0::4] + modes[2::4])
+
+
+def test_read_capped_keeps_at_most_the_limit_and_flags_overflow(monkeypatch):
+    monkeypatch.setattr(sandbox, "MAX_OUTPUT_BYTES", 10)
+    chunks: list[bytes] = []
+    over = threading.Event()
+    sandbox._read_capped(io.BytesIO(b"x" * 25), chunks, over)
+    assert b"".join(chunks) == b"x" * 10 and over.is_set()
+    chunks, over = [], threading.Event()
+    sandbox._read_capped(io.BytesIO(b"x" * 10), chunks, over)
+    assert b"".join(chunks) == b"x" * 10 and not over.is_set()
 
 
 def test_run_experiment_rejects_an_id_that_would_escape_the_evidence_dir(repo, tmp_path):
@@ -160,3 +210,23 @@ def test_docker_container_has_no_network_secrets_or_write_access(demo_repo, tmp_
         log = (tmp_path / execution.stdout_path).read_text()
         assert execution.outcome == "PASS", log
         assert "must-not-leak" not in log
+
+
+NOISY_PROBE = """
+import os
+
+def test_floods_output():
+    os.write(1, b"x" * 4_000_000)
+    assert False  # pytest prints the 4 MB of captured output in the failure report
+"""
+
+
+@needs_docker
+def test_docker_run_that_floods_output_is_stopped_and_is_error(demo_repo, tmp_path):
+    base = git(demo_repo, "rev-parse", "main")
+    experiment = run_experiment(demo_repo, base, base, "H8", NOISY_PROBE, tmp_path, attempts=1)
+    for execution in experiment.executions:
+        assert execution.outcome == "ERROR"
+        assert execution.exit_code == sandbox.OUTPUT_LIMIT_EXIT
+        assert (tmp_path / execution.stdout_path).stat().st_size <= sandbox.MAX_OUTPUT_BYTES
+        assert b"output over" in (tmp_path / execution.stderr_path).read_bytes()

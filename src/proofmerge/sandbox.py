@@ -27,6 +27,31 @@ MAX_OUTPUT_BYTES = 1_000_000  # per stream; a run that prints more is stopped an
 OUTPUT_LIMIT_EXIT = -1  # exit code recorded for a run stopped by the output limit
 # What runs inside the container; recorded in every Execution.
 PYTEST_ARGV = ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+INVALID_PROBE_EXIT = 6  # set by OUTCOME_PLUGIN; not a pytest exit code, so it reads ERROR
+# Written as conftest.py next to every probe. A test that fails with anything but an
+# assertion (NameError, ImportError, a setup error) is a broken probe, not evidence. So
+# is a skipped or xfail test: pytest exits 0 for it although its assertion never ran.
+OUTCOME_PLUGIN = f"""import pytest
+
+_broken = []
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    report = (yield).get_result()
+    assertion = call.excinfo is not None and call.excinfo.errisinstance(
+        (AssertionError, pytest.fail.Exception)
+    )
+    if report.skipped or hasattr(report, "wasxfail"):
+        _broken.append(item.nodeid)
+    elif report.failed and (call.when != "call" or not assertion):
+        _broken.append(item.nodeid)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if exitstatus in (0, 1) and _broken:
+        session.exitstatus = {INVALID_PROBE_EXIT}
+"""
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 HYPOTHESIS_ID = re.compile(r"H[0-9]+")
@@ -161,7 +186,7 @@ def docker_runner(
 def run_experiment(
     repo: Path,
     base_sha: str,
-    head_sha: str,
+    head_sha: str | None,
     hypothesis_id: str,
     probe_source: str,
     evidence_dir: Path,
@@ -171,7 +196,10 @@ def run_experiment(
     attempts: int = ATTEMPTS,
     timeout: int = TIMEOUT_SECONDS,
 ) -> Experiment:
-    """Run `probe_source` `attempts` times on each revision; logs go to `evidence_dir`."""
+    """Run `probe_source` `attempts` times on each revision; logs go to `evidence_dir`.
+
+    With `head_sha` None only base runs, so a probe can be checked without showing head.
+    """
     if not HYPOTHESIS_ID.fullmatch(hypothesis_id):
         raise SandboxError(f"bad hypothesis id: {hypothesis_id!r}")  # it becomes a file name
     if digest is None:
@@ -181,6 +209,7 @@ def run_experiment(
     probe_dir = evidence_dir / "probes"
     probe_dir.mkdir(parents=True, exist_ok=True)
     (probe_dir / probe_name).write_text(probe_source)
+    (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
     open_to_runner(probe_dir)
     log_dir = evidence_dir / hypothesis_id
     log_dir.mkdir(exist_ok=True)
@@ -188,7 +217,8 @@ def run_experiment(
     executions: list[Execution] = []
     with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
         Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
-        for revision, sha in (("base", base_sha), ("head", head_sha)):
+        revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
+        for revision, sha in revisions:
             code_dir = Path(tmp) / revision
             export_tree(repo, sha, code_dir)
             open_to_runner(code_dir)

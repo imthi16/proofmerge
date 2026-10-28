@@ -147,3 +147,27 @@ All three commands exited 0. `graphify update .` exited 0 (no code-graph topolog
 - Reviewed PR #7 at `c810f88a6697e2746d418f2bf062837430c798de` and PR #8 at `40568ff7cfb1f26fb8c8be256bcc71e3636b2443`; GitHub reports both merged already. No GitHub comments or reviews submitted.
 - PR #7 finding: `docs/PRIOR_ART.md` describes repeated runs and replay bundles as implemented, although the revision has no replay command. Reproducer: `proofmerge replay /tmp/proofmerge-review-nonexistent.json` exits 2 with `No such command 'replay'.` Follow-up recorded as T15.
 - PR #8: no concrete failing case introduced by the final changes found. Literature checks used the linked primary arXiv abstracts and ORION v1 text; no additional source discrepancy established.
+
+### T18 Spark probe loop — Claude, 2026-10-28
+- `src/proofmerge/probes.py` + `prompts/probe.md`: for each hypothesis, Spark writes one pytest probe. It runs once on base only. If it does not pass, Spark gets that base run's output tail and revises the probe, up to 3 drafts. A probe that passed on base then runs 3 times on base and 3 on head. Spark never sees head results.
+- Spark gets the base source of every changed file (up to 60,000 chars), so it no longer has to guess values the diff does not show. This fixes the T7 limit where the price was invented.
+- The loop is a sequence of schema-validated JSON calls, using a new `history` argument on `MetaClient.structured`, instead of native tool calling. The pipeline, not the model, decides when a probe runs, and every reply is validated.
+- `sandbox.py`:
+  - `run_experiment(..., head_sha=None)` runs base only.
+  - A fixed `conftest.py` is written next to every probe. A failure other than an assertion or `pytest.raises` (for example NameError, ImportError or a setup error) sets exit 6, which reads ERROR. This closes the T14 gap where a NameError counted as FAIL. Checked in Docker.
+- Private-name guard. The first real run on the safe bench candidate `cache-with-tenant-key` gave 2 false regressions (base PASS 3/3, head FAIL 3/3). Both probes edited the private `_PRICES` table and then expected the cache to return the new value; serving the cached value is the caching the PR asked for. Now a draft that uses a `_private` attribute, import, or `getattr`/`setattr` string is sent back to Spark without being run. Probes test public behavior only.
+- Real runs (Spark `muse-spark-1.3`, Docker runner), after the guard:
+  - `tenant-cache-regression`: H1 (unknown tenant served from the SKU-only cache) and H2 (tenant-a gets tenant-b's price, `assert 35.0 == 25.0`) both give base PASS 3/3 and head FAIL 3/3 with exit 1. Each probe passed on base at the first draft. 4 calls, 4,526 prompt / 8,754 completion tokens.
+  - `cache-with-tenant-key` (safe): Spark returned no probe for either hypothesis, so nothing reached head and there is no false regression. 4 calls, 4,506 / 5,851 tokens.
+- New CLI command: `proofmerge probe <repo> --base --head --intent-file --evidence-dir`. It writes `probe-run.json`, the probes, and the logs of every draft and run.
+- Checks: `ruff check src tests` clean; `pytest -q` 117 passed, including the Docker tests.
+- Known limits:
+  - One real run per candidate; hypotheses vary between runs.
+  - The private-name guard is a heuristic against an honest model overreaching, not a sandbox. A name built at runtime still gets through, so the verdict must not rely on it.
+  - There is no classification or verdict yet; that is Oct 31.
+  - The fixed conftest means a repository's own conftest is not loaded (same as T16).
+
+#### Codex review fixes (PR #14)
+- The private-name guard missed `vars(pricing)['_PRICES']` and `pricing.__dict__[...]`. Codex showed that such a probe recreates the false regression on `cache-with-tenant-key`. Now any string constant with a `_private` part is flagged, and so are `vars`, `__dict__`, `globals` and `locals`.
+- A probe whose tests were skipped exited 0, so it counted as passing on base without checking anything. The outcome plugin now turns any skip, xfail or xpass into exit 6 (ERROR); the constant is renamed `INVALID_PROBE_EXIT`. A module-level `importorskip` already exited 5 (ERROR); a test now covers it.
+- `ruff check src tests` clean; `pytest -q` 122 passed, including the Docker tests. The real Spark runs above were not repeated after these fixes.

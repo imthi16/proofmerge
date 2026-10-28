@@ -1,0 +1,10 @@
+{
+  "boundary-qty-inclusive": {"verdict": "BLOCK"},
+  "drop-tenant-validation": {"verdict": "BLOCK", "held_out": true},
+  "round-discount": {"verdict": "BLOCK", "held_out": true},
+  "mutate-stock": {"verdict": "BLOCK"},
+  "skip-boundary-test": {"verdict": "BLOCK"},
+  "pure-refactor-constants": {"verdict": "NOT_BLOCK"},
+  "intended-discount-rate": {"verdict": "NOT_BLOCK"},
+  "cache-with-tenant-key": {"verdict": "NOT_BLOCK", "held_out": true}
+}

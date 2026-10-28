@@ -9,8 +9,7 @@ import tempfile
 from pathlib import Path
 
 DEMO_ROOT = Path(__file__).resolve().parent
-GROUND_TRUTH_DIR = DEMO_ROOT / "ground_truth"
-LABELS_FILE = GROUND_TRUTH_DIR / "labels.json"
+DEFAULT_GROUND_TRUTH_DIR = DEMO_ROOT / "ground_truth"
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "Demo Builder",
     "GIT_AUTHOR_EMAIL": "builder@example.com",
@@ -80,13 +79,14 @@ def run_base_tests_on_head(repo_dir: Path) -> subprocess.CompletedProcess | None
         return run_tests(repo_dir, str(base_test))
 
 
-def check_repo(repo_dir: Path) -> int:
+def check_repo(repo_dir: Path, ground_truth_dir: Path) -> int:
     repo_dir = repo_dir.resolve()
     if not repo_dir.exists():
         print(f"Repo directory does not exist: {repo_dir}")
         return 1
 
-    labels = json.loads(LABELS_FILE.read_text())
+    labels_file = ground_truth_dir / "labels.json"
+    labels = json.loads(labels_file.read_text())
     branches = ["main"] + sorted(list_candidate_branches(repo_dir))
     missing = {f"candidate/{name}" for name in labels} - set(branches)
     if missing:
@@ -110,10 +110,20 @@ def check_repo(repo_dir: Path) -> int:
             all_ok = False
 
         candidate_name = branch.split("/", 1)[1] if branch.startswith("candidate/") else None
-        gt_dir = GROUND_TRUTH_DIR / candidate_name if candidate_name else None
+        gt_dir = ground_truth_dir / candidate_name if candidate_name else None
         if branch == "main":
-            # All ground-truth probes must pass against the clean base.
-            gt_tests = sorted(GROUND_TRUTH_DIR.glob("*/test_*.py"))
+            # Only BLOCK ground-truth probes must pass against the clean base.
+            # NOT_BLOCK probes may encode new behavior that does not exist on main.
+            block_candidates = {
+                name for name, val in labels.items()
+                if (val["verdict"] if isinstance(val, dict) else val) == "BLOCK"
+            }
+            gt_tests = sorted(
+                p
+                for name in block_candidates
+                for p in (ground_truth_dir / name).glob("test_*.py")
+                if (ground_truth_dir / name).exists()
+            )
             if not gt_tests:
                 gt_label = "ERROR"
                 any_error = True
@@ -126,10 +136,11 @@ def check_repo(repo_dir: Path) -> int:
                     all_ok = False
         elif candidate_name and candidate_name in labels:
             expected = labels[candidate_name]
-            if expected == "BLOCK" and (not gt_dir or not gt_dir.exists()):
+            verdict = expected["verdict"] if isinstance(expected, dict) else expected
+            if verdict == "BLOCK" and (not gt_dir or not gt_dir.exists()):
                 gt_label = "ERROR"
                 any_error = True
-            elif expected == "BLOCK" and gt_dir and gt_dir.exists():
+            elif verdict == "BLOCK" and gt_dir and gt_dir.exists():
                 gt_tests = sorted(gt_dir.glob("test_*.py"))
                 if not gt_tests:
                     gt_label = "ERROR"
@@ -142,7 +153,7 @@ def check_repo(repo_dir: Path) -> int:
                     elif gt.returncode == 0:
                         # BLOCK candidate ground-truth should fail.
                         all_ok = False
-            elif expected == "NOT_BLOCK" and gt_dir and gt_dir.exists():
+            elif verdict == "NOT_BLOCK" and gt_dir and gt_dir.exists():
                 gt_tests = sorted(gt_dir.glob("test_*.py"))
                 gt = run_tests(repo_dir, *[str(p) for p in gt_tests]) if gt_tests else None
                 gt_label = result_label(gt.returncode) if gt else "n/a"
@@ -155,18 +166,21 @@ def check_repo(repo_dir: Path) -> int:
                 gt_label = "n/a"
         else:
             gt_label = "n/a"
+            expected = None
 
         if branch.startswith("candidate/"):
             base_on_head = run_base_tests_on_head(repo_dir)
             base_label = result_label(base_on_head.returncode) if base_on_head else "ERROR"
-            if base_on_head and base_on_head.returncode not in (0, 1):
+            if base_on_head is None:
                 any_error = True
-            elif base_on_head is None:
+            elif base_on_head.returncode not in (0, 1):
                 any_error = True
-            elif candidate_name == "tenant-cache-regression" and base_on_head.returncode != 0:
-                all_ok = False
-            elif candidate_name in {"test-tamper", "intended-change"} and base_on_head.returncode == 0:
-                all_ok = False
+            elif isinstance(expected, dict) and "base_on_head" in expected:
+                expected_base = expected["base_on_head"]
+                if expected_base == "FAIL" and base_on_head.returncode == 0:
+                    all_ok = False
+                elif expected_base == "PASS" and base_on_head.returncode != 0:
+                    all_ok = False
         else:
             base_label = "n/a"
 
@@ -196,8 +210,14 @@ def main(argv: list[str] | None = None) -> int:
         default=str(DEMO_ROOT / ".build" / "demo-shop"),
         help="Path to the generated demo repo",
     )
+    parser.add_argument(
+        "--ground-truth",
+        type=Path,
+        default=DEFAULT_GROUND_TRUTH_DIR,
+        help="Directory containing ground-truth tests and labels.json",
+    )
     args = parser.parse_args(argv)
-    return check_repo(Path(args.repo_dir))
+    return check_repo(Path(args.repo_dir), args.ground_truth.resolve())
 
 
 if __name__ == "__main__":

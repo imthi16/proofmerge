@@ -22,5 +22,23 @@ Record what actually shipped; do not mark unimplemented features complete.
 - Offline checks: `ruff check` clean, `pytest -q` 9 passed (fake client, no network).
 - Also added and verified: package/CLI skeleton, demo-shop fixture with three candidate PRs (`demo/check_demo.py` passes), Meta API notes with quotes and URLs (`docs/META_API_NOTES.md`).
 
+## 2026-10-28 — T11 Benchmark batch 1 (pulled forward from Nov 2)
+- Created `bench/candidates/` with 8 new PR overlays against `demo/demo-shop`:
+  - 5 faulty: `boundary-qty-inclusive`, `drop-tenant-validation`, `round-discount`, `mutate-stock`, `skip-boundary-test`.
+  - 3 safe: `pure-refactor-constants`, `intended-discount-rate`, `cache-with-tenant-key`.
+- Created hidden ground truth in `bench/ground_truth/` with one probe per candidate and `labels.json` (`BLOCK`/`NOT_BLOCK`, 3 held-out: `drop-tenant-validation`, `round-discount`, `cache-with-tenant-key`).
+- Extended `demo/build_demo_repo.py` and `demo/check_demo.py` with `--candidates`/`--ground-truth` options while preserving default demo behavior.
+- Updated `demo/ground_truth/labels.json` to the dict form with optional `base_on_head` expectation.
+- Lead review (Claude): reworded the `skip-boundary-test` and `round-discount` intents, which announced the very change they hide (so the BLOCK label contradicted the intent contract); removed unused `--candidates` (check) and `--ground-truth` (build) options. Bench and demo checks re-run: same table, exit 0.
+
+### Verification
+- `python demo/check_demo.py` output unchanged from demo defaults (exit 0).
+- Build: `python demo/build_demo_repo.py bench/.build/bench-shop --candidates bench/candidates`; check: `python demo/check_demo.py bench/.build/bench-shop --ground-truth bench/ground_truth`:
+  - All 9 branches: existing suite PASS.
+  - 5 faulty candidates: ground-truth test FAIL (BASE PASS / HEAD FAIL verified manually).
+  - 3 safe candidates: ground-truth test PASS.
+- `.venv/bin/python -m ruff check src tests`: All checks passed.
+- `.venv/bin/python -m pytest -q`: 22 passed.
+
 ### Next task
-- Build typed Python CLI skeleton, deterministic Git diff extraction and mocked Meta SDK smoke test.
+- T8 Test-tamper static checks (Codex) or next in-flight task per TASKS.md.

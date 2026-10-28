@@ -1,5 +1,5 @@
 {
-  "tenant-cache-regression": "BLOCK",
-  "test-tamper": "BLOCK",
-  "intended-change": "NOT_BLOCK"
+  "tenant-cache-regression": {"verdict": "BLOCK", "base_on_head": "PASS"},
+  "test-tamper": {"verdict": "BLOCK", "base_on_head": "FAIL"},
+  "intended-change": {"verdict": "NOT_BLOCK", "base_on_head": "FAIL"}
 }

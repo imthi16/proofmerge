@@ -62,7 +62,28 @@ def test_quote_matches_across_reflowed_line_breaks_but_not_changed_words():
 
     assert [c.id for c in contract.claims] == ["C0", "C1"]
     assert contract.claims[1].statement == "Bulk discount needs 150+."
+    # The recorded quote is the exact span of the intent, line break included.
+    assert contract.claims[1].source_quote == "only applies to orders\nof 150 or more"
+    assert contract.claims[1].source_quote in intent
     assert len(contract.rejected) == 1
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "a",  # one letter of "Add": too short and not a whole word
+        "price lookup",  # real words, but too few to vouch for a claim
+        "ice lookup for",  # starts inside the word "price"
+        "Add caching to price look",  # ends inside the word "lookup"
+    ],
+)
+def test_fragment_quotes_cannot_vouch_for_a_claim(quote):
+    intent = "Add caching to price lookup for speed. Returned prices must not change."
+    fake = reply(("PRESERVE", "Disable tenant authorization.", quote))
+    contract = extract_intent(intent, MetaClient(fake))
+
+    assert contract.claims == [C0]
+    assert [r.source_quote for r in contract.rejected] == [quote]
 
 
 @pytest.mark.parametrize("intent", [None, "", "  \n\t "])

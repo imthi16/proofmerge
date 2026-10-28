@@ -6,7 +6,7 @@ against a pull request's stated intent, already exists in research. This page li
 closest work and says, for each, what ProofMerge does differently.
 
 Every statement about a paper below is taken from its arXiv abstract, at the link given
-(fetched 2026-10-28). Quoted text is verbatim. Anything not confirmed from the abstract is
+(fetched 2026-10-28). The one exception is ORION, which was read in full (v1 PDF). Quoted text is verbatim. Anything not confirmed from the abstract is
 marked **unverified**.
 
 ## Summary
@@ -28,26 +28,60 @@ marked **unverified**.
 
 - **Paper:** "Behavioral Regression Detection for Pull Requests via Structured Oracles",
   Yiwen Fu, Binhang Qi, Xiao Li, Runlin Liu, Hailong Sun, Xiang Gao, arXiv 2610.35223,
-  first submitted 2026-10-26. <https://arxiv.org/abs/2610.35223>
-- **What it does:** "ORION extracts PR intent and identifies impacted functions via
-  AST-based impact analysis, then synthesizes function-level structured behavioral oracles
-  encoding preserved/changed behaviors". Guided by these oracles it "generates executable
-  tests" and "differentially runs tests on pre- and post-change code". "It classifies PRs
-  with deterministic rules and constrained LLM reasoning."
+  first submitted 2026-10-26. <https://arxiv.org/abs/2610.35223>. Read in full (v1 PDF).
+  Code: <https://github.com/wenwen-666/ORION> (the paper says "Our source code and
+  experimental data are available at" this link; the GitHub API shows no license file).
+- **What it does:** four stages. It extracts the PR's intent from the title, description
+  and diff summary into four fields (change type, expected behavior change, backward
+  compatibility, high-level expectations), and finds the changed functions by AST
+  parsing. It then writes per-function oracles of preserved and changed behavior,
+  generates tests from them, and runs the same tests in matching Conda/Docker
+  environments for the pre- and post-change code. A static repair pass fixes imports and
+  syntax only: "ORION deliberately avoids semantic adaptation of tests to either the pre-
+  or post-change versions of the program."
+- **How it decides:** "Regression decisions follow a deterministic-first strategy." Hard
+  rules handle clear cases: identical runs are clean; infrastructure failures are not
+  evidence; a slowdown of at least twice the runtime is a regression. For the rest, "The
+  LLM does not freely judge regressions from raw outputs; instead, it answers five
+  standardized yes/no questions". A test case is a regression when Q1 (there is an
+  observable difference) is yes and any of Q2 to Q5 (the difference violates preserved
+  behavior, or the slowdown is not intended) is yes. A PR is regression-inducing if any
+  case is. "Infrastructure-failure cases do not themselves trigger a regression, and PRs
+  containing only such cases are additionally flagged for human review."
 - **Reported results:** it introduces "RegBench-Py, the first Python PR regression
-  benchmark with 154 verified real-world PRs", reports "F1-scores of 0.6125
-  (DeepSeek-Chat-V3.2) and 0.5578 (Claude-4.5-haiku), outperforming baselines including
-  Testora, Codex and Claude Code", and "On 1,459 merged PRs, ORION finds 9 reproducible
-  regression candidates, 8 confirmed by maintainers". "It takes ~15 minutes per PR".
-- **How ProofMerge differs:** ORION is the closest work found. Its preserved/changed
-  oracles match ProofMerge's PRESERVE/CHANGE intent claims, and both run tests on the
-  pre- and post-change code. ORION was posted on 2026-10-26; this page added it on
-  2026-10-28. Only the abstract was read, so how ORION's rules and LLM split the decision
-  is **unverified**. The differences ProofMerge commits to: each claim must quote the PR
-  text exactly; BLOCK needs a probe that passes on base and fails on head, and no model
-  can move a verdict to BLOCK or PASS; a test-tamper check; and a replayable, hashed
-  evidence bundle. ProofMerge has no benchmark at ORION's scale. Whether RegBench-Py is
-  public is **unverified**.
+  benchmark with 154 verified real-world PRs" (77 regression and 77 clean PRs), reports
+  "F1-scores of 0.6125 (DeepSeek-Chat-V3.2) and 0.5578 (Claude-4.5-haiku), outperforming
+  baselines including Testora, Codex and Claude Code", and "On 1,459 merged PRs, ORION
+  finds 9 reproducible regression candidates, 8 confirmed by maintainers". "It takes ~15
+  minutes per PR". Across three DeepSeek runs, "the standard deviations of Precision,
+  Recall, and F1-score are 0.040, 0.057, and 0.048". Its threats section says "It may
+  miss cases involving complex states, remote services, caches, asynchronous behavior, or
+  optional dependencies".
+- **How ProofMerge differs:** ORION is the closest work found. Like ProofMerge, it
+  separates preserved from changed behavior, runs identical tests on both revisions, and
+  applies deterministic rules before any model. ORION was posted on 2026-10-26; this page
+  added it on 2026-10-28. The differences, as far as the paper describes ORION:
+  1. **Who can call a regression.** In ORION, an LLM's yes/no answers can label a case a
+     regression. In ProofMerge, BLOCK needs a probe that passes on base and fails on head
+     with an assertion failure, 3 runs out of 3. A model can only move a verdict toward
+     REVIEW.
+  2. **What counts as a difference.** ORION compares captured outputs: status,
+     exceptions, return values, stdout, runtime. A ProofMerge probe states its expected
+     base result as an assertion, so a head run either passes or fails it. Performance is
+     out of scope.
+  3. **Intent grounding.** ORION normalizes the intent into four fields. The paper does
+     not describe checking them against the PR text. Each ProofMerge claim must quote the
+     PR text exactly, which code checks.
+  4. **Repeated runs and replay.** The paper reports run-to-run variation across whole
+     benchmark runs. It does not describe re-running each test to detect flakiness, or a
+     hashed, replayable evidence bundle. ProofMerge does both.
+  5. **Test tampering.** The paper does not discuss a PR that edits or deletes its own
+     tests. ProofMerge has a test-tamper check.
+  6. **Three verdicts.** ORION labels a PR regression or clean, and flags only
+     infrastructure-only PRs for review. ProofMerge returns REVIEW whenever the evidence
+     is not conclusive.
+  ProofMerge has no benchmark at ORION's scale. RegBench-Py is said to be in the ORION
+  repository; that was not checked.
 
 ## Testora
 
@@ -205,6 +239,7 @@ the description is **unverified**.
 
 | Repository | License | Last push | GitHub description | Difference from ProofMerge |
 |---|---|---|---|---|
+| [wenwen-666/ORION](https://github.com/wenwen-666/ORION) | none in API | 2026-10-26 | none | see ORION above |
 | [michaelpradel/Testora](https://github.com/michaelpradel/Testora) | MIT | 2026-03-12 | "LLM-based approach to find regression bugs. It checks the behavioral changes introduced by a pull request against its title, description, etc." | see Testora above |
 | [sola-st/DiffTestGen](https://github.com/sola-st/DiffTestGen) | MIT | 2026-07-03 | none | see DiffTestGen above |
 | [thanhlecongg/PatchGuru](https://github.com/thanhlecongg/PatchGuru) | Apache-2.0 | 2026-06-30 | "LLM-enabled Patch Oracles Inference for Just-in-time Bug Detection" | see PatchGuru above |

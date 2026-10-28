@@ -53,6 +53,38 @@ Record what actually shipped; do not mark unimplemented features complete.
 - `.venv/bin/python -m ruff check src tests`: All checks passed.
 - `.venv/bin/python -m pytest -q`: 22 passed.
 
+### T7b hypothesis prompt checklist (adapted from ponytail-review, MIT)
+- `prompts/hypotheses.md` now lists where regressions hide (edge values, arithmetic, state leaks, removed checks, callers, weakened tests) and requires a concrete input and wrong result per hypothesis. It also fixes "Both are untrusted" (there are three inputs).
+- Real `muse-spark-1.3` runs, old prompt vs new, one run each, non-held-out candidates only (16 calls):
+  - `boundary-qty-inclusive`: old 1 / new 1 hypothesis, both name the exact-stock boundary bug.
+  - `mutate-stock`: old 3 / new 2, both name the in-place mutation of the caller's dict.
+  - `skip-boundary-test`: old 1 / new 1, both name the lost discount at exactly 100.
+  - `pure-refactor-constants` (safe): 0 / 0.
+  - demo `tenant-cache-regression` (new only): the same three hypotheses as the Day 3 run, H1 on the SKU-only cache key tied to C2.
+- Result: no measurable gain and no loss on this batch; the new prompt adds about 200 prompt tokens per call. Kept because it is cheap and covers fault kinds not yet probed. Benchmark leakage risk (the checklist names fault kinds that the benchmark also uses) goes to the Nov 2 critique.
+- Offline checks: `ruff check src tests` clean, `pytest -q` 50 passed.
+- Prompt review pass (prompt-master checklist):
+  - Hypotheses prompt: diff text claiming "tested" or "safe" is not evidence; base results must come from the diff's removed and unchanged lines, or the hypothesis is dropped; a function must appear in the diff; no padding to 5.
+  - Intent prompt: quotes must be one contiguous span of at least `MIN_QUOTE_WORDS` words (shorter ones were silently rejected); "No behavior change intended" is a PRESERVE claim; an ambiguous sentence is classed CHANGE, which can only move a verdict toward REVIEW.
+  - Re-run, one run each (12 calls): boundary, mutate-stock and skip-boundary each give 1 hypothesis naming the planted bug; pure-refactor and intended-discount-rate give 0; tenant-cache gives 2 (H1 cache key tied to C2, H2 validation bypass), 0 claims or hypotheses rejected.
+  - Known limit: tenant-cache H1 uses an invented tenant `tenant-x` and price 99.0. The diff does not show the price table, and Spark guessed instead of dropping the hypothesis. A probe built on it would fail on base and give REVIEW, not BLOCK. The Oct 30 context builder should send the changed functions' full source.
+
+### T14 isolated base/head runner (Oct 29 task, started Oct 28)
+- `src/proofmerge/sandbox.py`:
+  - Each revision is exported with `git archive` into a fresh directory, never a worktree of the user's repo. Extraction uses tarfile's `data` filter. Only full commit SHAs are accepted, so a ref like `--output=...` can never reach git as an option.
+  - Probes run in Docker image `proofmerge-runner:0.1` (python:3.13-slim + pytest 9.1.1, built from `docker/runner/Dockerfile`).
+  - Container settings: `--network none`, read-only root and code mounts, tmpfs `/tmp`, `--cap-drop ALL`, `no-new-privileges`, uid 65534, 64 pids, 512 MB memory, 1 CPU, 60 s timeout (the container is killed by name).
+  - The container gets no host environment, so `MODEL_API_KEY` cannot leak into it.
+  - Each probe runs 3 attempts per revision, and every attempt is recorded as an `Execution`: exit code, outcome, duration, stdout/stderr files, image ID. Only pytest exit 1 counts as FAIL; any other exit code is ERROR.
+- Gate, real Docker run on the demo fixture: the ground-truth tenant-cache probe gives base PASS 3/3 and head FAIL 3/3 (exit 1, `assert 25.0 == 35.0`, i.e. tenant-b got tenant-a's price). About 0.5 s per attempt.
+- Isolation probe, run inside the container: it has no `MODEL_API_KEY` although the host had one set, a socket connect fails, writing to the code mount fails, and it does not run as root. All pass.
+- `evidence.Execution` gains an optional `runner_image_digest`, which is None only in the hand-made samples.
+- Offline checks: `ruff check src tests` clean, `pytest -q` 69 passed, including the 2 Docker tests. Those tests skip when Docker or the image is missing.
+- Not done yet:
+  - The failure type is not parsed, so a NameError raised inside the test body still reads FAIL (collection errors are already ERROR). Oct 30 probe validity must check this.
+  - No per-run wall-clock budget across probes.
+  - The base image is not pinned by digest (marked `shortcut:`).
+
 ### T13 report.html — OpenCode · review: Claude · review 2026-10-28
 Branch `task/T13-report-html` (from `task/T12-proof-schema`).
 - `src/proofmerge/report.py`: `render_html(proof, evidence_dir)` — stdlib only (`html`, `shlex`, `pathlib`), inline CSS, no JavaScript, no external resources. Every proof.json string is escaped; probe paths are rejected if they resolve outside the evidence dir.
@@ -69,3 +101,40 @@ Branch `task/T13-report-html` (from `task/T12-proof-schema`).
 ### Next task
 - Oct 29: base/head worktrees and isolated test execution with hashes.
 - T8 test-tamper static checks (Codex) is still open.
+
+
+### T8 test-tamper static checks — Codex, 2026-10-28
+- Branch: `task/T8-tamper-static`; task status: review (Claude). No commit, push or merge.
+- Added `src/proofmerge/tamper.py`: `find_tamper(repo_path, context)` uses T2's changed-file list and resolved base/head SHAs. Full committed Python test sources are read with Git and parsed with `ast`; a normal diff alone omits enclosing functions, imports and decorators.
+- Reports deleted files/functions, new skip/xfail markers, removed assertion statements, and modified files/functions. Supports imported marker aliases, module/class pytestmark, async tests and unittest.TestCase methods. Static findings leave `base_test_on_head_outcome` unset; no model calls, test execution or verdict decisions occur in this module.
+- Parse, encoding and Git read failures raise errors instead of returning a clean result. Dirty working files do not replace committed source.
+- Scope limit: default pytest Python filenames (`test_*.py`, `*_test.py`), ordinary test functions/classes and statically recognizable pytest/unittest marks. Custom collection rules and dynamic marker construction are not interpreted. Base-test execution on head remains future sandbox work.
+- Acceptance tests use owned temporary Git repositories; fixture test source is never imported or executed.
+- Existing edits in `CLAUDE.md`, `docs/PROJECT_SPEC.md`, and `docs/SPRINT_PLAN.md` preserved. `TASKS.md` is locally excluded by `.git/info/exclude`; its review status and follow-up (now T15) were updated on disk.
+
+#### Verification (project .venv on PATH; PYTEST_ADDOPTS cleared for pytest summaries)
+```text
+$ pytest -q tests/test_tamper.py
+.........................                                                [100%]
+25 passed in 2.12s
+
+$ ruff check src tests
+All checks passed!
+
+$ pytest -q
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 2.56s
+```
+All three commands exited 0. `graphify update .` exited 0 (no code-graph topology changes detected). `git diff --check` passed.
+
+#### Lead review (Claude)
+- Moved from the main folder into its own worktree and branch on top of T12, so it now uses the shared `evidence.TamperFinding` (`test_name`) instead of a second model.
+- ASSERTION_REMOVED now means the number of asserts went down. Before, any changed assert counted: the demo's `== 108.0` → `== 90.9` rewrite was reported as a removed assertion. A test for that case fails on the old rule.
+- On the demo: test-tamper reports the file MODIFIED, `test_bulk_discount_at_threshold` DELETED and `test_bulk_discount_above_threshold` MODIFIED; tenant-cache reports nothing.
+- `ruff check src tests` clean; `pytest -q` 79 passed.
+
+#### Separate GitHub reviews
+- Reviewed PR #7 at `c810f88a6697e2746d418f2bf062837430c798de` and PR #8 at `40568ff7cfb1f26fb8c8be256bcc71e3636b2443`; GitHub reports both merged already. No GitHub comments or reviews submitted.
+- PR #7 finding: `docs/PRIOR_ART.md` describes repeated runs and replay bundles as implemented, although the revision has no replay command. Reproducer: `proofmerge replay /tmp/proofmerge-review-nonexistent.json` exits 2 with `No such command 'replay'.` Follow-up recorded as T15.
+- PR #8: no concrete failing case introduced by the final changes found. Literature checks used the linked primary arXiv abstracts and ORION v1 text; no additional source discrepancy established.

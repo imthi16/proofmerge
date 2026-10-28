@@ -54,10 +54,18 @@ class HypothesisSet(BaseModel):
 def _problem(hypothesis: ProposedHypothesis, claim_ids: set[str], changed: set[str]) -> str | None:
     if hypothesis.claim_id not in claim_ids:
         return f"cites unknown claim {hypothesis.claim_id!r}"
+    blank = [name for name, value in hypothesis if isinstance(value, str) and not value.strip()]
+    if blank:
+        return f"blank field {blank[0]!r}"
     if not hypothesis.changed_locations:
         return "names no changed location"
     for location in hypothesis.changed_locations:
-        if location.split("::")[0] not in changed:
+        path, _, symbol = location.partition("::")
+        # shortcut: the symbol is not checked to exist; a probe calling a missing
+        # function fails on base and becomes REVIEW (Oct 30 probe validation).
+        if not symbol or not all(part.isidentifier() for part in symbol.split(".")):
+            return f"location {location!r} is not path::function"
+        if path not in changed:
             return f"location {location!r} is not in a changed file"
     return None
 

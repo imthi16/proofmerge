@@ -81,6 +81,11 @@ def test_valid_hypotheses_get_ids_and_the_request_carries_claims_and_diff():
         (hypothesis(locations=[]), "no changed location"),
         (hypothesis(locations=["src/demo_shop/inventory.py::reserve"]), "not in a changed file"),
         (hypothesis(locations=[f"b/{PRICING}::price_for"]), "not in a changed file"),
+        (hypothesis(locations=[PRICING]), "not path::function"),
+        (hypothesis(locations=[f"{PRICING}::"]), "not path::function"),
+        (hypothesis(locations=[f"{PRICING}::real::invented"]), "not path::function"),
+        ({**hypothesis(), "test_intent": "  "}, "blank field 'test_intent'"),
+        ({**hypothesis(), "title": ""}, "blank field 'title'"),
     ],
 )
 def test_hypotheses_with_unknown_claims_or_unchanged_locations_are_rejected(bad, reason):

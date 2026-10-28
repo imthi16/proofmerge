@@ -1,0 +1,16 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_cross_tenant_price_isolation _______________________
+
+    def test_cross_tenant_price_isolation():
+        """Each tenant must receive its own price for the same SKU."""
+        price_a = price_for("tenant-a", "widget")
+        price_b = price_for("tenant-b", "widget")
+        assert price_a == 25.0
+>       assert price_b == 35.0
+E       assert 25.0 == 35.0
+
+../probes/test_h1.py:11: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_cross_tenant_price_isolation - assert 25.0 ...
+1 failed in 0.02s

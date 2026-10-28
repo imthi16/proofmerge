@@ -31,6 +31,11 @@ def _marks(nodes: list[ast.expr], aliases: dict[str, str]) -> dict[str, set[str]
             continue
         target = node.func if isinstance(node, ast.Call) else node
         name = _name(target, aliases)
+        # Key by the resolved name plus arguments, so renaming an import alias
+        # (`pytest` -> `pt`) does not look like a newly added mark.
+        key = name
+        if isinstance(node, ast.Call):
+            key += ast.dump(ast.Tuple(elts=node.args)) + "".join(map(ast.dump, node.keywords))
         if name in {
             "pytest.mark.skip",
             "pytest.mark.skipif",
@@ -38,9 +43,9 @@ def _marks(nodes: list[ast.expr], aliases: dict[str, str]) -> dict[str, set[str]
             "unittest.skipIf",
             "unittest.skipUnless",
         }:
-            result["SKIPPED"].add(ast.dump(node))
+            result["SKIPPED"].add(key)
         elif name in {"pytest.mark.xfail", "unittest.expectedFailure"}:
-            result["XFAIL"].add(ast.dump(node))
+            result["XFAIL"].add(key)
     return result
 
 
@@ -84,19 +89,31 @@ def _inspect(source: str, path: str) -> tuple[dict, dict]:
             if node.name.startswith("test"):
                 functions[node.name] = node
                 marks[node.name] = _marks(node.decorator_list, aliases)
-        elif isinstance(node, ast.ClassDef) and (
-            node.name.startswith("Test")
-            or any(_name(base, aliases) == "unittest.TestCase" for base in node.bases)
-        ):
-            marks[node.name] = _marks(node.decorator_list + _assigned_marks(node.body), aliases)
-            for method in node.body:
-                if isinstance(
-                    method, (ast.FunctionDef, ast.AsyncFunctionDef)
-                ) and method.name.startswith("test"):
-                    name = f"{node.name}.{method.name}"
-                    functions[name] = method
-                    marks[name] = _marks(method.decorator_list, aliases)
+        elif isinstance(node, ast.ClassDef):
+            _inspect_class(node, "", aliases, functions, marks)
     return functions, marks
+
+
+def _inspect_class(
+    node: ast.ClassDef, prefix: str, aliases: dict, functions: dict, marks: dict
+) -> None:
+    """Record a collectable test class and, recursively, the test classes nested in it."""
+    if not (
+        node.name.startswith("Test")
+        or any(_name(base, aliases) == "unittest.TestCase" for base in node.bases)
+    ):
+        return
+    qualified = prefix + node.name
+    marks[qualified] = _marks(node.decorator_list + _assigned_marks(node.body), aliases)
+    for child in node.body:
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith(
+            "test"
+        ):
+            name = f"{qualified}.{child.name}"
+            functions[name] = child
+            marks[name] = _marks(child.decorator_list, aliases)
+        elif isinstance(child, ast.ClassDef):
+            _inspect_class(child, qualified + ".", aliases, functions, marks)
 
 
 def _assert_count(node: ast.AST) -> int:

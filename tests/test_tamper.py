@@ -139,6 +139,25 @@ def test_changed_assertion_is_modified_not_removed(inspect_diff):
     assert ("test_example", "ASSERTION_REMOVED") not in result
 
 
+def test_renamed_marker_alias_is_not_a_new_skip(inspect_diff):
+    before = "import pytest\n@pytest.mark.skip(reason='later')\n" + TEST
+    after = "import pytest as pt\n@pt.mark.skip(reason='later')\n" + TEST
+    result = signals(inspect_diff(before, after))
+    assert ("test_example", "SKIPPED") not in result
+    changed = before.replace("'later'", "'never'")
+    assert ("test_example", "SKIPPED") in signals(inspect_diff(before, changed))
+
+
+def test_nested_test_class_is_inspected(inspect_diff):
+    before = (
+        "class TestOuter:\n    class TestInner:\n"
+        "        def test_price(self):\n            assert 1 == 1\n"
+        "        def test_other(self):\n            assert 2 == 2\n"
+    )
+    after = before.replace("        def test_price(self):\n            assert 1 == 1\n", "")
+    assert ("TestOuter.TestInner.test_price", "DELETED") in signals(inspect_diff(before, after))
+
+
 def test_fixture_edit_marks_file(inspect_diff):
     before = "def fixture():\n    return 1\n\n" + TEST
     assert (None, "MODIFIED") in signals(

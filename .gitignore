@@ -33,4 +33,7 @@ evidence/runs/
 # Demo build output
 demo/.build/
 
+# Benchmark build output
+bench/.build/
+
 # Do not ignore repo-tracked synthetic demo evidence fixtures.

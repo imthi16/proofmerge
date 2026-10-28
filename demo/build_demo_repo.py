@@ -9,7 +9,7 @@ from pathlib import Path
 
 DEMO_ROOT = Path(__file__).resolve().parent
 BASE_SOURCE = DEMO_ROOT / "demo-shop"
-CANDIDATES_DIR = DEMO_ROOT / "candidates"
+DEFAULT_CANDIDATES_DIR = DEMO_ROOT / "candidates"
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "Demo Builder",
     "GIT_AUTHOR_EMAIL": "builder@example.com",
@@ -60,7 +60,7 @@ def assert_committed(repo_dir: Path, files_dir: Path) -> None:
                 raise SystemExit(f"Build error: {rel} was not committed as written")
 
 
-def build_repo(target_dir: Path, force: bool) -> None:
+def build_repo(target_dir: Path, force: bool, candidates_dir: Path) -> None:
     """Create the demo repository with base and candidate branches."""
     if target_dir.exists():
         if not force:
@@ -81,7 +81,7 @@ def build_repo(target_dir: Path, force: bool) -> None:
     commit_all(target_dir, "Initial demo-shop base")
 
     # Create candidate branches.
-    for candidate_dir in sorted(CANDIDATES_DIR.iterdir()):
+    for candidate_dir in sorted(candidates_dir.iterdir()):
         if not candidate_dir.is_dir():
             continue
         name = candidate_dir.name
@@ -114,8 +114,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite target directory if it exists",
     )
+    parser.add_argument(
+        "--candidates",
+        type=Path,
+        default=DEFAULT_CANDIDATES_DIR,
+        help="Directory containing candidate overlay directories",
+    )
     args = parser.parse_args(argv)
-    build_repo(Path(args.target_dir), args.force)
+    build_repo(Path(args.target_dir), args.force, args.candidates.resolve())
     return 0
 
 

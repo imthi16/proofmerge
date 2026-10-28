@@ -2,8 +2,11 @@
 
 Spark proposes claims; deterministic code keeps only those whose `source_quote`
 really appears in the intent text, so a model cannot invent requirements.
+Only the quote is verified: `kind` and `statement` are Spark's reading of it,
+so the verdict must never treat them as checked facts.
 """
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel
@@ -11,6 +14,7 @@ from pydantic import BaseModel
 from proofmerge.meta import SPARK_MODEL, MetaClient
 
 MAX_INTENT_CHARS = 8000
+MIN_QUOTE_WORDS = 3  # a fragment like "a" or "price" would vouch for any claim
 
 ClaimKind = Literal["CHANGE", "PRESERVE"]
 
@@ -62,9 +66,18 @@ description: the shortest span that states the claim. Never paraphrase it. \
 If the description states no behavior claims, return an empty list."""
 
 
-def _normalize(text: str) -> str:
-    # Models often reflow line breaks inside a quoted sentence; wording must still match.
-    return " ".join(text.split())
+def find_quote(quote: str, intent: str) -> str | None:
+    """Return the exact span of `intent` that `quote` cites, or None.
+
+    Whole words only, at least MIN_QUOTE_WORDS of them. Whitespace between words
+    may differ, because models reflow line breaks inside a quoted sentence.
+    """
+    words = quote.split()
+    if len(words) < MIN_QUOTE_WORDS:
+        return None
+    pattern = r"(?<!\w)" + r"\s+".join(map(re.escape, words)) + r"(?!\w)"
+    match = re.search(pattern, intent)
+    return match.group(0) if match else None
 
 
 def extract_intent(intent: str | None, client: MetaClient) -> IntentContract:
@@ -76,12 +89,16 @@ def extract_intent(intent: str | None, client: MetaClient) -> IntentContract:
     proposed = client.structured(
         SPARK_MODEL, developer=DEVELOPER_PROMPT, user=intent, schema=ProposedClaims
     ).claims
-    text = _normalize(intent)
     claims, rejected = [C0], []
     for claim in proposed:
-        quote = _normalize(claim.source_quote)
-        if quote and quote in text:
-            claims.append(IntentClaim(id=f"C{len(claims)}", **claim.model_dump()))
-        else:
+        span = find_quote(claim.source_quote, intent)
+        if span is None:
             rejected.append(claim)
+            continue
+        # Store the span from the intent itself, so the recorded quote is an exact substring.
+        claims.append(
+            IntentClaim(
+                id=f"C{len(claims)}", kind=claim.kind, statement=claim.statement, source_quote=span
+            )
+        )
     return IntentContract(claims=claims, rejected=rejected)

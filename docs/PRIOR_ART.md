@@ -13,12 +13,41 @@ marked **unverified**.
 
 | Work | Inputs | What it produces | Closest ProofMerge part |
 |---|---|---|---|
+| ORION | a PR, its intent, the changed code | PR-level regression classification from oracles of preserved and changed behavior | intent contract, base/head probes, verdict rules |
 | Testora | a PR, its title, description and commits | regressions, by classifying behavior differences as intended or unintended | intent contract, base/head tests |
+| PatchGuru | a PR and its natural-language artifacts | runtime assertions over pre- and post-patch versions | intent contract, probes |
+| ChaCo | a PR and its uncovered lines | tests that raise patch coverage | none: assumes the PR is correct |
+| Fault-enforcing study | LLM-generated regression tests for merged PRs | how often those tests encode the bug | probe validity rule |
 | DiffTestGen | old and new version of a program, PRs | tests that expose behavior differences | Spark hypotheses and probes |
 | Mokav | two program versions and an example input | a difference-exposing test input | base/head differential runs |
 | PatchDiff | two patches for the same issue | tests exposing behavioral discrepancies between patches | differential runs; benchmark realism |
 | TestGen-LLM (Meta) | existing human-written tests | improved test classes that pass assurance filters | probe validation: a probe counts only if it passes on base |
 | ACH (Meta) | code and an issue of concern | mutants and tests that kill them | PASS strength (stretch) |
+
+## ORION
+
+- **Paper:** "Behavioral Regression Detection for Pull Requests via Structured Oracles",
+  Yiwen Fu, Binhang Qi, Xiao Li, Runlin Liu, Hailong Sun, Xiang Gao, arXiv 2610.35223,
+  first submitted 2026-10-26. <https://arxiv.org/abs/2610.35223>
+- **What it does:** "ORION extracts PR intent and identifies impacted functions via
+  AST-based impact analysis, then synthesizes function-level structured behavioral oracles
+  encoding preserved/changed behaviors". Guided by these oracles it "generates executable
+  tests" and "differentially runs tests on pre- and post-change code". "It classifies PRs
+  with deterministic rules and constrained LLM reasoning."
+- **Reported results:** it introduces "RegBench-Py, the first Python PR regression
+  benchmark with 154 verified real-world PRs", reports "F1-scores of 0.6125
+  (DeepSeek-Chat-V3.2) and 0.5578 (Claude-4.5-haiku), outperforming baselines including
+  Testora, Codex and Claude Code", and "On 1,459 merged PRs, ORION finds 9 reproducible
+  regression candidates, 8 confirmed by maintainers". "It takes ~15 minutes per PR".
+- **How ProofMerge differs:** ORION is the closest work found. Its preserved/changed
+  oracles match ProofMerge's PRESERVE/CHANGE intent claims, and both run tests on the
+  pre- and post-change code. ORION was posted on 2026-10-26; this page added it on
+  2026-10-28. Only the abstract was read, so how ORION's rules and LLM split the decision
+  is **unverified**. The differences ProofMerge commits to: each claim must quote the PR
+  text exactly; BLOCK needs a probe that passes on base and fails on head, and no model
+  can move a verdict to BLOCK or PASS; a test-tamper check; and a replayable, hashed
+  evidence bundle. ProofMerge has no benchmark at ORION's scale. Whether RegBench-Py is
+  public is **unverified**.
 
 ## Testora
 
@@ -33,8 +62,8 @@ marked **unverified**.
 - **Reported results:** on Python projects it found "19 regression bugs"; "Out of 13
   regressions reported to the developers, 11 have been confirmed and 9 have already been
   fixed", at "12.3 minutes to check a PR and LLM costs of only $0.003 per PR".
-- **How ProofMerge differs:** Testora is the closest prior work, and the idea of using the
-  PR's natural-language intent as the oracle is Testora's. In Testora an LLM classifies
+- **How ProofMerge differs:** the idea of using the PR's natural-language intent as the
+  oracle is Testora's. In Testora an LLM classifies
   each difference as intended or unintended. In ProofMerge the model only proposes claims.
   Each claim must quote the intent text exactly, which deterministic code checks. The
   verdict then comes from fixed rules over the execution results, and a model can only
@@ -59,6 +88,48 @@ marked **unverified**.
   one intent claim and stops at an explainable merge recommendation with a replayable
   evidence bundle. It does not use call graphs or coverage feedback, so it will reach less
   of the changed code than DiffTestGen.
+
+## PatchGuru
+
+- **Paper:** "PatchGuru: Patch Oracle Inference from Natural Language Artifacts", Thanh
+  Le-Cong, Bach Le, Toby Murray, Michael Pradel, Cristian Cadar, arXiv 2602.05270, first
+  submitted 2026-02-05. <https://arxiv.org/abs/2602.05270>
+- **What it does:** "uses large language models (LLMs) to extract developer intent from NL
+  artifacts and synthesizes patch oracles: under-approximate yet practical specifications
+  expressed as runtime assertions in comparison programs that integrate pre- and
+  post-patch versions".
+- **Reported results:** on "400 recent PRs" it "reports 39 warnings with a precision of
+  0.62, yielding 24 confirmed true positives"; against Testora it "detects 17 more bugs
+  (24 vs. 7)", at "8.9 minutes and USD 0.07 per PR".
+- **How ProofMerge differs:** PatchGuru's warning is a violated LLM-written assertion
+  inside one program that calls both versions. ProofMerge runs the same probe as an
+  ordinary test in two separate checkouts, and counts it only when it passes on base and
+  fails on head.
+
+## Change And Cover (ChaCo)
+
+- **Paper:** "Change And Cover: Last-Mile, Pull Request-Based Regression Test
+  Augmentation", Zitong Zhou, Matteo Paltenghi, Miryung Kim, Michael Pradel, arXiv
+  2601.10942, first submitted 2026-01-16. <https://arxiv.org/abs/2601.10942>
+- **What it does:** "an LLM-based test augmentation technique" for the gap where "some
+  PR-modified lines remain untested". It "carefully integrates them into the existing test
+  suite".
+- **Reported results:** on "145 PRs" it "helps 30% of PRs achieve full patch coverage, at
+  the cost of $0.11".
+- **How ProofMerge differs:** ChaCo adds tests for code it takes as correct. ProofMerge
+  asks whether the PR itself broke something, and does not add tests to the repository.
+
+## Risks of LLM-generated regression tests
+
+- **Paper:** "On the Risks of using LLM-Generated Tests for Regression Testing", Mohammadali
+  Charoosaei, Cedric Richter, Mike Papadakis, arXiv 2610.11835, first submitted
+  2026-10-08. <https://arxiv.org/abs/2610.11835>
+- **What it finds:** "Across 145 pull requests from SciPy, Qiskit, and pandas, 8%-17% of
+  the generated tests are fault-enforcing, while only 2.4%-4.8% reveal faults". A
+  fault-enforcing test is one that asserts "faulty behavior".
+- **Why it matters here:** a test written from the head code can lock in the bug. This is
+  why a ProofMerge probe must pass on the base revision before a head failure counts: a
+  fault-enforcing probe fails on base, so it is never evidence for BLOCK.
 
 ## Mokav
 
@@ -126,6 +197,23 @@ marked **unverified**.
   goal) follows ACH's lineage: mutate the changed lines and report how many mutants the
   probes catch, as measured sensitivity, not as proof of correctness.
 
+## Open-source tools
+
+Facts in this table come from each repository's GitHub API record (description, license,
+last push), read on 2026-10-28. The tools were not cloned or run, so how they work beyond
+the description is **unverified**.
+
+| Repository | License | Last push | GitHub description | Difference from ProofMerge |
+|---|---|---|---|---|
+| [michaelpradel/Testora](https://github.com/michaelpradel/Testora) | MIT | 2026-03-12 | "LLM-based approach to find regression bugs. It checks the behavioral changes introduced by a pull request against its title, description, etc." | see Testora above |
+| [sola-st/DiffTestGen](https://github.com/sola-st/DiffTestGen) | MIT | 2026-07-03 | none | see DiffTestGen above |
+| [thanhlecongg/PatchGuru](https://github.com/thanhlecongg/PatchGuru) | Apache-2.0 | 2026-06-30 | "LLM-enabled Patch Oracles Inference for Just-in-time Bug Detection" | see PatchGuru above |
+| [UCLA-SEAL/Change-Cover](https://github.com/UCLA-SEAL/Change-Cover) | MIT | 2026-01-16 | the ChaCo paper title | see ChaCo above |
+| [tuzhechen2005/DiffWitness](https://github.com/tuzhechen2005/DiffWitness) | Apache-2.0 | 2026-10-24 | "A local Gemma 4 model hunts for inputs where your refactor changed behavior; running both versions confirms every finding." | finds any behavior change in a refactor; no intent contract (from the description) |
+| [Kakadu525/confidence-scorer](https://github.com/Kakadu525/confidence-scorer) | MIT | 2026-09-24 | Russian; it names differential property-based tests (Hypothesis, fast-check) and an AI reviewer for AI-generated PRs | inputs come from property-based testing, not from intent claims (from the description) |
+| [qodo-ai/qodo-cover](https://github.com/qodo-ai/qodo-cover) | AGPL-3.0 | 2026-04-05 | "An AI-Powered Tool for Automated Test Generation and Code Coverage Enhancement" | raises coverage; no base/head comparison is described |
+| [The-PR-Agent/pr-agent](https://github.com/The-PR-Agent/pr-agent) | MIT | 2026-10-28 | "PR Agent: The Original Open-Source PR Reviewer." | review comments; no test execution is described |
+
 ## What ProofMerge adds
 
 No single part below is claimed as new. The contribution is the combination, built for
@@ -142,7 +230,7 @@ AI-agent pull requests:
 
 ## Not covered here
 
-- Commercial review tools (for example CodeRabbit, Greptile, Qodo Cover, Copilot code
+- Commercial review tools (for example CodeRabbit, Greptile, QA.tech, Copilot code
   review) are not compared on this page. Their features were not checked from primary
   sources, so no claims about them are made. **Unverified.**
 - Peer-reviewed venues for these papers are not listed, because the arXiv abstracts do not

@@ -56,3 +56,40 @@ Record what actually shipped; do not mark unimplemented features complete.
 ### Next task
 - Oct 29: base/head worktrees and isolated test execution with hashes.
 - T8 test-tamper static checks (Codex) is still open.
+
+
+### T8 test-tamper static checks — Codex, 2026-10-28
+- Branch: `task/T8-tamper-static`; task status: review (Claude). No commit, push or merge.
+- Added `src/proofmerge/tamper.py`: `find_tamper(repo_path, context)` uses T2's changed-file list and resolved base/head SHAs. Full committed Python test sources are read with Git and parsed with `ast`; a normal diff alone omits enclosing functions, imports and decorators.
+- Reports deleted files/functions, new skip/xfail markers, removed assertion statements, and modified files/functions. Supports imported marker aliases, module/class pytestmark, async tests and unittest.TestCase methods. Static findings leave `base_test_on_head_outcome` unset; no model calls, test execution or verdict decisions occur in this module.
+- Parse, encoding and Git read failures raise errors instead of returning a clean result. Dirty working files do not replace committed source.
+- Scope limit: default pytest Python filenames (`test_*.py`, `*_test.py`), ordinary test functions/classes and statically recognizable pytest/unittest marks. Custom collection rules and dynamic marker construction are not interpreted. Base-test execution on head remains future sandbox work.
+- Acceptance tests use owned temporary Git repositories; fixture test source is never imported or executed.
+- Existing edits in `CLAUDE.md`, `docs/PROJECT_SPEC.md`, and `docs/SPRINT_PLAN.md` preserved. `TASKS.md` is locally excluded by `.git/info/exclude`; its review status and follow-up (now T15) were updated on disk.
+
+#### Verification (project .venv on PATH; PYTEST_ADDOPTS cleared for pytest summaries)
+```text
+$ pytest -q tests/test_tamper.py
+.........................                                                [100%]
+25 passed in 2.12s
+
+$ ruff check src tests
+All checks passed!
+
+$ pytest -q
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 2.56s
+```
+All three commands exited 0. `graphify update .` exited 0 (no code-graph topology changes detected). `git diff --check` passed.
+
+#### Lead review (Claude)
+- Moved from the main folder into its own worktree and branch on top of T12, so it now uses the shared `evidence.TamperFinding` (`test_name`) instead of a second model.
+- ASSERTION_REMOVED now means the number of asserts went down. Before, any changed assert counted: the demo's `== 108.0` → `== 90.9` rewrite was reported as a removed assertion. A test for that case fails on the old rule.
+- On the demo: test-tamper reports the file MODIFIED, `test_bulk_discount_at_threshold` DELETED and `test_bulk_discount_above_threshold` MODIFIED; tenant-cache reports nothing.
+- `ruff check src tests` clean; `pytest -q` 79 passed.
+
+#### Separate GitHub reviews
+- Reviewed PR #7 at `c810f88a6697e2746d418f2bf062837430c798de` and PR #8 at `40568ff7cfb1f26fb8c8be256bcc71e3636b2443`; GitHub reports both merged already. No GitHub comments or reviews submitted.
+- PR #7 finding: `docs/PRIOR_ART.md` describes repeated runs and replay bundles as implemented, although the revision has no replay command. Reproducer: `proofmerge replay /tmp/proofmerge-review-nonexistent.json` exits 2 with `No such command 'replay'.` Follow-up recorded as T15.
+- PR #8: no concrete failing case introduced by the final changes found. Literature checks used the linked primary arXiv abstracts and ORION v1 text; no additional source discrepancy established.

@@ -1,0 +1,216 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "sample-tenant-cache-block",
+  "base_sha": "1e6c838b0ef4466c8ea829d7429d6213b3cfa8f8",
+  "head_sha": "6796cac2deb75d7d7e9a7197844a52d0c92cae2c",
+  "diff_sha256": "6d9c5b972419e2c589262a02ad987d921cd455a513bc4792e248aa329a36c252",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Price lookup now caches results for speed.",
+        "source_quote": "Add caching to price lookup for speed."
+      },
+      {
+        "id": "C2",
+        "kind": "PRESERVE",
+        "statement": "Returned prices remain unchanged.",
+        "source_quote": "Returned prices must not change."
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C2",
+        "title": "SKU-only cache returns wrong tenant's price",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "After warming cache with price_for('tenant-b','widget') (=35.0), lookup for different tenant with same SKU but different price (e.g., after adding _PRICES['tenant-x']={'widget': 99.0}) returns cached 35.0 instead of 99.0",
+        "expected_base": "price_for('tenant-x','widget') returns 99.0 via live table lookup",
+        "expected_head": "price_for('tenant-x','widget') returns 35.0 via SKU-only cache hit",
+        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), insert _PRICES['tenant-x']={'widget':99.0}, call price_for('tenant-x','widget') and compare; restore _PRICES and clear cache.",
+        "risk_category": "data-isolation",
+        "falsification_criteria": "If head returns 99.0 for tenant-x (tenant-aware result) then hypothesis is false.",
+        "possibly_intended": false,
+        "id": "H1"
+      },
+      {
+        "claim_id": "C0",
+        "title": "Cached SKU bypasses unknown-tenant validation",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "After caching 'widget' via tenant-b, price_for('unknown-tenant','widget') returns cached price instead of raising ValueError",
+        "expected_base": "raises ValueError: Unknown tenant",
+        "expected_head": "returns 35.0 without validation",
+        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), then call price_for('unknown-tenant','widget') expecting ValueError on base.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "If head raises ValueError for unknown tenant even on cache hit then hypothesis is false.",
+        "possibly_intended": false,
+        "id": "H2"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timeout_seconds": 30,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "1e6c838b0ef4466c8ea829d7429d6213b3cfa8f8",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 411,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1e6c838b0ef4466c8ea829d7429d6213b3cfa8f8",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 412,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1e6c838b0ef4466c8ea829d7429d6213b3cfa8f8",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 413,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6796cac2deb75d7d7e9a7197844a52d0c92cae2c",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 396,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6796cac2deb75d7d7e9a7197844a52d0c92cae2c",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 397,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6796cac2deb75d7d7e9a7197844a52d0c92cae2c",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 398,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C2",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay evidence/sample-tenant-cache-block/proof.json --experiment H1"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 passes on base and fails on head in 3 of 3 runs, and breaks PRESERVE claim C2."
+    ],
+    "unresolved_risks": [
+      "H2 was not probed in this sample."
+    ],
+    "scope_limitations": [
+      "Only the probes listed were run; this is not proof the rest of the patch is correct."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 3100,
+    "completion_tokens": 7400
+  }
+}

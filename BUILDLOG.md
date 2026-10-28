@@ -22,5 +22,18 @@ Record what actually shipped; do not mark unimplemented features complete.
 - Offline checks: `ruff check` clean, `pytest -q` 9 passed (fake client, no network).
 - Also added and verified: package/CLI skeleton, demo-shop fixture with three candidate PRs (`demo/check_demo.py` passes), Meta API notes with quotes and URLs (`docs/META_API_NOTES.md`).
 
+## 2026-10-28 — Day 3: intent contract and Spark hypotheses
+
+### Day 3 gate: fixture diff + intent → quote-checked claims + a hypothesis tied to a claim
+- Command: `proofmerge hypotheses demo/.build/demo-shop --base main --head candidate/tenant-cache-regression --intent-file demo/candidates/tenant-cache-regression/intent.md`
+- Real `muse-spark-1.3` run: 2 calls, tokens prompt=1452 completion=4468, exit 0. Base `1e6c838`, head `6796cac`, diff sha256 `6d9c5b97…c252`.
+- Intent claims: C0 (implicit PRESERVE), C1 CHANGE "Add caching to price lookup for speed.", C2 PRESERVE "Returned prices must not change." Both quotes passed the substring check; 0 rejected.
+- Hypotheses: 3 kept, 0 rejected.
+  - H1 (C2): the cache is keyed by SKU only, so tenant-b gets tenant-a's price. This is the planted bug.
+  - H2 (C0): a cache hit skips the unknown-tenant check.
+  - H3 (C0): a cache hit leaks a price for a SKU the tenant does not have. The fixture data cannot show H3 yet, because both tenants sell `widget`.
+- The non-recursive `$defs`/`$ref` response schema was accepted by the Meta API.
+- Offline checks: `ruff check` clean, `pytest -q` 38 passed.
+
 ### Next task
-- Build typed Python CLI skeleton, deterministic Git diff extraction and mocked Meta SDK smoke test.
+- Oct 29: base/head worktrees and isolated test execution with hashes.

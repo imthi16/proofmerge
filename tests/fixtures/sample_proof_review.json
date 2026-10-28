@@ -15,13 +15,13 @@
       {
         "id": "C1",
         "kind": "CHANGE",
-        "statement": "Price lookup now caches results for speed.",
+        "statement": "Price lookup uses caching to return results faster.",
         "source_quote": "Add caching to price lookup for speed."
       },
       {
         "id": "C2",
         "kind": "PRESERVE",
-        "statement": "Returned prices remain unchanged.",
+        "statement": "Price lookup returns the same prices as before.",
         "source_quote": "Returned prices must not change."
       }
     ],
@@ -31,33 +31,48 @@
     "hypotheses": [
       {
         "claim_id": "C2",
-        "title": "SKU-only cache returns wrong tenant's price",
+        "title": "SKU-only cache leaks price across tenants",
         "changed_locations": [
           "src/demo_shop/pricing.py::price_for"
         ],
-        "suspected_behavior": "After warming cache with price_for('tenant-b','widget') (=35.0), lookup for different tenant with same SKU but different price (e.g., after adding _PRICES['tenant-x']={'widget': 99.0}) returns cached 35.0 instead of 99.0",
-        "expected_base": "price_for('tenant-x','widget') returns 99.0 via live table lookup",
-        "expected_head": "price_for('tenant-x','widget') returns 35.0 via SKU-only cache hit",
-        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), insert _PRICES['tenant-x']={'widget':99.0}, call price_for('tenant-x','widget') and compare; restore _PRICES and clear cache.",
+        "suspected_behavior": "Cache keyed only by sku leaks across tenants: call price_for('tenant-a','widget') then price_for('tenant-b','widget') returns tenant-a price on head instead of 35.0.",
+        "expected_base": "price_for('tenant-a','widget') returns tenant-a price (Pa) and subsequent price_for('tenant-b','widget') returns 35.0 (Pa != 35.0 per base table)",
+        "expected_head": "price_for('tenant-b','widget') returns Pa (the cached tenant-a price) instead of 35.0",
+        "test_intent": "Clear _price_cache, call price_for('tenant-a','widget') then price_for('tenant-b','widget') and assert second call equals 35.0.",
         "risk_category": "data-isolation",
-        "falsification_criteria": "If head returns 99.0 for tenant-x (tenant-aware result) then hypothesis is false.",
+        "falsification_criteria": "After warming cache with tenant-a, lookup for tenant-b same SKU still returns 35.0 (tenant-specific price).",
         "possibly_intended": false,
         "id": "H1"
       },
       {
         "claim_id": "C0",
-        "title": "Cached SKU bypasses unknown-tenant validation",
+        "title": "Unknown tenant check bypassed after cache hit",
         "changed_locations": [
           "src/demo_shop/pricing.py::price_for"
         ],
-        "suspected_behavior": "After caching 'widget' via tenant-b, price_for('unknown-tenant','widget') returns cached price instead of raising ValueError",
-        "expected_base": "raises ValueError: Unknown tenant",
-        "expected_head": "returns 35.0 without validation",
-        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), then call price_for('unknown-tenant','widget') expecting ValueError on base.",
+        "suspected_behavior": "Early return on cache hit skips tenant validation: after caching 'widget', price_for('no-such-tenant','widget') returns cached price instead of raising ValueError.",
+        "expected_base": "ValueError('Unknown tenant: no-such-tenant')",
+        "expected_head": "Returns cached float for 'widget' (e.g., 20.0/35.0) with no exception",
+        "test_intent": "Clear _price_cache, warm with price_for('tenant-a','widget'), then call price_for('no-such-tenant','widget') and check it raises ValueError.",
         "risk_category": "error-handling",
-        "falsification_criteria": "If head raises ValueError for unknown tenant even on cache hit then hypothesis is false.",
+        "falsification_criteria": "Lookup with unknown tenant_id still raises ValueError even when SKU is cached.",
         "possibly_intended": false,
         "id": "H2"
+      },
+      {
+        "claim_id": "C0",
+        "title": "Unknown SKU check bypassed after cache hit",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "After caching price_for('tenant-a','gadget') where gadget exists only for tenant-a, price_for('tenant-b','gadget') returns cached price instead of raising ValueError for unknown SKU.",
+        "expected_base": "ValueError('Unknown SKU for tenant tenant-b: gadget')",
+        "expected_head": "Returns cached tenant-a gadget price with no exception",
+        "test_intent": "Clear _price_cache, warm with price_for('tenant-a','gadget'), then call price_for('tenant-b','gadget') and check it raises ValueError.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "Lookup for SKU missing in that tenant's table still raises ValueError even when SKU cached from another tenant.",
+        "possibly_intended": false,
+        "id": "H3"
       }
     ],
     "rejected": []
@@ -66,7 +81,7 @@
     {
       "hypothesis_id": "H1",
       "test_source_path": "probes/test_h1.py",
-      "test_source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "test_source_sha256": "6c4bbadf8e2dc4a67dd29628aa5cc256d7c20f299b9170014c22ccbaffedcae8",
       "timeout_seconds": 30,
       "executions": [
         {

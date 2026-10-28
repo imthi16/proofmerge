@@ -37,6 +37,7 @@ class Execution(BaseModel):
     duration_ms: int
     stdout_path: str  # relative to the run's evidence directory
     stderr_path: str
+    runner_image_digest: str | None = None  # None only in the hand-made sample proofs
 
 
 class Experiment(BaseModel):

@@ -114,3 +114,12 @@ def test_smoke_without_key_exits_cleanly():
     result = CliRunner().invoke(app, ["smoke"], env={"MODEL_API_KEY": ""})
     assert result.exit_code == 1
     assert "MODEL_API_KEY" in result.output
+
+
+def test_history_turns_follow_the_first_user_message():
+    fake = FakeCompletions()
+    turns = [{"role": "assistant", "content": "a"}, {"role": "user", "content": "again"}]
+    MetaClient(fake).structured(SPARK_MODEL, developer="d", user="u", schema=Answer, history=turns)
+    assert [m["role"] for m in fake.requests[0]["messages"]] == [
+        "developer", "user", "assistant", "user"
+    ]  # fmt: skip

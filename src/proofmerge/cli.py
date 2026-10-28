@@ -7,9 +7,11 @@ from pydantic import BaseModel
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
-from proofmerge.hypotheses import check_diff, generate_hypotheses
+from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
+from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
+from proofmerge.sandbox import SandboxError
 
 app = typer.Typer()
 
@@ -81,7 +83,62 @@ def hypotheses(
         "hypotheses": found.model_dump(),
     }
     typer.echo(json.dumps(report, indent=2))
+    _echo_usage(client)
+
+
+def _echo_usage(client: MetaClient) -> None:
     usage = [u for u in client.usage if u is not None]
     prompt = sum(u.prompt_tokens for u in usage)
     completion = sum(u.completion_tokens for u in usage)
     typer.echo(f"calls={client.calls} tokens: prompt={prompt} completion={completion}", err=True)
+
+
+@app.command()
+def probe(
+    repo: Path,
+    base: Annotated[str, typer.Option(help="Base ref, e.g. main")],
+    head: Annotated[str, typer.Option(help="Head ref, e.g. candidate/tenant-cache-regression")],
+    evidence_dir: Annotated[Path, typer.Option(help="New directory for probes and logs")],
+    intent_file: Annotated[
+        Path | None, typer.Option(help="File holding the PR description")
+    ] = None,
+) -> None:
+    """Write a Spark probe per hypothesis and run it on base and head in Docker."""
+    try:
+        context = get_context(repo, base, head)
+        check_diff(context)
+        if not context.changed_files:
+            typer.echo("no changes between base and head; nothing to check", err=True)
+            return
+        evidence_dir.mkdir(parents=True)  # fails on an existing dir, so old logs never mix in
+        intent = intent_file.read_text() if intent_file else None
+        client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
+        contract = extract_intent(intent, client)
+        found = generate_hypotheses(context, contract, client)
+        probes, experiments = probe_hypotheses(
+            repo, context, contract, found.hypotheses, client, evidence_dir
+        )
+    except (ContextError, MetaError, SandboxError, ValueError, OSError) as error:
+        typer.echo(f"probe failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    report = {
+        "base_sha": context.base_sha,
+        "head_sha": context.head_sha,
+        "intent": contract.model_dump(),
+        "hypotheses": found.model_dump(),
+        "probes": [p.model_dump() for p in probes],
+        "experiments": [e.model_dump() for e in experiments],
+    }
+    (evidence_dir / "probe-run.json").write_text(json.dumps(report, indent=2))
+    for experiment in experiments:
+        grid = {
+            revision: "".join(x.outcome[0] for x in experiment.executions if x.revision == revision)
+            for revision in ("base", "head")
+        }
+        typer.echo(f"{experiment.hypothesis_id}: base {grid['base']}  head {grid['head']}")
+    for p in probes:
+        if not p.test_source:
+            typer.echo(f"{p.hypothesis_id}: Spark wrote no probe (untestable with public names)")
+        elif not p.passed_on_base:
+            typer.echo(f"{p.hypothesis_id}: no probe passed on base after {p.drafts} drafts")
+    _echo_usage(client)

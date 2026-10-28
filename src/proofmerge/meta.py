@@ -5,6 +5,7 @@ response_format, no sampling overrides, no logprobs, `max_completion_tokens`.
 """
 
 import os
+from collections.abc import Sequence
 from typing import Any, Protocol, TypeVar
 
 import openai
@@ -51,10 +52,14 @@ class MetaClient:
         developer: str,
         user: str,
         schema: type[T],
+        history: Sequence[dict[str, str]] = (),
         reasoning_effort: str = "low",
         max_completion_tokens: int = 8192,
     ) -> T:
-        """One stateless call whose reply must validate against `schema`."""
+        """One stateless call whose reply must validate against `schema`.
+
+        `history` holds earlier assistant/user turns, sent after the first user message.
+        """
         if model.endswith("-contributor"):
             # Contributor mode lets Meta train on prompts, which include repository code.
             raise MetaError(f"refusing contributor model {model}: prompts may be used for training")
@@ -68,6 +73,7 @@ class MetaClient:
                 messages=[
                     {"role": "developer", "content": developer},
                     {"role": "user", "content": user},
+                    *history,
                 ],
                 response_format={
                     "type": "json_schema",

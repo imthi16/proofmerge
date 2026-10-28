@@ -230,3 +230,46 @@ def test_docker_run_that_floods_output_is_stopped_and_is_error(demo_repo, tmp_pa
         assert execution.exit_code == sandbox.OUTPUT_LIMIT_EXIT
         assert (tmp_path / execution.stdout_path).stat().st_size <= sandbox.MAX_OUTPUT_BYTES
         assert b"output over" in (tmp_path / execution.stderr_path).read_bytes()
+
+
+def test_run_experiment_without_head_runs_only_base(repo, tmp_path):
+    path, base, _ = repo
+    experiment = run_experiment(
+        path, base, None, "H1", "P", tmp_path, runner=lambda *a: (0, b"", b""), digest="d"
+    )
+    assert [e.revision for e in experiment.executions] == ["base"] * 3
+    assert (tmp_path / "probes" / "conftest.py").read_text() == sandbox.OUTCOME_PLUGIN
+
+
+PLUGIN_CASES = {
+    "assert": ("def test_x():\n    assert 1 == 2\n", 1),
+    "raises": (("import pytest\n\ndef test_x():\n    with pytest.raises(ValueError):\n"
+                "        pass\n"), 1),
+    "name_error": ("def test_x():\n    missing_function()\n", sandbox.NOT_ASSERTION_EXIT),
+    "setup_error": (("import pytest\n\n@pytest.fixture\ndef f():\n    assert False\n\n"
+                     "def test_x(f):\n    pass\n"), sandbox.NOT_ASSERTION_EXIT),
+    "mixed": ("def test_a():\n    assert False\n\ndef test_b():\n    {}['k']\n",
+              sandbox.NOT_ASSERTION_EXIT),
+    "pass": ("def test_x():\n    assert True\n", 0),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("case", PLUGIN_CASES)
+def test_outcome_plugin_counts_only_assertion_failures_as_fail(case, tmp_path):
+    source, exit_code = PLUGIN_CASES[case]
+    (tmp_path / "test_probe.py").write_text(source)
+    (tmp_path / "conftest.py").write_text(sandbox.OUTCOME_PLUGIN)
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "test_probe.py"],
+        cwd=tmp_path, capture_output=True, check=False, env={**os.environ, "PYTEST_ADDOPTS": ""},
+    )  # fmt: skip
+    assert result.returncode == exit_code, result.stdout.decode()
+
+
+@needs_docker
+def test_docker_probe_calling_a_missing_function_is_error_not_fail(demo_repo, tmp_path):
+    base = git(demo_repo, "rev-parse", "main")
+    probe = "from demo_shop import pricing\n\ndef test_x():\n    pricing.no_such_function()\n"
+    experiment = run_experiment(demo_repo, base, None, "H7", probe, tmp_path, attempts=1)
+    assert [e.outcome for e in experiment.executions] == ["ERROR"]
+    assert experiment.executions[0].exit_code == sandbox.NOT_ASSERTION_EXIT

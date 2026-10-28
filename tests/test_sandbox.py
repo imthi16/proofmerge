@@ -245,12 +245,22 @@ PLUGIN_CASES = {
     "assert": ("def test_x():\n    assert 1 == 2\n", 1),
     "raises": (("import pytest\n\ndef test_x():\n    with pytest.raises(ValueError):\n"
                 "        pass\n"), 1),
-    "name_error": ("def test_x():\n    missing_function()\n", sandbox.NOT_ASSERTION_EXIT),
+    "name_error": ("def test_x():\n    missing_function()\n", sandbox.INVALID_PROBE_EXIT),
     "setup_error": (("import pytest\n\n@pytest.fixture\ndef f():\n    assert False\n\n"
-                     "def test_x(f):\n    pass\n"), sandbox.NOT_ASSERTION_EXIT),
+                     "def test_x(f):\n    pass\n"), sandbox.INVALID_PROBE_EXIT),
     "mixed": ("def test_a():\n    assert False\n\ndef test_b():\n    {}['k']\n",
-              sandbox.NOT_ASSERTION_EXIT),
+              sandbox.INVALID_PROBE_EXIT),
     "pass": ("def test_x():\n    assert True\n", 0),
+    "skip": ("import pytest\n\ndef test_x():\n    pytest.skip('no')\n", sandbox.INVALID_PROBE_EXIT),
+    "xfail": (("import pytest\n\n@pytest.mark.xfail\ndef test_x():\n    assert False\n"),
+              sandbox.INVALID_PROBE_EXIT),
+    "xpass": (("import pytest\n\n@pytest.mark.xfail\ndef test_x():\n    assert True\n"),
+              sandbox.INVALID_PROBE_EXIT),
+    "pass_and_skip": (("import pytest\n\ndef test_a():\n    assert True\n\n"
+                       "@pytest.mark.skip\ndef test_b():\n    assert False\n"),
+                      sandbox.INVALID_PROBE_EXIT),
+    "module_skip": (("import pytest\n\npytest.importorskip('no_such_module')\n\n"
+                     "def test_x():\n    assert True\n"), 5),
 }  # fmt: skip
 
 
@@ -272,4 +282,4 @@ def test_docker_probe_calling_a_missing_function_is_error_not_fail(demo_repo, tm
     probe = "from demo_shop import pricing\n\ndef test_x():\n    pricing.no_such_function()\n"
     experiment = run_experiment(demo_repo, base, None, "H7", probe, tmp_path, attempts=1)
     assert [e.outcome for e in experiment.executions] == ["ERROR"]
-    assert experiment.executions[0].exit_code == sandbox.NOT_ASSERTION_EXIT
+    assert experiment.executions[0].exit_code == sandbox.INVALID_PROBE_EXIT

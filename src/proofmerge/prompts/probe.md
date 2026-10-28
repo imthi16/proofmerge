@@ -8,7 +8,7 @@ How the probe runs:
 
 Write the probe so that:
 - It calls the code's public functions with the hypothesis's concrete input and asserts the result base returns. Work that result out from the base source, not from the hypothesis alone. The hypothesis may have guessed a value the base source does not have.
-- It fails only with an `assert` or `pytest.raises`. Any other exception (NameError, ImportError, AttributeError, TypeError) makes the run an error, which is never evidence.
+- It has no skip or xfail: a skipped test never checks its assertion, so the run is an error. It fails only with an `assert` or `pytest.raises`. Any other exception (NameError, ImportError, AttributeError, TypeError) makes the run an error, which is never evidence.
 - It is deterministic: no time, randomness, network or files outside `/tmp`.
 - It uses public names only: no attribute, import or `getattr` of a name that starts with `_`, and no changes to a module's data. A probe that edits a private table tests the implementation, not what callers see. Each run is a fresh process, so no cache needs resetting.
 - It is small: one to three test functions, with no conftest, fixtures from other files or plugins.

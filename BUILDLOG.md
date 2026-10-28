@@ -141,6 +141,11 @@ All three commands exited 0. `graphify update .` exited 0 (no code-graph topolog
 - Checks: `ruff check src tests` clean; `pytest -q` 117 passed, including the Docker tests.
 - Known limits:
   - One real run per candidate; hypotheses vary between runs.
-  - The private-name guard is a heuristic and does not catch `vars(module)` or similar.
+  - The private-name guard is a heuristic against an honest model overreaching, not a sandbox. A name built at runtime still gets through, so the verdict must not rely on it.
   - There is no classification or verdict yet; that is Oct 31.
   - The fixed conftest means a repository's own conftest is not loaded (same as T16).
+
+#### Codex review fixes (PR #14)
+- The private-name guard missed `vars(pricing)['_PRICES']` and `pricing.__dict__[...]`. Codex showed that such a probe recreates the false regression on `cache-with-tenant-key`. Now any string constant with a `_private` part is flagged, and so are `vars`, `__dict__`, `globals` and `locals`.
+- A probe whose tests were skipped exited 0, so it counted as passing on base without checking anything. The outcome plugin now turns any skip, xfail or xpass into exit 6 (ERROR); the constant is renamed `INVALID_PROBE_EXIT`. A module-level `importorskip` already exited 5 (ERROR); a test now covers it.
+- `ruff check src tests` clean; `pytest -q` 122 passed, including the Docker tests. The real Spark runs above were not repeated after these fixes.

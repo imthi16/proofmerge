@@ -64,33 +64,35 @@ def _private(name: str) -> bool:
     return name.startswith("_") and not name.startswith("__")
 
 
+REFLECTION = {"__dict__", "vars", "globals", "locals"}  # name lookups by string
+
+
 def private_names(source: str) -> list[str]:
     """Private names a probe reaches into. A probe that edits a module's private data
-    (a price table under a cache, say) tests the implementation, not what callers see."""
+    (a price table under a cache, say) tests the implementation, not what callers see.
+
+    shortcut: a heuristic against an honest model overreaching, not a sandbox; a
+    determined probe can still build a name at runtime. The verdict must not rely on it.
+    """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []  # pytest reports it as a collection error, which is ERROR
     found: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and _private(node.attr):
-            found.add(node.attr)
+        if isinstance(node, ast.Attribute):
+            if _private(node.attr) or node.attr in REFLECTION:
+                found.add(node.attr)
+        elif isinstance(node, ast.Name) and node.id in REFLECTION:
+            found.add(node.id)
         elif isinstance(node, ast.ImportFrom):
             found.update(alias.name for alias in node.names if _private(alias.name))
             found.update(p for p in (node.module or "").split(".") if _private(p))
         elif isinstance(node, ast.Import):
             found.update(p for alias in node.names for p in alias.name.split(".") if _private(p))
-        elif isinstance(node, ast.Call):
-            # getattr(module, "_cache"), monkeypatch.setattr(module, "_TABLE", ...)
-            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
-            if name in {"getattr", "setattr", "hasattr", "delattr"}:
-                found.update(
-                    arg.value
-                    for arg in node.args
-                    if isinstance(arg, ast.Constant)
-                    and isinstance(arg.value, str)
-                    and _private(arg.value)
-                )
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            # getattr(m, "_cache"), monkeypatch.setattr(m, "_T", ...), sys.modules["p._impl"]
+            found.update(p for p in node.value.split(".") if _private(p))
     return sorted(found)
 
 

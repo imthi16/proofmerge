@@ -134,6 +134,14 @@ def test_private_names_finds_every_way_a_probe_reaches_into_private_state():
         "    assert price_for('a', 'b').__class__ is float\n"
     )
     assert private_names(source) == ["_PRICES", "_TABLE", "_helper", "_impl", "_price_cache"]
+    reflective = (
+        "import sys, demo_shop.pricing as pricing\n"
+        "vars(pricing)['_PRICES']['a'] = 1\n"
+        "pricing.__dict__['_CACHE'].clear()\n"
+        "sys.modules['pkg._impl']\n"
+    )
+    assert private_names(reflective) == ["_CACHE", "_PRICES", "__dict__", "_impl", "vars"]
+    assert private_names("def test_x():\n    assert f('a_b', '__init__') == 1\n") == []
     assert private_names("def test_x(:\n") == []
 
 

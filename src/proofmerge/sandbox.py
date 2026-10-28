@@ -27,9 +27,10 @@ MAX_OUTPUT_BYTES = 1_000_000  # per stream; a run that prints more is stopped an
 OUTPUT_LIMIT_EXIT = -1  # exit code recorded for a run stopped by the output limit
 # What runs inside the container; recorded in every Execution.
 PYTEST_ARGV = ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
-NOT_ASSERTION_EXIT = 6  # set by OUTCOME_PLUGIN; not a pytest exit code, so it reads ERROR
+INVALID_PROBE_EXIT = 6  # set by OUTCOME_PLUGIN; not a pytest exit code, so it reads ERROR
 # Written as conftest.py next to every probe. A test that fails with anything but an
-# assertion (NameError, ImportError, a setup error) is a broken probe, not evidence.
+# assertion (NameError, ImportError, a setup error) is a broken probe, not evidence. So
+# is a skipped or xfail test: pytest exits 0 for it although its assertion never ran.
 OUTCOME_PLUGIN = f"""import pytest
 
 _broken = []
@@ -41,13 +42,15 @@ def pytest_runtest_makereport(item, call):
     assertion = call.excinfo is not None and call.excinfo.errisinstance(
         (AssertionError, pytest.fail.Exception)
     )
-    if report.failed and (call.when != "call" or not assertion):
+    if report.skipped or hasattr(report, "wasxfail"):
+        _broken.append(item.nodeid)
+    elif report.failed and (call.when != "call" or not assertion):
         _broken.append(item.nodeid)
 
 
 def pytest_sessionfinish(session, exitstatus):
-    if exitstatus == 1 and _broken:
-        session.exitstatus = {NOT_ASSERTION_EXIT}
+    if exitstatus in (0, 1) and _broken:
+        session.exitstatus = {INVALID_PROBE_EXIT}
 """
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")

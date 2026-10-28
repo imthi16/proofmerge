@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 import pytest
 from test_meta import FakeCompletions
@@ -121,3 +122,74 @@ def test_hypotheses_command_fails_cleanly_on_a_bad_repo(tmp_path):
     result = CliRunner().invoke(app, ["hypotheses", str(tmp_path), "--base", "main", "--head", "x"])
     assert result.exit_code == 1
     assert "Not a Git repository" in result.output
+
+
+def test_unusual_file_names_are_sent_literally_and_accepted():
+    # Git C-quotes this name in diff headers, so the model must copy it from the file list.
+    name = "src/café.py"
+    context = CONTEXT.model_copy(
+        update={"changed_files": [name], "diff_text": '+++ "b/src/caf\\303\\251.py"\n'}
+    )
+    fake = reply(hypothesis(locations=[f"{name}::f"]))
+    found = generate_hypotheses(context, CONTRACT, MetaClient(fake))
+
+    assert [h.id for h in found.hypotheses] == ["H1"]
+    assert f'["{name}"]' in fake.requests[0]["messages"][1]["content"]
+
+
+def git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize(
+    ("content", "exit_code", "message"),
+    [("before\n", 0, "no changes"), ("x" * (MAX_DIFF_CHARS + 1), 1, str(MAX_DIFF_CHARS))],
+)
+def test_command_checks_the_diff_before_any_model_call(tmp_path, content, exit_code, message):
+    git(tmp_path, "init", "-q")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "base",
+    )
+    (tmp_path / "f.txt").write_text(content)
+    git(tmp_path, "add", ".")
+    git(
+        tmp_path,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        "head",
+    )
+    base = "HEAD~1" if exit_code else "HEAD"  # HEAD..HEAD is an empty comparison
+    intent = tmp_path / "intent.md"
+    intent.write_text("Make it faster.")
+    # An empty key proves no client is built: building one would fail with a key error.
+    result = CliRunner().invoke(
+        app,
+        [
+            "hypotheses",
+            str(tmp_path),
+            "--base",
+            base,
+            "--head",
+            "HEAD",
+            "--intent-file",
+            str(intent),
+        ],
+        env={"MODEL_API_KEY": ""},
+    )
+    assert result.exit_code == exit_code
+    assert message in result.output
+    assert "MODEL_API_KEY" not in result.output

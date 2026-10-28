@@ -62,17 +62,25 @@ def _problem(hypothesis: ProposedHypothesis, claim_ids: set[str], changed: set[s
     return None
 
 
+def check_diff(context: GitContext) -> None:
+    """Refuse a diff too large to send to the model."""
+    if len(context.diff_text) > MAX_DIFF_CHARS:
+        raise ValueError(f"diff is over {MAX_DIFF_CHARS} characters")
+
+
 def generate_hypotheses(
     context: GitContext, contract: IntentContract, client: MetaClient
 ) -> HypothesisSet:
     """Ask Spark for hypotheses about base..head and keep the ones that pass validation."""
     if not context.changed_files:
         return HypothesisSet(hypotheses=[], rejected=[])
-    if len(context.diff_text) > MAX_DIFF_CHARS:
-        raise ValueError(f"diff is over {MAX_DIFF_CHARS} characters")
+    check_diff(context)
     claims = json.dumps([claim.model_dump() for claim in contract.claims], indent=2)
+    # Diff headers C-quote unusual names (b/"caf\303\251.py"), so give the literal paths too.
+    files = json.dumps(context.changed_files, ensure_ascii=False)
     user = (
         f"Intent claims:\n{claims}\n\n"
+        f"Changed files:\n{files}\n\n"
         f"Unified diff from base {context.base_sha} to head {context.head_sha}:\n"
         f"{context.diff_text}"
     )

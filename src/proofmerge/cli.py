@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
-from proofmerge.hypotheses import generate_hypotheses
+from proofmerge.hypotheses import check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 
@@ -62,6 +62,10 @@ def hypotheses(
     """Print intent claims and Spark hypotheses for base..head (up to 2 real calls)."""
     try:
         context = get_context(repo, base, head)
+        check_diff(context)  # before any model call, so a refused diff costs nothing
+        if not context.changed_files:
+            typer.echo("no changes between base and head; nothing to check", err=True)
+            return
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2)
         contract = extract_intent(intent, client)

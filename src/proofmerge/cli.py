@@ -7,9 +7,11 @@ from pydantic import BaseModel
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
+from proofmerge.evidence import Proof
 from proofmerge.hypotheses import check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
+from proofmerge.report import render_html
 
 app = typer.Typer()
 
@@ -48,6 +50,21 @@ def smoke() -> None:
     usage = client.usage[-1]
     if usage is not None:
         typer.echo(f"tokens: prompt={usage.prompt_tokens} completion={usage.completion_tokens}")
+
+
+@app.command()
+def report(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    out: Annotated[Path, typer.Option(help="Output HTML file")] = Path("report.html"),
+) -> None:
+    """Render proof.json as one self-contained report.html (evidence dir = its folder)."""
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        out.write_text(render_html(proof, proof_json.parent))
+    except (OSError, ValueError) as error:
+        typer.echo(f"report failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"wrote {out}")
 
 
 @app.command()

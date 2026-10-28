@@ -53,6 +53,19 @@ Record what actually shipped; do not mark unimplemented features complete.
 - `.venv/bin/python -m ruff check src tests`: All checks passed.
 - `.venv/bin/python -m pytest -q`: 22 passed.
 
+### T13 report.html — OpenCode · review: Claude · review 2026-10-28
+Branch `task/T13-report-html` (from `task/T12-proof-schema`).
+- `src/proofmerge/report.py`: `render_html(proof, evidence_dir)` — stdlib only (`html`, `shlex`, `pathlib`), inline CSS, no JavaScript, no external resources. Every proof.json string is escaped; probe paths are rejected if they resolve outside the evidence dir.
+- CLI: `proofmerge report <proof.json> --out report.html` (evidence dir = the folder holding proof.json).
+- Page order per task: verdict banner (decision as text + reasons; PASS says "No regression found within the tested scope") → intent claims with exact quotes + rejected claims → tamper findings → hypothesis cards (cited claim, expected base/head, base/head × attempt grid, classification, probe source or "probe source not captured", reproduce command) → provenance (base/head SHA, diff sha256, probe sha256s, model usage) → scope limitations + unresolved risks, always visible.
+- `evidence.py` contract needed no changes for this task.
+- Screenshots for the PR (light/dark × desktop/1280 × 375px, both samples): rendered headlessly and copied to `../t13-screenshots/` next to the repo (not committed).
+
+#### Verification
+- `.venv/bin/ruff check src tests`: All checks passed.
+- `.venv/bin/pytest -q`: 63 passed (10 new in `tests/test_report.py`: both samples' decision/claim ids/hypothesis ids/quotes, escaped `<script>` claim, probe source captured/missing/outside-evidence-dir, PASS wording, CLI success + missing-file error).
+- Both reports opened and visually checked (banner text, grid, monospace hashes, dark via `prefers-color-scheme`, 375px layout).
+
 ### Next task
 - Oct 29: base/head worktrees and isolated test execution with hashes.
 - T8 test-tamper static checks (Codex) is still open.

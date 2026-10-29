@@ -17,8 +17,8 @@ from proofmerge.context import GitContext
 from proofmerge.evidence import Experiment
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import IntentContract
-from proofmerge.meta import SPARK_MODEL, MetaClient
-from proofmerge.sandbox import Runner, docker_runner, image_digest, run_experiment
+from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
+from proofmerge.sandbox import Runner, SandboxError, docker_runner, image_digest, run_experiment
 
 MAX_BASE_RUNS = 3
 MAX_SOURCE_CHARS = 60_000  # base source sent to Spark, over all changed files
@@ -207,29 +207,34 @@ def probe_hypotheses(
     probes: list[Probe] = []
     experiments: list[Experiment] = []
     for hypothesis in hypotheses:
-        probe = write_probe(
-            repo,
-            context,
-            contract,
-            hypothesis,
-            client,
-            evidence_dir,
-            sources=sources,
-            runner=runner,
-            digest=digest,
-        )
-        probes.append(probe)
-        if probe.passed_on_base:
-            experiments.append(
-                run_experiment(
-                    repo,
-                    context.base_sha,
-                    context.head_sha,
-                    hypothesis.id,
-                    probe.test_source,
-                    evidence_dir,
-                    runner=runner,
-                    digest=digest,
-                )
+        try:
+            probe = write_probe(
+                repo,
+                context,
+                contract,
+                hypothesis,
+                client,
+                evidence_dir,
+                sources=sources,
+                runner=runner,
+                digest=digest,
             )
+            probes.append(probe)
+            if probe.passed_on_base:
+                experiments.append(
+                    run_experiment(
+                        repo,
+                        context.base_sha,
+                        context.head_sha,
+                        hypothesis.id,
+                        probe.test_source,
+                        evidence_dir,
+                        runner=runner,
+                        digest=digest,
+                    )
+                )
+        except (MetaError, SandboxError, OSError, ValueError) as error:
+            # ponytail: partials ride on the exception; a result type if more callers need them
+            error.completed = {"probes": probes, "experiments": experiments}
+            raise
     return probes, experiments

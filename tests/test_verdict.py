@@ -107,6 +107,14 @@ def test_rule_4_any_change_claim_downgrades_tamper_fail_to_review():
     assert "CHANGE" in result.reasons[0]
 
 
+def test_tamper_fail_is_review_when_intent_extraction_failed():
+    result = decide(
+        IntentContract(claims=[C0], rejected=[]), [], [], [tamper()], intent_established=False
+    )
+    assert result.decision == "REVIEW"
+    assert "intent extraction failed" in result.reasons[0]
+
+
 @pytest.mark.parametrize("outcome", ["PASS", "ERROR", "TIMEOUT", None])
 def test_rule_5_tamper_without_fail_needs_review(outcome):
     result = decide(contract(), [], [], [tamper(outcome)])

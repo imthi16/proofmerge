@@ -304,3 +304,8 @@ All checks passed!
   $ ../proofmerge-T3/.venv/bin/ruff check src tests
   All checks passed!
   ```
+- Real run, 2026-10-29 (Muse Spark, Docker), `proofmerge verify <demo repo> --base main --head candidate/tenant-cache-regression --intent-file demo/candidates/tenant-cache-regression/intent.md`:
+  - Claims: C1 CHANGE "Add caching to price lookup for speed", C2 PRESERVE "Returned prices must not change".
+  - H1 (C0) and H2 (C2), both Spark-written probes: base PASS 3/3, head FAIL 3/3, `AssertionError: assert 25.0 == 35.0` (tenant-b got tenant-a's price). Verdict BLOCK (the exit code was not captured in this run; exit codes are covered by the CLI tests). 4 model calls, 4,552 prompt / 7,683 completion tokens.
+  - `proofmerge replay` on the bundle: `evidence intact: 37 files`.
+  - Known limit seen in this run: H2's title is "cached price goes stale", but its probe checks tenant isolation, the same bug as H1. A probe is not yet checked against its hypothesis text.

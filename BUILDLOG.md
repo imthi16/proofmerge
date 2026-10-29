@@ -383,6 +383,11 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: 331 passed, 8 skipped in 12.07s.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`.
 
+### Benchmark run 1 and doc status refresh — 2026-10-29
+- First real run of `bench/run_bench.py` on main `2d43fc4`: Muse Spark 1.3 + Muse Wonder 1.0, Docker sandbox, 20 candidates, 87 model calls, 0 errors. Faulty: 6 BLOCK, 6 REVIEW, 0 PASS. Safe: 1 BLOCK, 3 REVIEW, 4 PASS. Counts split by held-out status are in `bench/results/README.md`; per-candidate data is in `bench/results/2026-10-29-run1/results.json`, with local evidence paths replaced by `<run dir>`.
+- Two verdict issues found: a false BLOCK where a CHANGE claim explains the change (`newsletter-promo-fix`), and four faulty cases held at REVIEW because an intent text with no explicit claim was treated as no intent. Changes made after this run address both, so later runs on these cases are not clean held-out results.
+- `docs/PRIOR_ART.md` and `ORIGINALITY.md` now mark the verdict engine, probes, repeated runs, manifest replay (hash checks only) and tamper checks as built. Replay re-running the experiments stays planned.
+
 ### 2026-10-29 — T36 Verdict fixes
 - Intent text with no explicit claims now leaves a verified C0 regression eligible for BLOCK. Missing or blank intent, and contracts whose proposed claims were all rejected, keep that regression at REVIEW.
 - Wonder checks whether a verified CHANGE quote explicitly requests the behavior a probe shows changing. Known CHANGE explanations qualify verified regressions for REVIEW; unknown and non-CHANGE ids are ignored. Proofs record explained probe ids and their claim ids; reports show the escaped annotation. New fields default to empty for older proofs.

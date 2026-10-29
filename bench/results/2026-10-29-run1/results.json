@@ -1,0 +1,328 @@
+{
+  "metadata": {
+    "git_sha": "2d43fc4d39a50c1fcb3b144af5c834cfb6b626b0",
+    "hypotheses_sha256": "7b7bde5be0de5a370da585ee767be267034ca79b9a0c4aec86788e480ba04309",
+    "intent_sha256": "f7bf2487dbd57ec5a8e5229e4fdf4a021c3894e1822b3d8fbe79d521f58d8cf8",
+    "spark_model": "muse-spark-1.3",
+    "date": "2026-10-29T11:47:56.022149+00:00"
+  },
+  "candidates": {
+    "boundary-qty-inclusive": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because intent is missing."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3236,
+        "completion": 4693
+      },
+      "evidence_dir": "<run dir>/boundary-qty-inclusive"
+    },
+    "drop-tenant-validation": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H2 needs review because its probe may not test its hypothesis.",
+        "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present."
+      ],
+      "model_calls": 6,
+      "tokens": {
+        "prompt": 5213,
+        "completion": 11363
+      },
+      "evidence_dir": "<run dir>/drop-tenant-validation"
+    },
+    "round-discount": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3426,
+        "completion": 4513
+      },
+      "evidence_dir": "<run dir>/round-discount"
+    },
+    "mutate-stock": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3481,
+        "completion": 3794
+      },
+      "evidence_dir": "<run dir>/mutate-stock"
+    },
+    "skip-boundary-test": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present.",
+        "Changed test tests/test_pricing.py fails on head and the contract has no CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head and the contract has no CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head and the contract has no CHANGE claim."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3912,
+        "completion": 2714
+      },
+      "evidence_dir": "<run dir>/skip-boundary-test"
+    },
+    "price-error-type": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because C1 is a CHANGE claim."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3679,
+        "completion": 7850
+      },
+      "evidence_dir": "<run dir>/price-error-type"
+    },
+    "ledger-mutation-order": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because intent is missing.",
+        "H2 needs review because intent is missing."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 5164,
+        "completion": 5839
+      },
+      "evidence_dir": "<run dir>/ledger-mutation-order"
+    },
+    "order-total-off-by-one": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because C1 is a CHANGE claim."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3771,
+        "completion": 4561
+      },
+      "evidence_dir": "<run dir>/order-total-off-by-one"
+    },
+    "line-totals-generator": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H3 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 7,
+      "tokens": {
+        "prompt": 7148,
+        "completion": 7493
+      },
+      "evidence_dir": "<run dir>/line-totals-generator"
+    },
+    "promo-rule-order": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because intent is missing."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3624,
+        "completion": 3472
+      },
+      "evidence_dir": "<run dir>/promo-rule-order"
+    },
+    "zero-price-unknown": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "H2 needs review because its probe may not test its hypothesis.",
+        "H1 needs review because intent is missing.",
+        "H2 needs review because intent is missing."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4829,
+        "completion": 8207
+      },
+      "evidence_dir": "<run dir>/zero-price-unknown"
+    },
+    "default-shipping-express": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3643,
+        "completion": 4266
+      },
+      "evidence_dir": "<run dir>/default-shipping-express"
+    },
+    "pure-refactor-constants": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 1957,
+        "completion": 2206
+      },
+      "evidence_dir": "<run dir>/pure-refactor-constants"
+    },
+    "intended-discount-rate": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "Changed test tests/test_pricing.py fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_above_threshold fails on head but needs review because the contract has a CHANGE claim."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 2057,
+        "completion": 1776
+      },
+      "evidence_dir": "<run dir>/intended-discount-rate"
+    },
+    "cache-with-tenant-key": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 was not tested: Stale cached price after price table update.",
+        "H2 was not tested: Deleted tenant still served from cache."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4738,
+        "completion": 7178
+      },
+      "evidence_dir": "<run dir>/cache-with-tenant-key"
+    },
+    "extract-inventory-validation": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 2,
+      "tokens": {
+        "prompt": 1752,
+        "completion": 1611
+      },
+      "evidence_dir": "<run dir>/extract-inventory-validation"
+    },
+    "comprehension-line-totals": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 2,
+      "tokens": {
+        "prompt": 1607,
+        "completion": 1795
+      },
+      "evidence_dir": "<run dir>/comprehension-line-totals"
+    },
+    "intended-express-fee": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "Changed test tests/test_orders.py fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_orders.py::test_order_total_express_with_cancelled_last_line fails on head but needs review because the contract has a CHANGE claim.",
+        "Meta API request failed (HTTP 500)"
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 1793,
+        "completion": 1696
+      },
+      "evidence_dir": "<run dir>/intended-express-fee"
+    },
+    "single-lookup-pricing": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 1933,
+        "completion": 3505
+      },
+      "evidence_dir": "<run dir>/single-lookup-pricing"
+    },
+    "newsletter-promo-fix": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "Changed test tests/test_orders.py needs review because its outcome is PASS."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4248,
+        "completion": 4523
+      },
+      "evidence_dir": "<run dir>/newsletter-promo-fix"
+    }
+  },
+  "summary": {
+    "non_held_out": {
+      "faulty_BLOCK": 3,
+      "faulty_REVIEW": 5,
+      "faulty_PASS": 0,
+      "faulty_ERROR": 0,
+      "safe_BLOCK": 1,
+      "safe_REVIEW": 2,
+      "safe_PASS": 2,
+      "safe_ERROR": 0
+    },
+    "held_out": {
+      "faulty_BLOCK": 3,
+      "faulty_REVIEW": 1,
+      "faulty_PASS": 0,
+      "faulty_ERROR": 0,
+      "safe_BLOCK": 0,
+      "safe_REVIEW": 1,
+      "safe_PASS": 2,
+      "safe_ERROR": 0
+    }
+  }
+}

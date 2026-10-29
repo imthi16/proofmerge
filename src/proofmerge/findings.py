@@ -44,14 +44,14 @@ def findings_for(
             and hypothesis_id in passed
             and re.fullmatch(r"[0-9a-fA-F]{64}", experiment.test_source_sha256) is not None
         )
-        # ponytail: report is the CLI that exists; switch to replay when hash checks land.
+        # shortcut: replay checks hashes only; re-running in Docker is a later task.
         findings.append(
             Finding(
                 hypothesis_id=hypothesis_id,
                 claim_id=claims[hypothesis_id],
                 classification=classification,
                 verified=verified,
-                reproducer_command=f"proofmerge report {proof_path}",
+                reproducer_command=f"proofmerge replay {proof_path}",
             )
         )
     return findings

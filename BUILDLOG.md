@@ -309,3 +309,11 @@ All checks passed!
   - H1 (C0) and H2 (C2), both Spark-written probes: base PASS 3/3, head FAIL 3/3, `AssertionError: assert 25.0 == 35.0` (tenant-b got tenant-a's price). Verdict BLOCK (the exit code was not captured in this run; exit codes are covered by the CLI tests). 4 model calls, 4,552 prompt / 7,683 completion tokens.
   - `proofmerge replay` on the bundle: `evidence intact: 37 files`.
   - Known limit seen in this run: H2's title is "cached price goes stale", but its probe checks tenant isolation, the same bug as H1. A probe is not yet checked against its hypothesis text.
+
+### T22 Benchmark and demo leakage cleanup — 2026-10-29
+- Neutralized cache docstrings and the boundary-test skip reason; removed ticket/approval cues and mutation disclosure from intents while preserving explicit intended changes and the newsletter fix description. Labels and candidate executable logic are unchanged. Added a separate tenant-b price assertion to the tenant-validation ground truth.
+- Build/check commands passed (exit 0): `PY=../proofmerge-T3/.venv/bin/python`; `B=$(mktemp -d)/bench && $PY demo/build_demo_repo.py $B --candidates bench/candidates && $PY demo/check_demo.py $B --ground-truth bench/ground_truth`; `D=$(mktemp -d)/demo && $PY demo/build_demo_repo.py $D && $PY demo/check_demo.py $D`.
+- Compared against a `git archive` of main at `e188f4b`: the 20-candidate bench table and the 3-candidate demo table are identical before and after (lead re-run, all four checks exit 0).
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (exit 0): `238 passed, 7 skipped in 8.19s`.
+- `../proofmerge-T3/.venv/bin/ruff check src tests` (exit 0): `All checks passed!`; `git diff --check` passed.
+- Intent prompt (`intent.py`): the PRESERVE rule no longer quotes the benchmark's own sentence "No behavior change intended"; it now says a general statement that results or behavior do not change is a PRESERVE claim. The hypotheses prompt is unchanged; its sha256 before benchmark runs is `7b7bde5be0de5a370da585ee767be267034ca79b9a0c4aec86788e480ba04309`. After this edit `pytest -q`: 245 passed (Docker tests included); `ruff check src tests`: clean. Real Spark runs were not repeated after the prompt change.

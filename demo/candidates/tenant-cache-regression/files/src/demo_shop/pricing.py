@@ -10,7 +10,7 @@ _price_cache: dict[str, float] = {}
 
 
 def price_for(tenant_id: str, sku: str) -> float:
-    """Return the unit price for a tenant/sku pair (cached by SKU)."""
+    """Return the unit price for a tenant/sku pair."""
     if sku in _price_cache:
         return _price_cache[sku]
     if tenant_id not in _PRICES:

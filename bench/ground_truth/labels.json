@@ -4,7 +4,19 @@
   "round-discount": {"verdict": "BLOCK", "held_out": true},
   "mutate-stock": {"verdict": "BLOCK"},
   "skip-boundary-test": {"verdict": "BLOCK"},
+  "price-error-type": {"verdict": "BLOCK"},
+  "ledger-mutation-order": {"verdict": "BLOCK"},
+  "order-total-off-by-one": {"verdict": "BLOCK"},
+  "line-totals-generator": {"verdict": "BLOCK"},
+  "promo-rule-order": {"verdict": "BLOCK", "held_out": true},
+  "zero-price-unknown": {"verdict": "BLOCK"},
+  "default-shipping-express": {"verdict": "BLOCK", "held_out": true},
   "pure-refactor-constants": {"verdict": "NOT_BLOCK"},
   "intended-discount-rate": {"verdict": "NOT_BLOCK"},
-  "cache-with-tenant-key": {"verdict": "NOT_BLOCK", "held_out": true}
+  "cache-with-tenant-key": {"verdict": "NOT_BLOCK", "held_out": true},
+  "extract-inventory-validation": {"verdict": "NOT_BLOCK", "held_out": true},
+  "comprehension-line-totals": {"verdict": "NOT_BLOCK"},
+  "intended-express-fee": {"verdict": "NOT_BLOCK"},
+  "single-lookup-pricing": {"verdict": "NOT_BLOCK", "held_out": true},
+  "newsletter-promo-fix": {"verdict": "NOT_BLOCK"}
 }

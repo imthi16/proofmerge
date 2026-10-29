@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_line_totals_empty_is_empty_list _____________________
+
+    def test_line_totals_empty_is_empty_list():
+        result = line_totals([])
+>       assert result == []
+E       assert <generator ob...x7f8e1f230790> == []
+E         
+E         Use -v to get more diff
+
+../probes/test_h5.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h5.py::test_line_totals_empty_is_empty_list - assert <g...
+1 failed in 0.02s

@@ -1,0 +1,19 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_reserve_does_not_mutate_caller_dict ___________________
+
+    def test_reserve_does_not_mutate_caller_dict():
+        stock = {'A': 10}
+        r1 = reserve(stock, 'A', 2)
+        assert r1 == {'A': 8}
+>       assert stock == {'A': 10}
+E       AssertionError: assert {'A': 8} == {'A': 10}
+E         
+E         Differing items:
+E         {'A': 8} != {'A': 10}
+E         Use -v to get more diff
+
+../probes/test_h1.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_reserve_does_not_mutate_caller_dict - Asser...
+1 failed in 0.02s

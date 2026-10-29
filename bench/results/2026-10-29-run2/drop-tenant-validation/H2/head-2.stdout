@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________________ test_unknown_tenant_rejected _________________________
+
+    def test_unknown_tenant_rejected():
+        try:
+            result = price_for("unknown-tenant-xyz-123", "widget")
+        except ValueError as e:
+            assert "Unknown tenant: unknown-tenant-xyz-123" in str(e)
+        else:
+>           assert False, f"expected ValueError but returned {result!r}"
+E           AssertionError: expected ValueError but returned 25.0
+E           assert False
+
+../probes/test_h2.py:9: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_unknown_tenant_rejected - AssertionError: e...
+1 failed in 0.02s

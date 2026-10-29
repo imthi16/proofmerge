@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________________ test_line_totals_returns_list _________________________
+
+    def test_line_totals_returns_list():
+        result = line_totals([{"qty": 2, "price": 5}, {"qty": 3, "price": 5}])
+>       assert result == [10, 15]
+E       assert <generator ob...x766d426a0860> == [10, 15]
+E         
+E         Use -v to get more diff
+
+../probes/test_h1.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_line_totals_returns_list - assert <generato...
+1 failed in 0.02s

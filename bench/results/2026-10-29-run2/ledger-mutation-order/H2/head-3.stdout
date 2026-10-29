@@ -1,0 +1,39 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_negative_amount_error_wins ________________________
+
+    def test_negative_amount_error_wins():
+        try:
+>           record_purchase({}, "bob", -5.0)
+
+../probes/test_h2.py:5: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+ledger = {}, customer = 'bob', amount = -5.0
+
+    def record_purchase(ledger: dict[str, float], customer: str, amount: float) -> float:
+        """Record a purchase and return the customer's new balance.
+    
+        Raises:
+            ValueError: When amount is negative or customer is unknown.
+        """
+        if customer not in ledger:
+>           raise ValueError(f"Unknown customer: {customer}")
+E           ValueError: Unknown customer: bob
+
+src/demo_shop/orders.py:33: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_negative_amount_error_wins():
+        try:
+            record_purchase({}, "bob", -5.0)
+        except ValueError as exc:
+>           assert "Negative purchase amount" in str(exc)
+E           AssertionError: assert 'Negative purchase amount' in 'Unknown customer: bob'
+E            +  where 'Unknown customer: bob' = str(ValueError('Unknown customer: bob'))
+
+../probes/test_h2.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_negative_amount_error_wins - AssertionError...
+1 failed in 0.02s

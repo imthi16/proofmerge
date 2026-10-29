@@ -1,0 +1,508 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "drop-tenant-validation",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+  "diff_sha256": "a65c2f4ab982f202c3b235841e1c7e4bf26c3e3545cfb0b9816b513ae6bbf1be",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "PRESERVE",
+        "statement": "The price lookup returns the same prices as before.",
+        "source_quote": "Returned prices should stay the same."
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C1",
+        "title": "Valid tenant gets another tenant's SKU price instead of error",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "tenant_id is ignored, so price_for with a valid tenant B and a sku that exists only in tenant A returns A's price instead of raising. Concrete pattern: pick t1,t2 from _PRICES keys and sku s where s in _PRICES[t1] and s not in _PRICES[t2], call price_for(t2, s).",
+        "expected_base": "Raises ValueError containing 'Unknown SKU for tenant <tenant>: <sku>'",
+        "expected_head": "Returns float price from the other tenant's table, no exception",
+        "test_intent": "Deterministic pytest: import pricing, read _PRICES to find t1,t2,s with s exclusive to t1, call price_for(t2, s) and assert it raises ValueError; it passes on base and fails (returns float) on head.",
+        "risk_category": "data-isolation",
+        "falsification_criteria": "Proven wrong if head also raises ValueError for that input, or if no exclusive SKU exists because all tenant tables have identical SKU sets.",
+        "possibly_intended": false,
+        "id": "H1"
+      },
+      {
+        "claim_id": "C0",
+        "title": "Unknown tenant no longer rejected",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "tenant_id is never checked, so price_for('unknown-tenant-xyz', s) where s is any existing sku returns a price instead of raising Unknown tenant. Base raises before looking at sku.",
+        "expected_base": "Raises ValueError with message 'Unknown tenant: unknown-tenant-xyz'",
+        "expected_head": "Returns float price from whichever table contains the sku, no exception",
+        "test_intent": "Deterministic pytest: get any existing sku s from _PRICES.values(), call price_for('unknown-tenant-xyz-123', s) and assert ValueError; passes on base, returns float on head.",
+        "risk_category": "security",
+        "falsification_criteria": "Proven wrong if head raises ValueError for unknown tenant id.",
+        "possibly_intended": false,
+        "id": "H2"
+      },
+      {
+        "claim_id": "C0",
+        "title": "Unknown SKU error message loses tenant context",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "For a sku absent from all tables, e.g. price_for(valid_tenant, 'no-such-sku-xyz-123'), both revisions raise ValueError but head changes the message and drops tenant context that callers may match on.",
+        "expected_base": "Raises ValueError with message containing both tenant id and sku, e.g. 'Unknown SKU for tenant <tenant>: <sku>'",
+        "expected_head": "Raises ValueError with message 'Unknown SKU: <sku>' with no tenant id",
+        "test_intent": "Deterministic pytest: pick valid tenant t from _PRICES and sku 'no-such-sku-xyz-123' absent from all tables, call price_for(t, sku), capture ValueError message and assert it mentions t; passes on base, fails on head.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "Proven wrong if head's exception message still contains the tenant id and matches base message.",
+        "possibly_intended": false,
+        "id": "H3"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "e38ad3026e8b401d3ba2921d38ef7717ab8721bdec32ff30dc3190e3ce94e7e9",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 603,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 705,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 605,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 703,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "H2",
+      "test_source_path": "probes/test_h2.py",
+      "test_source_sha256": "8a46a1e1eb36acd1b3cd68533e784ad956353622588899c8452dba8228b15490",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 808,
+          "stdout_path": "H2/base-1.stdout",
+          "stderr_path": "H2/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 605,
+          "stdout_path": "H2/base-2.stdout",
+          "stderr_path": "H2/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 705,
+          "stdout_path": "H2/base-3.stdout",
+          "stderr_path": "H2/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H2/head-1.stdout",
+          "stderr_path": "H2/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H2/head-2.stdout",
+          "stderr_path": "H2/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H2/head-3.stdout",
+          "stderr_path": "H2/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "H3",
+      "test_source_path": "probes/test_h3.py",
+      "test_source_sha256": "d32924e9bb265a1eba96cdcf806a552dc27f747ef4e7a26c1c019b602827a846",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 604,
+          "stdout_path": "H3/base-1.stdout",
+          "stderr_path": "H3/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 704,
+          "stdout_path": "H3/base-2.stdout",
+          "stderr_path": "H3/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 705,
+          "stdout_path": "H3/base-3.stdout",
+          "stderr_path": "H3/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 703,
+          "stdout_path": "H3/head-1.stdout",
+          "stderr_path": "H3/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H3/head-2.stdout",
+          "stderr_path": "H3/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d01619a2a2ba62d78fbe154cbf4a1836685bd187",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h3.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H3/head-3.stdout",
+          "stderr_path": "H3/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C1",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json"
+    },
+    {
+      "hypothesis_id": "H2",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json"
+    },
+    {
+      "hypothesis_id": "H3",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 needs review because its probe may not test its hypothesis.",
+      "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+      "H3 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 7,
+    "prompt_tokens": 7120,
+    "completion_tokens": 11921
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [
+    "H1"
+  ],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

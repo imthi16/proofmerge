@@ -350,3 +350,9 @@ All checks passed!
   All checks passed!
   ```
 - The eight Docker tests were skipped by their availability guard. `ruff check bench/run_bench.py` and `git diff --check` also passed.
+- Real runs after this change, 2026-10-29 (Muse Spark + Muse Wonder 1.0, Docker), on the three demo candidates:
+  - tenant-cache-regression: BLOCK, exit 2. H1 (C2) and H2 (C0) verified regressions. Wonder marked H3's probe as not testing its hypothesis, so H3 alone is REVIEW. No claim contested. 7 calls, 6,970 prompt / 10,674 completion tokens.
+  - test-tamper: BLOCK, exit 2. H1 (C1) verified regression plus the tamper check. Nothing contested or mismatched. 5 calls.
+  - intended-change: REVIEW, exit 0, from the CHANGE claim and the changed tests. 3 calls.
+  - Full suite after the change: `pytest -q` 394 passed (Docker tests included); `ruff check src tests` clean.
+

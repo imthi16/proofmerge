@@ -17,6 +17,7 @@ from proofmerge.manifest import (
     write_manifest,
 )
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
+from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.report import render_html
 from proofmerge.sandbox import SandboxError
@@ -141,6 +142,52 @@ def _echo_usage(client: MetaClient) -> None:
     prompt = sum(u.prompt_tokens for u in usage)
     completion = sum(u.completion_tokens for u in usage)
     typer.echo(f"calls={client.calls} tokens: prompt={prompt} completion={completion}", err=True)
+
+
+class _UnavailableCompletions:
+    """Defer client setup failure to the recorded model stage of verify."""
+
+    def __init__(self, error: MetaError) -> None:
+        self.error = str(error)
+
+    def create(self, **kwargs):
+        raise MetaError(self.error)
+
+
+@app.command()
+def verify(
+    repo: Path,
+    base: Annotated[str, typer.Option(help="Base ref, e.g. main")],
+    head: Annotated[str, typer.Option(help="Head ref to verify")],
+    evidence_dir: Annotated[Path, typer.Option(help="New directory for proof and report")],
+    intent_file: Annotated[
+        Path | None, typer.Option(help="File holding the PR description")
+    ] = None,
+) -> None:
+    """Verify base..head and write proof.json, report.html and a hashed manifest."""
+    try:
+        context = get_context(repo, base, head)
+        check_diff(context)
+        if not context.changed_files:
+            typer.echo("no changes between base and head; nothing to check", err=True)
+            return
+        intent = intent_file.read_text() if intent_file else None
+        budget = 2 + MAX_HYPOTHESES * MAX_BASE_RUNS
+        try:
+            client = MetaClient(max_calls=budget)
+        except MetaError as error:
+            client = MetaClient(completions=_UnavailableCompletions(error), max_calls=budget)
+        proof = run_verify(repo, base, head, intent, evidence_dir, client)
+    except (ContextError, ValueError, OSError) as error:
+        typer.echo(f"verify failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"verdict: {proof.verdict.decision}")
+    for reason in proof.verdict.reasons:
+        typer.echo(reason)
+    typer.echo(f"report: {evidence_dir / 'report.html'}")
+    _echo_usage(client)
+    if proof.verdict.decision == "BLOCK":
+        raise typer.Exit(2)
 
 
 @app.command()

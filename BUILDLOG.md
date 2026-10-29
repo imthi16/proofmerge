@@ -286,6 +286,30 @@ All checks passed!
 - Demo check rebuild + `python demo/check_demo.py` (exit 0): main PASS/PASS; intended-change PASS / n/a / FAIL; tenant-cache-regression PASS/FAIL/PASS; test-tamper PASS/FAIL/FAIL — same table as before batch 2.
 - Not verified here: no Spark probe runs against the new candidates yet (that is the batch-2 benchmark run, not the fixture task); TASKS.md is outside this worktree and was not edited by this agent.
 
+
+### 2026-10-29 — T24 deterministic verdict engine
+- Added `decide` with rules 1–9, BLOCK precedence with all reasons retained, scope limitations, unresolved hypotheses, and unknown-claim rejection; tests cover every rule and the three hand-built demo cases.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `268 passed, 7 skipped in 7.06s`. Docker was excluded from PATH; the seven Docker integration tests were skipped.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`
+
+### 2026-10-29 — T23 end-to-end verification
+- Added `proofmerge verify`: resolves revisions, extracts intent, generates and runs probes, checks changed tests, normalizes findings, and writes `proof.json`, `report.html`, then the manifest as the final write.
+- Added 31 acceptance and failure-path tests, including the real Docker demo producing base PASS 3/3, head FAIL 3/3, BLOCK, and an intact replay bundle. All model replies in tests are scripted.
+- API/client-setup, sandbox and tamper-stage failures are recorded as REVIEW reasons and completed evidence is kept. They never erase hard evidence: a verified base PASS 3/3 / head FAIL 3/3 regression, or a base test failing on head with no CHANGE claim, still gives BLOCK (the verdict engine's precedence is unchanged). A run that fails before any such evidence exists gives REVIEW.
+- Verification:
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  306 passed in 24.97s (Docker tests included)
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```
+- Real run, 2026-10-29 (Muse Spark, Docker), `proofmerge verify <demo repo> --base main --head candidate/tenant-cache-regression --intent-file demo/candidates/tenant-cache-regression/intent.md`:
+  - Claims: C1 CHANGE "Add caching to price lookup for speed", C2 PRESERVE "Returned prices must not change".
+  - H1 (C0) and H2 (C2), both Spark-written probes: base PASS 3/3, head FAIL 3/3, `AssertionError: assert 25.0 == 35.0` (tenant-b got tenant-a's price). Verdict BLOCK (the exit code was not captured in this run; exit codes are covered by the CLI tests). 4 model calls, 4,552 prompt / 7,683 completion tokens.
+  - `proofmerge replay` on the bundle: `evidence intact: 37 files`.
+  - Known limit seen in this run: H2's title is "cached price goes stale", but its probe checks tenant isolation, the same bug as H1. A probe is not yet checked against its hypothesis text.
+
 ### T22 Benchmark and demo leakage cleanup — 2026-10-29
 - Neutralized cache docstrings and the boundary-test skip reason; removed ticket/approval cues and mutation disclosure from intents while preserving explicit intended changes and the newsletter fix description. Labels and candidate executable logic are unchanged. Added a separate tenant-b price assertion to the tenant-validation ground truth.
 - Build/check commands passed (exit 0): `PY=../proofmerge-T3/.venv/bin/python`; `B=$(mktemp -d)/bench && $PY demo/build_demo_repo.py $B --candidates bench/candidates && $PY demo/check_demo.py $B --ground-truth bench/ground_truth`; `D=$(mktemp -d)/demo && $PY demo/build_demo_repo.py $D && $PY demo/check_demo.py $D`.

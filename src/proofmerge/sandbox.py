@@ -54,7 +54,7 @@ def pytest_sessionfinish(session, exitstatus):
 """
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-HYPOTHESIS_ID = re.compile(r"H[0-9]+")
+HYPOTHESIS_ID = re.compile(r"[HT][0-9]+")
 
 # (image, code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
 Runner = Callable[[str, Path, Path, str, int], tuple[int | None, bytes, bytes]]

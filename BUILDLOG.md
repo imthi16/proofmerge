@@ -317,3 +317,16 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (exit 0): `238 passed, 7 skipped in 8.19s`.
 - `../proofmerge-T3/.venv/bin/ruff check src tests` (exit 0): `All checks passed!`; `git diff --check` passed.
 - Intent prompt (`intent.py`): the PRESERVE rule no longer quotes the benchmark's own sentence "No behavior change intended"; it now says a general statement that results or behavior do not change is a PRESERVE claim. The hypotheses prompt is unchanged; its sha256 before benchmark runs is `7b7bde5be0de5a370da585ee767be267034ca79b9a0c4aec86788e480ba04309`. After this edit `pytest -q`: 245 passed (Docker tests included); `ruff check src tests`: clean. Real Spark runs were not repeated after the prompt change.
+
+### 2026-10-29 — T28 GitHub composite action
+- Added the composite action, workflow documentation, and 25 offline tests covering credential skips, trusted action installation paths, literal PR input, exit capture, artifact publication configuration, comment creation/update, malformed evidence, and verdict policy.
+- Empty keys skip all work and comments. Missing evidence or inconsistent verify exits fail; BLOCK always fails, and REVIEW fails with `fail-on: review`. Marked bot comments are updated using a JSON input file; new comments use a body file.
+- Verification:
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  323 passed, 8 skipped in 11.80s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```
+- The eight Docker integration tests were skipped by their Docker/image availability guard. No real model calls or GitHub execution were performed. Real GitHub validation remains pending.

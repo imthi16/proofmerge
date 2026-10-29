@@ -6,9 +6,9 @@ import re
 import tokenize
 from pathlib import Path, PurePosixPath
 
-from proofmerge.context import GitContext, _git
+from proofmerge.context import ContextError, GitContext, _git
 from proofmerge.evidence import Experiment, Outcome, TamperFinding, TamperKind
-from proofmerge.sandbox import Runner, docker_runner, run_experiment
+from proofmerge.sandbox import Runner, SandboxError, docker_runner, run_experiment
 
 
 class TamperError(Exception):
@@ -203,44 +203,55 @@ def run_base_tests_on_head(
     """Run each affected file's committed base tests on both revisions, without a verdict."""
     experiments: list[Experiment] = []
     outcomes: dict[str, Outcome] = {}
+
+    def stamped() -> list[TamperFinding]:
+        return [
+            finding.model_copy(update={"base_test_on_head_outcome": outcomes[finding.test_path]})
+            if finding.test_path in outcomes
+            else finding
+            for finding in findings
+        ]
+
     for finding in findings:
         path = finding.test_path
         if path in outcomes:
             continue
         outcomes[path] = "ERROR"
-        if not _git(
-            repo, "ls-tree", "-z", context.base_sha, "--", f":(literal){path}",
-            error=f"Cannot inspect test revision {context.base_sha}",
-        ):
-            continue  # A newly added test has no base version to run.
-        source = _git(
-            repo, "show", f"{context.base_sha}:{path}",
-            error=f"Cannot read test file {path!r} at {context.base_sha}",
-        )
-        encoding, header = tokenize.detect_encoding(io.BytesIO(source).readline)
-        lines = source.decode(encoding).split("\n", len(header))
-        # Match the UTF-8 probe write, changing only comments Python inspected
-        # for an encoding declaration (never text inside a multiline literal).
-        for index in range(len(header)):
-            lines[index] = re.sub(
-                r"^([ \t\f]*#.*?coding[:=][ \t]*)([-\w.]+)",
-                r"\g<1>utf-8", lines[index], flags=re.ASCII,
+        try:
+            if not _git(
+                repo, "ls-tree", "-z", context.base_sha, "--", f":(literal){path}",
+                error=f"Cannot inspect test revision {context.base_sha}",
+            ):
+                continue  # A newly added test has no base version to run.
+            source = _git(
+                repo, "show", f"{context.base_sha}:{path}",
+                error=f"Cannot read test file {path!r} at {context.base_sha}",
             )
-        # shortcut: repository conftest.py fixtures are not loaded by the isolated
-        # probe; tests needing them read ERROR. Upgrade when fixture support is needed.
-        experiment = run_experiment(
-            repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
-            "\n".join(lines),
-            evidence_dir, runner=runner, digest=digest, attempts=3,
-        )
-        experiments.append(experiment)
-        base = [e.outcome for e in experiment.executions if e.revision == "base"]
-        head = [e.outcome for e in experiment.executions if e.revision == "head"]
-        if head == ["PASS"] * 3:
-            outcomes[path] = "PASS"
-        elif base == ["PASS"] * 3 and head == ["FAIL"] * 3:
-            outcomes[path] = "FAIL"
-    return [
-        finding.model_copy(update={"base_test_on_head_outcome": outcomes[finding.test_path]})
-        for finding in findings
-    ], experiments
+            encoding, header = tokenize.detect_encoding(io.BytesIO(source).readline)
+            lines = source.decode(encoding).split("\n", len(header))
+            # Match the UTF-8 probe write, changing only comments Python inspected
+            # for an encoding declaration (never text inside a multiline literal).
+            for index in range(len(header)):
+                lines[index] = re.sub(
+                    r"^([ \t\f]*#.*?coding[:=][ \t]*)([-\w.]+)",
+                    r"\g<1>utf-8", lines[index], flags=re.ASCII,
+                )
+            # shortcut: repository conftest.py fixtures are not loaded by the isolated
+            # probe; tests needing them read ERROR. Upgrade when fixture support is needed.
+            experiment = run_experiment(
+                repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
+                "\n".join(lines),
+                evidence_dir, runner=runner, digest=digest, attempts=3,
+            )
+            experiments.append(experiment)
+            base = [e.outcome for e in experiment.executions if e.revision == "base"]
+            head = [e.outcome for e in experiment.executions if e.revision == "head"]
+            if head == ["PASS"] * 3:
+                outcomes[path] = "PASS"
+            elif base == ["PASS"] * 3 and head == ["FAIL"] * 3:
+                outcomes[path] = "FAIL"
+        except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
+            # ponytail: partials ride on the exception; a result type if more callers need them
+            error.completed = {"tamper": stamped(), "experiments": experiments}
+            raise
+    return stamped(), experiments

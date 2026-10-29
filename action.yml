@@ -1,0 +1,164 @@
+name: ProofMerge
+description: Verify an owned synthetic PR and publish its evidence bundle.
+inputs:
+  model-api-key:
+    description: Meta model API key; unavailable secrets skip verification.
+    required: true
+  fail-on:
+    description: Fail on block (default), or on review and block.
+    default: block
+  python-version:
+    description: Python version used to install ProofMerge.
+    default: '3.13'
+runs:
+  using: composite
+  steps:
+    - name: Check credentials
+      id: credentials
+      shell: bash
+      env:
+        MODEL_API_KEY: ${{ inputs.model-api-key }}
+      run: |
+        if [[ -z "$MODEL_API_KEY" ]]; then
+          echo 'skipped: no MODEL_API_KEY (fork PR?)'
+          echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo 'enabled=true' >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-python@v5
+      if: steps.credentials.outputs.enabled == 'true'
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install action code
+      if: steps.credentials.outputs.enabled == 'true'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        cd "$RUNNER_TEMP"
+        python -m pip install "$ACTION_PATH"
+    - name: Build sandbox runner
+      if: steps.credentials.outputs.enabled == 'true'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        docker build -t proofmerge-runner:0.1 "$ACTION_PATH/docker/runner"
+    - name: Record PR intent
+      if: steps.credentials.outputs.enabled == 'true'
+      shell: bash
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
+      run: |
+        printf '%s' "$PR_BODY" > "$RUNNER_TEMP/proofmerge-intent.txt"
+    - name: Verify
+      id: verify
+      if: steps.credentials.outputs.enabled == 'true'
+      shell: bash
+      env:
+        MODEL_API_KEY: ${{ inputs.model-api-key }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        cd "$RUNNER_TEMP"
+        set +e
+        proofmerge verify "$GITHUB_WORKSPACE" --base "$BASE_SHA" --head "$HEAD_SHA" \
+          --intent-file "$RUNNER_TEMP/proofmerge-intent.txt" \
+          --evidence-dir "$RUNNER_TEMP/proofmerge-evidence"
+        result=$?
+        set -e
+        printf '%s\n' "$result" > "$RUNNER_TEMP/proofmerge-exit-code"
+    - uses: actions/upload-artifact@v4
+      id: evidence
+      if: ${{ always() && steps.credentials.outputs.enabled == 'true' }}
+      with:
+        name: proofmerge-evidence
+        path: ${{ runner.temp }}/proofmerge-evidence
+        if-no-files-found: warn
+    - name: Post or update verdict
+      if: ${{ always() && steps.credentials.outputs.enabled == 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        ARTIFACT_URL: ${{ steps.evidence.outputs.artifact-url }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        cd "$RUNNER_TEMP"
+        python - <<'PY'
+        import json
+        import os
+        import subprocess
+        from pathlib import Path
+
+        temp = Path(os.environ['RUNNER_TEMP'])
+        status = 1
+        decision = 'ERROR'
+        reasons = ['Verification could not run or did not produce valid evidence.']
+        try:
+            code = int((temp / 'proofmerge-exit-code').read_text())
+            proof = json.loads((temp / 'proofmerge-evidence/proof.json').read_text())
+            verdict = proof['verdict']
+            candidate, recorded = verdict['decision'], verdict['reasons']
+            if candidate not in ('PASS', 'REVIEW', 'BLOCK'):
+                raise ValueError('unknown verdict')
+            if not isinstance(recorded, list) or not all(isinstance(x, str) for x in recorded):
+                raise ValueError('invalid reasons')
+            if code != (2 if candidate == 'BLOCK' else 0):
+                raise ValueError('verify exit code does not match verdict')
+            decision, reasons = candidate, recorded
+            status = int(decision == 'BLOCK' or (
+                decision == 'REVIEW' and os.environ['FAIL_ON'] == 'review'
+            ))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        if os.environ['FAIL_ON'] not in ('block', 'review'):
+            status = 1
+            reasons = [*reasons, 'Invalid fail-on input: expected block or review.']
+        (temp / 'proofmerge-status').write_text(str(status))
+        # Render untrusted reasons literally, including mentions and HTML/Markdown.
+        def literal(value):
+            return ''.join(f'&#{ord(char)};' for char in value)
+
+        artifact = os.environ['ARTIFACT_URL']
+        body = '<!-- proofmerge -->\n## ProofMerge: ' + decision + '\n\n'
+        body += '\n'.join('- ' + literal(reason) for reason in reasons)
+        body += '\n\n' + (f'[Evidence artifact]({artifact})' if artifact else 'Evidence artifact unavailable.')
+        comment = temp / 'proofmerge-comment.md'
+        comment.write_text(body, encoding='utf-8')
+
+        def gh(*args):
+            return subprocess.run(['gh', *args], check=True, capture_output=True, text=True).stdout
+
+        repo, number = os.environ['GH_REPO'], str(int(os.environ['PR_NUMBER']))
+        pages = json.loads(gh('api', '--paginate', '--slurp',
+                              f'repos/{repo}/issues/{number}/comments'))
+        existing = next((item for page in pages for item in page
+                         if item.get('user', {}).get('login') == 'github-actions[bot]'
+                         and '<!-- proofmerge -->' in item.get('body', '')), None)
+        if existing:
+            # gh pr comment cannot target a marker-specific comment; PATCH a JSON file.
+            payload = temp / 'proofmerge-comment.json'
+            payload.write_text(json.dumps({'body': comment.read_text(encoding='utf-8')}))
+            comment_id = str(int(existing['id']))
+            gh('api', '--method', 'PATCH', f'repos/{repo}/issues/comments/{comment_id}',
+               '--input', str(payload))
+        else:
+            gh('pr', 'comment', number, '--repo', repo, '--body-file', str(comment))
+        PY
+    - name: Apply verdict policy
+      if: ${{ always() && steps.credentials.outputs.enabled == 'true' }}
+      shell: bash
+      run: |
+        cd "$RUNNER_TEMP"
+        python - <<'PY'
+        import os
+        from pathlib import Path
+
+        try:
+            status = (Path(os.environ['RUNNER_TEMP']) / 'proofmerge-status').read_text()
+        except OSError:
+            status = '1'
+        raise SystemExit(0 if status == '0' else 1)
+        PY

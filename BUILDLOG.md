@@ -410,3 +410,9 @@ All checks passed!
 - Final demo runs on main `bcd0032` (Spark + Wonder, Docker): tenant-cache-regression BLOCK (two runs), test-tamper BLOCK, intended-change REVIEW. `proofmerge replay` on each bundle: evidence intact.
 - README restructured around a real run. The new hero image (`docs/assets/hero-{light,dark}.svg`) shows that run's base 3/3 pass and patch 3/3 fail grid. The report card screenshot is from the same run. The flowchart now shows the tamper guard and Wonder feeding the verdict, the problem table quotes the current demo intents, and the report image no longer has a dark-mode variant that pointed at the old hand-made sample.
 
+### 2026-10-29 — T40 Replay recorded experiments
+- `proofmerge replay <proof.json> --rerun --repo <repo>` verifies existing hashes first, validates full commit SHAs and their existence, then re-runs each recorded probe in Docker with its recorded attempt count and timeout. It prints per-revision outcome sequences and exits 1 on any mismatch or execution failure.
+- Re-run probes and logs go to a new retained temporary directory whose path is printed; the original bundle stays unchanged. Hash-only replay remains unchanged. Empty or malformed experiment records fail before execution. No model calls or new dependencies.
+- Added offline coverage for reproduction, changed base/head attempts, source preservation, pinned commits, tampered probes, missing commits, invalid records and runner failures, plus a scripted-model demo Docker integration test guarded on Docker/image availability.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `462 passed, 9 skipped in 32.05s`. Docker availability guards account for the nine skips, including the new integration test. `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`. `git diff --check` passed.
+

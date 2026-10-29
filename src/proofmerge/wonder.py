@@ -60,7 +60,7 @@ def cross_check_claims(
 
 def check_probes(
     hypotheses: list[Hypothesis], probes: list[Probe], client: MetaClient,
-    *, contract: IntentContract,
+    *, contract: IntentContract, intent: str | None = None,
 ) -> tuple[frozenset[str], frozenset[str], dict[str, str]]:
     """Check every base-passing probe in one call, with no execution or verdict authority."""
     passed = [probe for probe in probes if probe.passed_on_base]
@@ -71,7 +71,7 @@ def check_probes(
     reply = client.structured(
         WONDER_MODEL,
         developer=PROBES_PROMPT,
-        user=json.dumps({"change_claims": [
+        user=json.dumps({"intent": intent, "change_claims": [
             {"id": c.id, "source_quote": c.source_quote} for c in changes.values()
         ], "probes": [
             {

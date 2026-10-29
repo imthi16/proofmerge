@@ -65,7 +65,7 @@ def run_verify(
         errors.append(str(error))
     try:
         mismatched_probe_ids, explained_probe_ids, explained_probe_claim_ids = check_probes(
-            found.hypotheses, probes, client, contract=contract,
+            found.hypotheses, probes, client, contract=contract, intent=intent,
         )
     except MetaError as error:
         errors.append(str(error))

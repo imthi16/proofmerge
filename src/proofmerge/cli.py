@@ -204,7 +204,7 @@ def verify(
             typer.echo("no changes between base and head; nothing to check", err=True)
             return
         intent = intent_file.read_text() if intent_file else None
-        budget = 2 + MAX_HYPOTHESES * MAX_BASE_RUNS
+        budget = 4 + MAX_HYPOTHESES * MAX_BASE_RUNS
         try:
             client = MetaClient(max_calls=budget)
         except MetaError as error:

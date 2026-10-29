@@ -14,6 +14,7 @@ def decide(
     errors: list[str] | None = None,
     *,
     intent_established: bool = True,
+    mismatched_probe_ids: frozenset[str] = frozenset(),
 ) -> Verdict:
     """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
     claims = {claim.id: claim for claim in contract.claims}
@@ -22,6 +23,11 @@ def decide(
     reasons: list[str] = []
     unresolved: list[str] = []
     block = False
+
+    for hypothesis_id in sorted(mismatched_probe_ids):
+        reasons.append(
+            f"{hypothesis_id} needs review because its probe may not test its hypothesis."
+        )
 
     for finding in findings:
         if finding.claim_id not in claims:
@@ -41,7 +47,7 @@ def decide(
                     + ", ".join(qualifications)
                     + "."
                 )
-            else:
+            elif finding.hypothesis_id not in mismatched_probe_ids:
                 block = True
                 reasons.append(
                     f"{finding.hypothesis_id} is a verified regression against "

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-labelledby="t d">
+  <title id="t">ProofMerge</title>
+  <desc id="d">A real ProofMerge run: the same Spark-written test passes 3 of 3 times on the original commit 9dcc104 and fails 3 of 3 times on the AI's patch 32dff53, so the verdict is BLOCK.</desc>
+  <rect x="0.75" y="0.75" width="1278.5" height="438.5" rx="20" fill="#FFFFFF" stroke="#D5DCE3" stroke-width="1.5"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="72" y="170" font-size="84" font-weight="800" letter-spacing="-2.5" fill="#16212E">ProofMerge</text>
+    <text x="74" y="232" font-size="30" font-weight="600" fill="#16212E">Don't trust AI-generated code.</text>
+    <text x="74" y="272" font-size="30" font-weight="600" fill="#16212E">Make it prove itself.</text>
+    <text x="74" y="330" font-size="19" fill="#4A5A6B">One test written by Muse Spark, run three times on the</text>
+    <text x="74" y="356" font-size="19" fill="#4A5A6B">original code and three times on the AI's patch.</text>
+  </g>
+  <rect x="700" y="56" width="508" height="328" rx="16" fill="#F4F6F8" stroke="#D5DCE3" stroke-width="1.5"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="18" fill="#4A5A6B">
+    <text x="812" y="104">run 1</text><text x="892" y="104">run 2</text><text x="972" y="104">run 3</text>
+  </g>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="600" fill="#16212E">
+    <text x="732" y="152">base</text>
+    <text x="732" y="234">patch</text>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#4A5A6B">
+    <text x="732" y="174">9dcc104</text>
+    <text x="732" y="256">32dff53</text>
+  </g>
+  <rect x="812" y="120" width="66" height="62" rx="10" fill="#2DA44E"/><path d="M832 153 l9 9 l17 -19" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="892" y="120" width="66" height="62" rx="10" fill="#2DA44E"/><path d="M912 153 l9 9 l17 -19" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="972" y="120" width="66" height="62" rx="10" fill="#2DA44E"/><path d="M992 153 l9 9 l17 -19" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="812" y="202" width="66" height="62" rx="10" fill="#E5484D"/><path d="M834 222 l22 22 M856 222 l-22 22" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/><rect x="892" y="202" width="66" height="62" rx="10" fill="#E5484D"/><path d="M914 222 l22 22 M936 222 l-22 22" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/><rect x="972" y="202" width="66" height="62" rx="10" fill="#E5484D"/><path d="M994 222 l22 22 M1016 222 l-22 22" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="1072" y="152" font-size="18" fill="#1A7F37" font-weight="600">3 of 3</text>
+    <text x="1072" y="174" font-size="16" fill="#4A5A6B">pass</text>
+    <text x="1072" y="234" font-size="18" fill="#C5282F" font-weight="600">3 of 3</text>
+    <text x="1072" y="256" font-size="16" fill="#4A5A6B">fail</text>
+  </g>
+  <line x1="732" y1="296" x2="1176" y2="296" stroke="#D5DCE3" stroke-width="1.5"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="732" y="340" font-size="17" fill="#4A5A6B">decided in plain code, not by a model</text>
+    <rect x="1040" y="312" width="136" height="44" rx="22" fill="#E5484D"/>
+    <text x="1108" y="341" font-size="21" font-weight="800" letter-spacing="1" fill="#FFFFFF" text-anchor="middle">BLOCK</text>
+  </g>
+</svg>

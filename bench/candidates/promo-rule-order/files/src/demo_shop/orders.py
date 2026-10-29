@@ -7,7 +7,7 @@ quantity.
 SHIPPING_FEES = {"standard": 5.0, "express": 12.0}
 
 _PROMO_RULES = {
-    "news-5": lambda customer: customer.get("newsletter"),
+    "news-5": lambda customer: customer.get("subscribed"),
     "vip-10": lambda customer: customer.get("vip"),
 }
 

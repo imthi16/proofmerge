@@ -94,7 +94,10 @@ def test_rule_3_model_signals_downgrade_verified_regression_to_review(qualificat
     if qualification == "missing intent":
         intent = IntentContract(claims=[C0], rejected=[])
         claim_id = "C0"
-    result = decide(intent, [], [finding(claim_id)], [], contested)
+    result = decide(
+        intent, [], [finding(claim_id)], [], contested,
+        intent_given=qualification != "missing intent",
+    )
     assert result.decision == "REVIEW"
     assert len(result.reasons) == 1
     if qualification == "missing intent":
@@ -183,7 +186,7 @@ def test_block_wins_and_keeps_reasons_from_all_fired_rules():
 
 @pytest.mark.parametrize("claims", [[], [C0]])
 def test_empty_input_passes_with_scope_limitations(claims):
-    result = decide(IntentContract(claims=claims, rejected=[]), [], [], [])
+    result = decide(IntentContract(claims=claims, rejected=[]), [], [], [], intent_given=False)
     assert result.decision == "PASS"
     assert result.scope_limitations == SCOPE + [NO_INTENT]
     assert result.unresolved_risks == []
@@ -288,3 +291,35 @@ def test_passing_mismatched_probe_keeps_unrelated_regression_block():
     )
     assert result.decision == "BLOCK"
     assert "H1 needs review because its probe may not test its hypothesis." in result.reasons
+
+
+@pytest.mark.parametrize("intent_given, rejected, expected", [
+    (True, False, "BLOCK"), (False, False, "REVIEW"), (True, True, "REVIEW"),
+])
+def test_c0_intent_presence_and_rejected_claims(intent_given, rejected, expected):
+    from proofmerge.intent import ProposedClaim
+
+    intent = IntentContract(claims=[C0], rejected=[ProposedClaim(
+        kind="PRESERVE", statement="invented", source_quote="not in the intent",
+    )] if rejected else [])
+    result = decide(intent, [], [finding("C0")], [], intent_given=intent_given)
+    assert result.decision == expected
+    assert (NO_INTENT in result.scope_limitations) == (expected == "REVIEW")
+
+
+@pytest.mark.parametrize("claim_id", ["C0", "C2"])
+@pytest.mark.parametrize("other_block", [False, True])
+def test_explained_regression_is_review_and_preserves_other_blocks(claim_id, other_block):
+    intent = contract()
+    intent.claims.append(contract("CHANGE").claims[1].model_copy(update={"id": "C1"}))
+    findings = [finding(claim_id)] + ([finding(hypothesis_id="H2")] if other_block else [])
+    result = decide(intent, [], findings, [], explained_probe_ids=frozenset({"H1"}),
+                    explained_probe_claim_ids={"H1": "C1"})
+    assert result.decision == ("BLOCK" if other_block else "REVIEW")
+    assert "H1 may be the intended change C1." in result.reasons
+
+
+def test_explanation_cannot_turn_inconclusive_evidence_into_block_or_pass():
+    result = decide(contract(), [], [finding(classification="INCONCLUSIVE", verified=False)], [],
+                    explained_probe_ids=frozenset({"H1"}))
+    assert result.decision == "REVIEW"

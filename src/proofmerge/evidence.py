@@ -93,3 +93,5 @@ class Proof(BaseModel):
     model_usage: ModelUsage
     contested_claim_ids: list[str] = []
     mismatched_probe_ids: list[str] = []
+    explained_probe_ids: list[str] = []
+    explained_probe_claim_ids: dict[str, str] = {}

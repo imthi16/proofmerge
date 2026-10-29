@@ -15,7 +15,7 @@ The general idea of AI-generated code review/verification was considered before 
 - Reproducible proof bundle and manifest
 - Synthetic demo fixtures, benchmark, metrics and 3-minute video
 
-These are **planned capabilities** until corresponding commits/tests exist.
+Each item counts as built only when a dated `BUILDLOG.md` entry records its commits and checks. On 2026-10-29 the first five are built; the benchmark has a first recorded run, and the video is not made yet.
 
 ## Rules
 - All code demonstrated as original ProofMerge functionality must be authored in this event window.

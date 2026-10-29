@@ -27,6 +27,7 @@ class CheckedProbe(BaseModel):
     hypothesis_id: str
     tests_hypothesis: bool
     reason: str
+    explained_by_change: str | None = None
 
 
 class CheckedProbes(BaseModel):
@@ -58,17 +59,21 @@ def cross_check_claims(
 
 
 def check_probes(
-    hypotheses: list[Hypothesis], probes: list[Probe], client: MetaClient
-) -> frozenset[str]:
+    hypotheses: list[Hypothesis], probes: list[Probe], client: MetaClient,
+    *, contract: IntentContract, intent: str | None = None,
+) -> tuple[frozenset[str], frozenset[str], dict[str, str]]:
     """Check every base-passing probe in one call, with no execution or verdict authority."""
     passed = [probe for probe in probes if probe.passed_on_base]
     if not passed:
-        return frozenset()
+        return frozenset(), frozenset(), {}
+    changes = {c.id: c for c in contract.claims if c.kind == "CHANGE" and c.source_quote}
     by_id = {h.id: h for h in hypotheses}
     reply = client.structured(
         WONDER_MODEL,
         developer=PROBES_PROMPT,
-        user=json.dumps({"probes": [
+        user=json.dumps({"intent": intent, "change_claims": [
+            {"id": c.id, "source_quote": c.source_quote} for c in changes.values()
+        ], "probes": [
             {
                 "hypothesis_id": probe.hypothesis_id,
                 "hypothesis": by_id[probe.hypothesis_id].model_dump(include={
@@ -80,7 +85,7 @@ def check_probes(
         ]}),
         schema=CheckedProbes,
     )
-    return frozenset(
+    mismatched = frozenset(
         probe.hypothesis_id for probe in passed
         if probe.hypothesis_id not in by_id
         or not any(item.hypothesis_id == probe.hypothesis_id for item in reply.results)
@@ -89,3 +94,12 @@ def check_probes(
             for item in reply.results
         )
     )
+    # Keep only supplied, base-passing probes and verified CHANGE quote ids.
+    explanations = {
+        probe.hypothesis_id: item.explained_by_change
+        for probe in passed
+        for item in reply.results
+        if item.hypothesis_id == probe.hypothesis_id
+        and item.explained_by_change in changes
+    }
+    return mismatched, frozenset(explanations), explanations

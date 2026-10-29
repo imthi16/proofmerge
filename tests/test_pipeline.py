@@ -561,3 +561,53 @@ def test_claim_check_failure_does_not_skip_probe_check(tmp_path, failure, other_
     assert any(error_text in reason for reason in proof.verdict.reasons)
     assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
     assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("intent", [None, "", " \n\t ", "Improve price calculation."])
+def test_c0_only_intent_text_controls_regression_verdict(tmp_path, intent):
+    replies = Replies(claim="C0")
+    if intent and intent.strip():
+        replies.replies.insert(0, {"claims": []})
+    proof, evidence, _, _ = execute(tmp_path, replies=replies, intent=intent)
+    assert proof.intent.claims[0].id == "C0"
+    assert len(proof.intent.claims) == 1
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == ("BLOCK" if intent and intent.strip() else "REVIEW")
+    assert_bundle(proof, evidence)
+
+
+def test_all_proposed_claims_rejected_keeps_c0_regression_review(tmp_path):
+    replies = Replies(claim="C0")
+    replies.replies.insert(0, {"claims": [{
+        "kind": "PRESERVE", "statement": "invented", "source_quote": "not in intent text",
+    }]})
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.intent.rejected
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == "REVIEW"
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("explanation, expected", [
+    ("C1", "REVIEW"), ("C0", "BLOCK"), ("C99", "BLOCK"),
+])
+def test_explained_change_reaches_verdict_proof_and_report(tmp_path, explanation, expected):
+    intent = "Use the new customer field for promotion eligibility."
+    replies = Replies(claim="C0", wonder_claims=[{"id": "C1", "kind": "CHANGE"}],
+                      wonder_results=[{
+                          "hypothesis_id": "H1", "tests_hypothesis": True,
+                          "reason": "explicit requested behavior", "explained_by_change": explanation,
+                      }])
+    replies.replies.insert(0, {"claims": [{
+        "kind": "CHANGE", "statement": "new field", "source_quote": intent,
+    }]})
+    proof, evidence, _, _ = execute(tmp_path, replies=replies, intent=intent)
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == expected
+    assert proof.explained_probe_ids == (["H1"] if explanation == "C1" else [])
+    assert proof.explained_probe_claim_ids == ({"H1": "C1"} if explanation == "C1" else {})
+    annotation = "Muse Wonder: may be the intended change C1"
+    assert (annotation in (evidence / "report.html").read_text()) == (explanation == "C1")
+    if explanation == "C1":
+        assert "H1 may be the intended change C1." in proof.verdict.reasons
+    assert_bundle(proof, evidence)

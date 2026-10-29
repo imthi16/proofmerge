@@ -58,12 +58,15 @@ def run_verify(
             errors.append(str(error))
 
     contested_claim_ids, mismatched_probe_ids = frozenset(), frozenset()
+    explained_probe_ids, explained_probe_claim_ids = frozenset(), {}
     try:
         contested_claim_ids = cross_check_claims(contract, intent, client)
     except MetaError as error:
         errors.append(str(error))
     try:
-        mismatched_probe_ids = check_probes(found.hypotheses, probes, client)
+        mismatched_probe_ids, explained_probe_ids, explained_probe_claim_ids = check_probes(
+            found.hypotheses, probes, client, contract=contract, intent=intent,
+        )
     except MetaError as error:
         errors.append(str(error))
 
@@ -88,6 +91,9 @@ def run_verify(
         contract, found.hypotheses, findings, tamper,
         contested_claim_ids=contested_claim_ids, mismatched_probe_ids=mismatched_probe_ids,
         errors=errors, intent_established=intent_established,
+        intent_given=bool(intent and intent.strip()),
+        explained_probe_ids=explained_probe_ids,
+        explained_probe_claim_ids=explained_probe_claim_ids,
     )
     usage = [u for u in client.usage if u is not None]
     proof = Proof(
@@ -104,6 +110,8 @@ def run_verify(
         verdict=verdict,
         contested_claim_ids=sorted(contested_claim_ids),
         mismatched_probe_ids=sorted(mismatched_probe_ids),
+        explained_probe_ids=sorted(explained_probe_ids),
+        explained_probe_claim_ids=explained_probe_claim_ids,
         model_usage=ModelUsage(
             calls=client.calls,
             prompt_tokens=sum(u.prompt_tokens for u in usage),

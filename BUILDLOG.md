@@ -382,3 +382,10 @@ All checks passed!
 - `/tmp/pm-venv/bin/proofmerge setup` printed `built runner image: sha256:7174905168e20eba95778e38864657946941e275dedc412a3ddf07750ced7c69`.
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: 331 passed, 8 skipped in 12.07s.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`.
+
+### 2026-10-29 — T36 Verdict fixes
+- Intent text with no explicit claims now leaves a verified C0 regression eligible for BLOCK. Missing or blank intent, and contracts whose proposed claims were all rejected, keep that regression at REVIEW.
+- Wonder checks whether a verified CHANGE quote explicitly requests the behavior a probe shows changing. Known CHANGE explanations qualify verified regressions for REVIEW; unknown and non-CHANGE ids are ignored. Proofs record explained probe ids and their claim ids; reports show the escaped annotation. New fields default to empty for older proofs.
+- Added offline coverage for the intent cases, CHANGE explanations, invalid explanation ids, prompt restrictions, report escaping, old-proof defaults, and unrelated BLOCK precedence. No real model calls or new dependencies.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `428 passed, 8 skipped in 18.38s`. The eight skips are Docker availability guards.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `git diff --check` passed.

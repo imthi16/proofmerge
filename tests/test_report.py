@@ -165,3 +165,14 @@ def test_old_proofs_render_without_wonder_annotations(name):
     page = render_html(load(name), FIXTURES)
     assert "contested by Muse Wonder" not in page
     assert "Muse Wonder: probe may not test this hypothesis" not in page
+
+
+def test_explained_change_annotation_is_scoped_and_escaped():
+    proof = load("sample_proof_block.json").model_copy(deep=True)
+    hypothesis = proof.hypotheses.hypotheses[0]
+    proof.explained_probe_ids = [hypothesis.id, "H99"]
+    proof.explained_probe_claim_ids = {hypothesis.id: "<script>C1</script>", "H99": "C99"}
+    page = render_html(proof, FIXTURES)
+    assert page.count("Muse Wonder: may be the intended change") == 1
+    assert "Muse Wonder: may be the intended change &lt;script&gt;C1&lt;/script&gt;" in page
+    assert "<script>" not in page

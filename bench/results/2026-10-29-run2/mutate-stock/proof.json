@@ -1,0 +1,204 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "mutate-stock",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "a63d834305c6fc240d4f6ae411b1ef89d58303fe",
+  "diff_sha256": "0f6b7263dcbef7a8efd2bd1a6de08e8f53723f5a5ed6c76fedcdda25a94337bc",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Stock reservation completes faster than before.",
+        "source_quote": "Speed up stock reservation"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "reserve mutates caller stock dict in place",
+        "changed_locations": [
+          "src/demo_shop/inventory.py::reserve"
+        ],
+        "suspected_behavior": "reserve now mutates the caller's stock dict in place instead of returning a copy, so reusing the stock dict sees depleted quantity",
+        "expected_base": "reserve({'A': 10}, 'A', 2) returns {'A': 8} and the caller-owned input dict stays {'A': 10}; a second call with the same input dict also returns {'A': 8}, and `result is stock` is False",
+        "expected_head": "reserve({'A': 10}, 'A', 2) returns {'A': 8} but mutates the input dict to {'A': 8} and returns the same object (`result is stock` is True); a second call with the same dict returns {'A': 6}",
+        "test_intent": "Create stock={'A':10}, call r1=reserve(stock,'A',2), assert stock still {'A':10} and r1=={'A':10-2}; then call r2=reserve(stock,'A',2) and assert r2==r1; also assert r1 is not stock. Passes on base, fails on head.",
+        "risk_category": "data-isolation",
+        "falsification_criteria": "If on head the input dict is unchanged after reserve and the returned dict is a new object, this hypothesis is wrong.",
+        "possibly_intended": true,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "676f5d7189a41a7acb63406f2ab417b023c40fe55dc9ecda6644e5e683dbfc94",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 603,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 705,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 706,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "a63d834305c6fc240d4f6ae411b1ef89d58303fe",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 706,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "a63d834305c6fc240d4f6ae411b1ef89d58303fe",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 605,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "a63d834305c6fc240d4f6ae411b1ef89d58303fe",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/mutate-stock/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 5,
+    "prompt_tokens": 3915,
+    "completion_tokens": 4522
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

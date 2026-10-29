@@ -1,0 +1,30 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________________ test_line_totals_len _____________________________
+
+    def test_line_totals_len():
+        items = [{'qty': 1, 'price': 2}, {'qty': 2, 'price': 3}]
+        result = line_totals(items)
+        try:
+>           n = len(result)
+                ^^^^^^^^^^^
+E           TypeError: object of type 'generator' has no len()
+
+../probes/test_h3.py:7: TypeError
+
+During handling of the above exception, another exception occurred:
+
+    def test_line_totals_len():
+        items = [{'qty': 1, 'price': 2}, {'qty': 2, 'price': 3}]
+        result = line_totals(items)
+        try:
+            n = len(result)
+        except TypeError as e:
+>           assert False, f"len() on line_totals result raised TypeError: {e}"
+E           AssertionError: len() on line_totals result raised TypeError: object of type 'generator' has no len()
+E           assert False
+
+../probes/test_h3.py:9: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h3.py::test_line_totals_len - AssertionError: len() on ...
+1 failed in 0.02s

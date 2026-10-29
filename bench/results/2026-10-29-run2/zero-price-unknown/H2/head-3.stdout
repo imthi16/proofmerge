@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_unknown_sku_raises_value_error ______________________
+
+    def test_unknown_sku_raises_value_error():
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+../probes/test_h2.py:5: Failed
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_unknown_sku_raises_value_error - Failed: DI...
+1 failed in 0.02s

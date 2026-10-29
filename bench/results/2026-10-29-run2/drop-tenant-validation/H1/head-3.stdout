@@ -1,0 +1,22 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_________________________ test_tenant_b_price_isolated _________________________
+
+    def test_tenant_b_price_isolated():
+>       assert price_for("tenant-b", "widget") == 35.0
+E       AssertionError: assert 25.0 == 35.0
+E        +  where 25.0 = price_for('tenant-b', 'widget')
+
+../probes/test_h1.py:6: AssertionError
+_________________________ test_unknown_tenant_rejected _________________________
+
+    def test_unknown_tenant_rejected():
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+../probes/test_h1.py:10: Failed
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_tenant_b_price_isolated - AssertionError: a...
+FAILED ../probes/test_h1.py::test_unknown_tenant_rejected - Failed: DID NOT R...
+2 failed in 0.02s

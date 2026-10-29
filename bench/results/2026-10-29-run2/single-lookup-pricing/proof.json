@@ -1,0 +1,51 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "single-lookup-pricing",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "aed4524a4d984311c9b6edead99851ef18d34f43",
+  "diff_sha256": "0deba0fb3f286e40f2efbfd23eaba13d5f649ab6455171335dad04c4e07aca88",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "The price lookup performs fewer dictionary lookups and executes faster.",
+        "source_quote": "Cut redundant dictionary lookups in the price lookup for speed"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "PASS",
+    "reasons": [
+      "No regression was found within the tested scope."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 1933,
+    "completion_tokens": 5409
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

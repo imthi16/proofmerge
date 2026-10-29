@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofMerge intended-express-fee — REVIEW</title>
+<style>:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #212b38; --muted: #55657a; --border: #d4dce5;
+  --code-bg: #f2f5f8;
+  --pass-bg: #e7f5ea; --pass-fg: #1e6e33;
+  --review-bg: #fbf3dc; --review-fg: #6e4e06;
+  --block-bg: #fbe9e8; --block-fg: #a12622;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131c27; --fg: #e7edf4; --muted: #a3b2c4; --border: #2c3e52;
+    --code-bg: #0f1823;
+    --pass-bg: #12291b; --pass-fg: #5bc97a;
+    --review-bg: #2e2510; --review-fg: #e3b341;
+    --block-bg: #2e1614; --block-fg: #f47974;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main, .banner { max-width: 60rem; }
+main { margin: 0 auto; padding: 0 1rem 2rem; }
+.banner { border-left: 6px solid; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem auto; }
+.banner.pass { background: var(--pass-bg); color: var(--pass-fg); border-color: var(--pass-fg); }
+.banner.review { background: var(--review-bg); color: var(--review-fg); border-color: var(--review-fg); }
+.banner.block { background: var(--block-bg); color: var(--block-fg); border-color: var(--block-fg); }
+.banner .decision { font-size: 1.6rem; font-weight: 700; letter-spacing: .05em; margin: 0; }
+.banner .headline { font-weight: 600; margin: .25rem 0 0; }
+.banner .run { margin: .25rem 0 0; font-size: .9rem; }
+.banner ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+section { border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; margin: 1rem 0; }
+.claim.rejected { border-style: dashed; }
+h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+h3, h4 { font-size: 1rem; margin: .25rem 0; }
+blockquote { margin: .5rem 0 0; padding: .5rem .75rem; border-left: 3px solid var(--border); background: var(--code-bg); font-style: italic; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+code { background: var(--code-bg); padding: 0 .25rem; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: .75rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; margin: .5rem 0; }
+th, td { border: 1px solid var(--border); padding: .25rem .75rem; text-align: center; }
+.outcome.pass { color: var(--pass-fg); font-weight: 700; }
+.outcome.fail { color: var(--block-fg); font-weight: 700; }
+.outcome.error, .outcome.timeout { color: var(--review-fg); font-weight: 700; }
+.muted { color: var(--muted); }
+@media (max-width: 40rem) { body { font-size: 15px; } th, td { padding: .25rem .4rem; } }</style>
+</head>
+<body>
+<main>
+<header class="banner review">
+<p class="decision">REVIEW</p>
+<p class="headline">Not conclusive — a human must review</p>
+<p class="run">run <code>intended-express-fee</code></p>
+<ul><li>Changed test tests/test_orders.py fails on head but needs review because the contract has a CHANGE claim.</li><li>Changed test tests/test_orders.py::test_order_total_express_with_cancelled_last_line fails on head but needs review because the contract has a CHANGE claim.</li></ul>
+</header><section><h2>Intent claims</h2><section class="claim"><h3><code>C0</code> · PRESERVE</h3><p>Behavior that the intent does not describe must not change.</p><p class="muted">implicit claim — not stated in the intent text</p></section><section class="claim"><h3><code>C1</code> · CHANGE</h3><p>The express shipping fee is 15.0.</p><blockquote>Raise the express shipping fee from 12.0 to 15.0</blockquote></section></section><section><h2>Test-tamper guard</h2><ul><li><code>tests/test_orders.py</code> — MODIFIED, base test on head: FAIL</li><li><code>tests/test_orders.py</code> :: <code>test_order_total_express_with_cancelled_last_line</code> — MODIFIED, base test on head: FAIL</li></ul></section><section><h2>Hypotheses and probes</h2></section><section><h2>Provenance</h2>
+<ul>
+<li>base <code>9dcc10400d16c23a0db4f508c3678ffabf46b1f4</code></li>
+<li>head <code>9b2a02791e024702bd119142c154b8fd49334d84</code></li>
+<li>diff sha256 <code>00400908466e87f0467b2c969e72f2f966fbdfa7f1e4fb51522950b4ca09b31a</code></li>
+<li>probe for <code>T1</code>: sha256 <code>4670be4be093052dc9f43465e82959c4fff485148a35ce274c0b9c245696b5d2</code></li>
+<li>model usage: 3 calls, 2046 prompt tokens, 1338 completion tokens</li>
+</ul>
+<p class="muted">Hashes detect that a file changed after capture; they are not signatures.</p>
+</section><section class="scope"><h2>Scope</h2><ul><li>PASS means no regression was found within the tested scope; it does not prove the change correct.</li><li>Only the hypotheses listed in this proof were tested.</li></ul></section>
+</main>
+</body>
+</html>

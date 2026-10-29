@@ -1,0 +1,75 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "cache-with-tenant-key",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "0737787cfb95385178c507213bc1c98c9e8d3da6",
+  "diff_sha256": "201b45797edbecd636d1abcf713a64eb6a67c7400debe86917fce67a97959ab7",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Prices are cached to make price retrieval faster.",
+        "source_quote": "Add price caching for speed"
+      },
+      {
+        "id": "C2",
+        "kind": "PRESERVE",
+        "statement": "Tenant isolation continues to be enforced.",
+        "source_quote": "preserving tenant isolation"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "Stale cached price after underlying price table changes",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "price_for('tenant-b','widget') caches 35.0 on first call; if _PRICES['tenant-b']['widget'] is then updated to 99.0, head keeps returning cached 35.0 while base returns the new price.",
+        "expected_base": "99.0 on second call (live read of updated _PRICES)",
+        "expected_head": "35.0 on second call (stale value from first call)",
+        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), mutate _PRICES['tenant-b']['widget'] to 99.0, call price_for again and compare results; restore _PRICES and clear cache in finally.",
+        "risk_category": "state",
+        "falsification_criteria": "If head returns the updated 99.0 after the price-table mutation, the hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "H1 was not tested: Stale cached price after underlying price table changes."
+    ],
+    "unresolved_risks": [
+      "H1 was not tested: Stale cached price after underlying price table changes"
+    ],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 4,
+    "prompt_tokens": 3401,
+    "completion_tokens": 5831
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

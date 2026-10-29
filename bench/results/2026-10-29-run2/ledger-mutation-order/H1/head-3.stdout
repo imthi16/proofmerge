@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_negative_purchase_leaves_ledger_unchanged ________________
+
+    def test_negative_purchase_leaves_ledger_unchanged():
+        ledger = {'alice': 100.0}
+        with pytest.raises(ValueError):
+            record_purchase(ledger, 'alice', -10.0)
+>       assert ledger['alice'] == 100.0
+E       assert 90.0 == 100.0
+
+../probes/test_h1.py:8: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_negative_purchase_leaves_ledger_unchanged
+1 failed in 0.02s

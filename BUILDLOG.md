@@ -399,3 +399,9 @@ All checks passed!
   - `boundary-qty-inclusive` (faulty) is now BLOCK; in run 1 it was REVIEW, "intent is missing".
   - `price-error-type` (faulty) is BLOCK.
   - `newsletter-promo-fix` (safe) is still BLOCK. Calling Wonder directly with the same input, it agreed the probe tests its hypothesis: legacy `{"subscribed": True}` customers lose news-5. It returned `explained_by_change: null`, because the intent asks to "wire the promotion check to the new customer field" but never says legacy-flag customers lose the promotion. That is the strict anti-laundering rule working as written, so the prompt was not loosened further for this case. It stays a reported false BLOCK against its label.
+
+### Benchmark run 2 — 2026-10-29
+- `bench/run_bench.py` on main `bcd0032`: Muse Spark 1.3 + Muse Wonder 1.0, Docker, 20 candidates, 90 model calls, 0 errors. Faulty: 12 BLOCK, 0 REVIEW, 0 PASS. Safe: 1 BLOCK, 3 REVIEW, 4 PASS. The full bundles are in `bench/results/2026-10-29-run2/`; spot-checked with `proofmerge replay`.
+- Compared with run 1, four faulty cases became BLOCK because of the intent-handling fix. Two became BLOCK because Spark cited C0 instead of the vague CHANGE claim it cited in run 1 (run-to-run model variation, recorded as a known limit). `newsletter-promo-fix` stays a false BLOCK under the strict CHANGE-explanation rule.
+- Run 2 came after fixes made in response to run 1, so it is not a clean held-out result.
+

@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_vip_precedence_over_newsletter ______________________
+
+    def test_vip_precedence_over_newsletter():
+>       assert promo_for({"vip": True, "subscribed": True}) == "vip-10"
+E       AssertionError: assert 'news-5' == 'vip-10'
+E         
+E         - vip-10
+E         + news-5
+
+../probes/test_h1.py:4: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_vip_precedence_over_newsletter - AssertionE...
+1 failed in 0.02s

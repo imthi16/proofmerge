@@ -1,0 +1,204 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "order-total-off-by-one",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "6a773149f3bf031156bd11f96d76ec4cd1e4c8db",
+  "diff_sha256": "8ec32c5f018107f3e5b9b2160c246a95d66141b781a3597e36189bd48d45b9a4",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Totals accumulation is performed using positional iteration.",
+        "source_quote": "Refactor the totals accumulation to positional iteration"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "order_total skips last item due to off-by-one range",
+        "changed_locations": [
+          "src/demo_shop/orders.py::order_total"
+        ],
+        "suspected_behavior": "Head iterates range(len(items)-1) so last item is never added; with items=[{\"qty\":2,\"price\":10.0},{\"qty\":1,\"price\":5.0}] and shipping='standard' total misses 5.0",
+        "expected_base": "30.0 (2*10.0 + 1*5.0 + 5.0 shipping)",
+        "expected_head": "25.0 (2*10.0 + 5.0 shipping, last item skipped)",
+        "test_intent": "Call order_total([{'qty':2,'price':10.0},{'qty':1,'price':5.0}], shipping='standard') and assert result == 30.0; passes on base, fails on head with 25.0.",
+        "risk_category": "boundary",
+        "falsification_criteria": "If head returns 30.0 for this input, same as base, the hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "c18114ee4cee5be48038563800adfb8b71fc2334f4c108dff0122f14eb18b411",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 603,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 603,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 604,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6a773149f3bf031156bd11f96d76ec4cd1e4c8db",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 603,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6a773149f3bf031156bd11f96d76ec4cd1e4c8db",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "6a773149f3bf031156bd11f96d76ec4cd1e4c8db",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/order-total-off-by-one/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 5,
+    "prompt_tokens": 4071,
+    "completion_tokens": 4478
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

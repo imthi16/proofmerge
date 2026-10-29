@@ -1,0 +1,51 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "pure-refactor-constants",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "24e707a7698ee6f6a2bf5d8c90ab90ac29813995",
+  "diff_sha256": "8c832fb8dfb55ff61e62eb4122de8ddb9565de9e37a0d72891f459cfc1ac3bb3",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "PRESERVE",
+        "statement": "The discount helper behavior remains unchanged.",
+        "source_quote": "No behavior change"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "PASS",
+    "reasons": [
+      "No regression was found within the tested scope."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 1956,
+    "completion_tokens": 2003
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

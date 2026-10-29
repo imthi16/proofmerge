@@ -405,3 +405,8 @@ All checks passed!
 - Compared with run 1, four faulty cases became BLOCK because of the intent-handling fix. Two became BLOCK because Spark cited C0 instead of the vague CHANGE claim it cited in run 1 (run-to-run model variation, recorded as a known limit). `newsletter-promo-fix` stays a false BLOCK under the strict CHANGE-explanation rule.
 - Run 2 came after fixes made in response to run 1, so it is not a clean held-out result.
 
+### Fresh-clone check and README redesign — 2026-10-29
+- Followed the README install steps exactly, in an isolated directory on main `bcd0032`. `uv tool install git+https://github.com/imthi16/proofmerge` worked with and without `--python 3.13`. Then `proofmerge setup` built the runner image, `git clone` and `python3 demo/build_demo_repo.py` built the demo, and `proofmerge verify` on `candidate/tenant-cache-regression` gave BLOCK, exit 2, in 6 model calls. A stock Ubuntu `PATH` has no `python` command, so the README now uses `python3`.
+- Final demo runs on main `bcd0032` (Spark + Wonder, Docker): tenant-cache-regression BLOCK (two runs), test-tamper BLOCK, intended-change REVIEW. `proofmerge replay` on each bundle: evidence intact.
+- README restructured around a real run. The new hero image (`docs/assets/hero-{light,dark}.svg`) shows that run's base 3/3 pass and patch 3/3 fail grid. The report card screenshot is from the same run. The flowchart now shows the tamper guard and Wonder feeding the verdict, the problem table quotes the current demo intents, and the report image no longer has a dark-mode variant that pointed at the old hand-made sample.
+

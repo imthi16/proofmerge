@@ -12,8 +12,10 @@ def decide(
     tamper: list[TamperFinding],
     contested_claim_ids: frozenset[str] = frozenset(),
     errors: list[str] | None = None,
+    *,
+    review_on_error: bool = False,
 ) -> Verdict:
-    """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
+    """Apply rules 1–9; callers can require a complete run before allowing BLOCK."""
     claims = {claim.id: claim for claim in contract.claims}
     has_intent = any(claim.id != C0.id for claim in contract.claims)
     has_change = any(claim.kind == "CHANGE" for claim in contract.claims)
@@ -79,6 +81,8 @@ def decide(
     reasons.extend(errors or ())
 
     decision = "BLOCK" if block else "REVIEW" if reasons else "PASS"
+    if review_on_error and errors:
+        decision = "REVIEW"
     if decision == "PASS":
         reasons.append("No regression was found within the tested scope.")
     limitations = [

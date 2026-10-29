@@ -291,3 +291,16 @@ All checks passed!
 - Added `decide` with rules 1–9, BLOCK precedence with all reasons retained, scope limitations, unresolved hypotheses, and unknown-claim rejection; tests cover every rule and the three hand-built demo cases.
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `268 passed, 7 skipped in 7.06s`. Docker was excluded from PATH; the seven Docker integration tests were skipped.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`
+
+### 2026-10-29 — T23 end-to-end verification
+- Added `proofmerge verify`: resolves revisions, extracts intent, generates and runs probes, checks changed tests, normalizes findings, and writes `proof.json`, `report.html`, then the manifest as the final write.
+- Added 31 acceptance and failure-path tests, including the real Docker demo producing base PASS 3/3, head FAIL 3/3, BLOCK, and an intact replay bundle. All model replies in tests are scripted.
+- API/client-setup, sandbox and tamper failures produce REVIEW with recorded reasons; completed evidence is retained. Execution ERROR/TIMEOUT also requires REVIEW. Added an opt-in `review_on_error` argument to `decide` because its existing BLOCK precedence could otherwise override a failed run; default behavior is unchanged.
+- Verification:
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  306 passed in 25.35s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```

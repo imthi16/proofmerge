@@ -382,3 +382,8 @@ All checks passed!
 - `/tmp/pm-venv/bin/proofmerge setup` printed `built runner image: sha256:7174905168e20eba95778e38864657946941e275dedc412a3ddf07750ced7c69`.
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: 331 passed, 8 skipped in 12.07s.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`.
+
+### Benchmark run 1 and doc status refresh — 2026-10-29
+- First real run of `bench/run_bench.py` on main `2d43fc4`: Muse Spark 1.3 + Muse Wonder 1.0, Docker sandbox, 20 candidates, 87 model calls, 0 errors. Faulty: 6 BLOCK, 6 REVIEW, 0 PASS. Safe: 1 BLOCK, 3 REVIEW, 4 PASS. Counts split by held-out status are in `bench/results/README.md`; per-candidate data is in `bench/results/2026-10-29-run1/results.json`, with local evidence paths replaced by `<run dir>`.
+- Two verdict issues found: a false BLOCK where a CHANGE claim explains the change (`newsletter-promo-fix`), and four faulty cases held at REVIEW because an intent text with no explicit claim was treated as no intent. Changes made after this run address both, so later runs on these cases are not clean held-out results.
+- `docs/PRIOR_ART.md` and `ORIGINALITY.md` now mark the verdict engine, probes, repeated runs, manifest replay (hash checks only) and tamper checks as built. Replay re-running the experiments stays planned.

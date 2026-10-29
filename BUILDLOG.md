@@ -286,3 +286,8 @@ All checks passed!
 - Demo check rebuild + `python demo/check_demo.py` (exit 0): main PASS/PASS; intended-change PASS / n/a / FAIL; tenant-cache-regression PASS/FAIL/PASS; test-tamper PASS/FAIL/FAIL — same table as before batch 2.
 - Not verified here: no Spark probe runs against the new candidates yet (that is the batch-2 benchmark run, not the fixture task); TASKS.md is outside this worktree and was not edited by this agent.
 
+
+### 2026-10-29 — T24 deterministic verdict engine
+- Added `decide` with rules 1–9, BLOCK precedence with all reasons retained, scope limitations, unresolved hypotheses, and unknown-claim rejection; tests cover every rule and the three hand-built demo cases.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `268 passed, 7 skipped in 7.06s`. Docker was excluded from PATH; the seven Docker integration tests were skipped.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`

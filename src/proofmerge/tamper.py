@@ -1,12 +1,14 @@
-"""Static signals for changed tests; these findings are not verdicts."""
+"""Static and dynamic signals for changed tests; these findings are not verdicts."""
 
 import ast
 import io
+import re
 import tokenize
 from pathlib import Path, PurePosixPath
 
 from proofmerge.context import GitContext, _git
-from proofmerge.evidence import TamperFinding, TamperKind
+from proofmerge.evidence import Experiment, Outcome, TamperFinding, TamperKind
+from proofmerge.sandbox import Runner, docker_runner, run_experiment
 
 
 class TamperError(Exception):
@@ -188,3 +190,57 @@ def find_tamper(repo_path: str | Path, context: GitContext) -> list[TamperFindin
                 if values - old_marks.get(name, {}).get(kind, set()):
                     add(kind, name)
     return findings
+
+
+def run_base_tests_on_head(
+    repo: Path,
+    context: GitContext,
+    findings: list[TamperFinding],
+    evidence_dir: Path,
+    runner: Runner = docker_runner,
+    digest: str | None = None,
+) -> tuple[list[TamperFinding], list[Experiment]]:
+    """Run each affected file's committed base tests on both revisions, without a verdict."""
+    experiments: list[Experiment] = []
+    outcomes: dict[str, Outcome] = {}
+    for finding in findings:
+        path = finding.test_path
+        if path in outcomes:
+            continue
+        outcomes[path] = "ERROR"
+        if not _git(
+            repo, "ls-tree", "-z", context.base_sha, "--", f":(literal){path}",
+            error=f"Cannot inspect test revision {context.base_sha}",
+        ):
+            continue  # A newly added test has no base version to run.
+        source = _git(
+            repo, "show", f"{context.base_sha}:{path}",
+            error=f"Cannot read test file {path!r} at {context.base_sha}",
+        )
+        encoding, header = tokenize.detect_encoding(io.BytesIO(source).readline)
+        lines = source.decode(encoding).split("\n", len(header))
+        # Match the UTF-8 probe write, changing only comments Python inspected
+        # for an encoding declaration (never text inside a multiline literal).
+        for index in range(len(header)):
+            lines[index] = re.sub(
+                r"^([ \t\f]*#.*?coding[:=][ \t]*)([-\w.]+)",
+                r"\g<1>utf-8", lines[index], flags=re.ASCII,
+            )
+        # shortcut: repository conftest.py fixtures are not loaded by the isolated
+        # probe; tests needing them read ERROR. Upgrade when fixture support is needed.
+        experiment = run_experiment(
+            repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
+            "\n".join(lines),
+            evidence_dir, runner=runner, digest=digest, attempts=3,
+        )
+        experiments.append(experiment)
+        base = [e.outcome for e in experiment.executions if e.revision == "base"]
+        head = [e.outcome for e in experiment.executions if e.revision == "head"]
+        if head == ["PASS"] * 3:
+            outcomes[path] = "PASS"
+        elif base == ["PASS"] * 3 and head == ["FAIL"] * 3:
+            outcomes[path] = "FAIL"
+    return [
+        finding.model_copy(update={"base_test_on_head_outcome": outcomes[finding.test_path]})
+        for finding in findings
+    ], experiments

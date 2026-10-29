@@ -46,7 +46,7 @@ Run it on the bundled demo (the demo files need a clone; the tool itself does no
 ```bash
 git clone https://github.com/imthi16/proofmerge
 cd proofmerge
-python demo/build_demo_repo.py
+python3 demo/build_demo_repo.py
 proofmerge verify demo/.build/demo-shop \
   --base main --head candidate/tenant-cache-regression \
   --intent-file demo/candidates/tenant-cache-regression/intent.md \
@@ -278,7 +278,7 @@ ruff check src tests
 Build the demo repository, then compare its branches against the ground truth:
 
 ```bash
-python demo/build_demo_repo.py   # creates demo/.build/demo-shop
+python3 demo/build_demo_repo.py  # creates demo/.build/demo-shop
 python demo/check_demo.py        # prints the table shown above
 ```
 

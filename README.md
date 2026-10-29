@@ -5,6 +5,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Runtime model: Muse Spark 1.3" src="https://img.shields.io/badge/Muse%20Spark-1.3-6CA0FF">
+  <img alt="Runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
   <img alt="Track: Indie Developer" src="https://img.shields.io/badge/track-Indie%20Developer-2C3E52">
   <img alt="Status: early build" src="https://img.shields.io/badge/status-early%20build-E3B341">
 </p>
@@ -169,17 +170,12 @@ relies on, the same probe run 3 times on each commit, and why head failed.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/report-card-dark.png">
-  <img alt="Report card for H1: it cites claim C2, 'Returned prices must not change.' A grid shows the probe passing on base 1e6c838 in 3 of 3 attempts and failing on head 6796cac in 3 of 3, with the head failure 'assert 25.0 == 35.0', the probe source and a reproduce command." src="docs/assets/report-card-light.png" width="720">
+  <img alt="From a real run on the demo's tenant-cache PR (Muse Spark + Muse Wonder, Docker): the probe was written by Spark, base PASS 3/3, head FAIL 3/3; on the patch an unknown tenant gets a cached price instead of an error." src="docs/assets/report-card-real-light.png" width="720">
 </picture>
 
 > [!NOTE]
-> This screenshot is rendered from `tests/fixtures/sample_proof_block.json`. Its
-> intent claims and hypotheses come from a real Muse Spark run, and the failure
-> line comes from a real Docker run of the demo's ground-truth test. The verdict
-> and the grid were put together by hand, because the end-to-end pipeline does
-> not exist yet. `proofmerge probe` now writes and runs Spark probes separately;
-> this screenshot still uses the hand-written sample probe.
-> [Whole page](docs/assets/report-full-light.png).
+> From a real run on the demo's tenant-cache PR (Muse Spark + Muse Wonder, Docker): the probe was written by Spark, base PASS 3/3, head FAIL 3/3; on the patch an unknown tenant gets a cached price instead of an error.
+> [Whole page](docs/assets/report-full-real-light.png).
 
 Render it yourself:
 
@@ -209,7 +205,7 @@ proofmerge report tests/fixtures/sample_proof_block.json --out report.html
 | 🟢 | Muse Wonder cross-check | Built, tested | T30 independent cross-checks (2026-10-29) |
 | 🟢 | GitHub Action that runs on every PR | Built, not yet run on GitHub | T28 GitHub composite action (2026-10-29) |
 | 🟢 | One-command install and `proofmerge setup` | Built, tested | T31 Fresh install + `proofmerge setup` (2026-10-29) |
-| 🟢 | Benchmark runner (`bench/run_bench.py`) | Built, tested; no real model benchmark run | T29 benchmark runner (2026-10-29) |
+| 🟢 | Benchmark runner (`bench/run_bench.py`) | Built, tested; two real runs recorded | Benchmark run 1; Benchmark run 2 (2026-10-29) |
 | ⚪ | Replay re-running experiments in Docker | Planned | No completed checks recorded |
 | ⚪ | PASS strength | Planned | No completed checks recorded |
 
@@ -217,7 +213,22 @@ Day-by-day progress, with the real check results, is in [BUILDLOG.md](BUILDLOG.m
 
 ## 📊 Results
 
-Benchmark results will be added from a recorded run.
+20 synthetic pull requests on one small fixture (12 faulty, 8 safe); a smoke benchmark, not an accuracy claim.
+
+| | BLOCK | REVIEW | PASS |
+|---|---|---|---|
+| Faulty, not held out (8) | 8 | 0 | 0 |
+| Faulty, held out (4) | 4 | 0 | 0 |
+| Safe, not held out (5) | 1 | 2 | 2 |
+| Safe, held out (3) | 0 | 1 | 2 |
+
+90 model calls, 78,557 prompt and 98,448 completion tokens, 0 errors.
+
+- No faulty case was passed in either run.
+- One safe case (`newsletter-promo-fix`) is a false BLOCK: the hypothesis cited the implicit claim C0, but the behavior change it found is the one the PR's CHANGE claim asks for.
+- Run 2 came after fixes made in response to run 1, so it is not a clean held-out result.
+
+Per-candidate evidence for run 2, replayable with `proofmerge replay`: [bench/results/2026-10-29-run2](bench/results/2026-10-29-run2). Run 1 and the full comparison are in [bench/results/README.md](bench/results/README.md).
 
 ## 🤖 Use it on your PRs
 

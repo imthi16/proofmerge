@@ -21,7 +21,7 @@ from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.report import render_html
-from proofmerge.sandbox import SandboxError, image_digest, runner_dockerfile_path
+from proofmerge.sandbox import RUNNER_IMAGE, SandboxError, image_digest, runner_dockerfile_path
 
 app = typer.Typer()
 
@@ -53,7 +53,7 @@ def setup() -> None:
         raise typer.Exit(1) from None
     try:
         result = subprocess.run(
-            ["docker", "build", "-t", "proofmerge-runner:0.1", str(context_dir)],
+            ["docker", "build", "-t", RUNNER_IMAGE, str(context_dir)],
             capture_output=True,
             text=True,
             check=False,

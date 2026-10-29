@@ -40,9 +40,11 @@ Set your Meta developer key:
 export MODEL_API_KEY=...  # never commit this
 ```
 
-Run it on the bundled demo:
+Run it on the bundled demo (the demo files need a clone; the tool itself does not):
 
 ```bash
+git clone https://github.com/imthi16/proofmerge
+cd proofmerge
 python demo/build_demo_repo.py
 proofmerge verify demo/.build/demo-shop \
   --base main --head candidate/tenant-cache-regression \

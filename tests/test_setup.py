@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from proofmerge import cli
-from proofmerge.sandbox import SandboxError, image_digest, runner_dockerfile_path
+from proofmerge.sandbox import RUNNER_IMAGE, SandboxError, image_digest, runner_dockerfile_path
 
 runner = CliRunner()
 
@@ -65,8 +65,8 @@ def test_setup_command_runs_docker_argv_list(monkeypatch) -> None:
     assert "sha256:abc123" in result.output
     expected_context = str(runner_dockerfile_path().parent)
     assert calls == [
-        ["docker", "build", "-t", "proofmerge-runner:0.1", expected_context],
-        ["docker", "image", "inspect", "--format", "{{.Id}}", "proofmerge-runner:0.1"],
+        ["docker", "build", "-t", RUNNER_IMAGE, expected_context],
+        ["docker", "image", "inspect", "--format", "{{.Id}}", RUNNER_IMAGE],
     ]
 
 

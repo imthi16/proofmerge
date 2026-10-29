@@ -54,7 +54,7 @@ def pytest_sessionfinish(session, exitstatus):
 """
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-HYPOTHESIS_ID = re.compile(r"H[0-9]+")
+HYPOTHESIS_ID = re.compile(r"[HT][0-9]+")
 
 # (image, code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
 Runner = Callable[[str, Path, Path, str, int], tuple[int | None, bytes, bytes]]
@@ -208,7 +208,7 @@ def run_experiment(
     probe_name = f"test_{hypothesis_id.lower()}.py"
     probe_dir = evidence_dir / "probes"
     probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source)
+    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
     (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
     open_to_runner(probe_dir)
     log_dir = evidence_dir / hypothesis_id

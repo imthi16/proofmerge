@@ -1,11 +1,13 @@
 """Inspect owned committed fixtures only; never import or execute their contents."""
 
 import subprocess
+import tokenize
 
 import pytest
 
 from proofmerge.context import get_context
-from proofmerge.tamper import TamperError, find_tamper
+from proofmerge.evidence import TamperFinding
+from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
 
 
 @pytest.fixture
@@ -23,7 +25,10 @@ def inspect_diff(tmp_path):
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
         if before is not None:
-            target.write_text(before)
+            if isinstance(before, bytes):
+                target.write_bytes(before)
+            else:
+                target.write_text(before)
         git("add", ".")
         git("commit", "--allow-empty", "-m", "base")
         base = git("rev-parse", "HEAD")
@@ -202,3 +207,96 @@ def test_large_function_with_decorator_outside_diff(inspect_diff):
     result = signals(inspect_diff(before, before + "    assert False\n"))
     assert ("test_example", "MODIFIED") in result
     assert ("test_example", "SKIPPED") not in result
+
+
+@pytest.mark.parametrize(
+    ("base_codes", "head_codes", "expected"),
+    [
+        ([0, 0, 0], [1, 1, 1], "FAIL"),
+        ([0, 0, 0], [0, 0, 0], "PASS"),
+        ([1, 1, 1], [0, 0, 0], "PASS"),
+        ([2, 2, 2], [0, 0, 0], "PASS"),
+        ([1, 1, 1], [1, 1, 1], "ERROR"),
+        ([0, 1, 0], [1, 1, 1], "ERROR"),
+        ([0, 0, 0], [1, 0, 1], "ERROR"),
+        ([0, 0, 0], [2, 2, 2], "ERROR"),
+        ([0, 0, 0], [6, 6, 6], "ERROR"),
+        ([0, 0, 0], [None, None, None], "ERROR"),
+        ([None, 0, 0], [1, 1, 1], "ERROR"),
+    ],
+)
+def test_base_tests_on_head_rule(inspect_diff, tmp_path, base_codes, head_codes, expected):
+    (tmp_path / "README.md").write_text("Owned fixture repository.\n")
+    findings = inspect_diff(TEST, None)
+    context = get_context(tmp_path, "HEAD~", "HEAD")
+    codes = iter(base_codes + head_codes)
+    calls = []
+
+    def runner(image, code_dir, probe_dir, probe_name, timeout):
+        assert (probe_dir / probe_name).read_text() == TEST
+        assert probe_name == "test_t1.py"
+        assert image == "sha256:fake"
+        assert (code_dir / "tests/test_example.py").exists() == (code_dir.name == "base")
+        calls.append(code_dir.name)
+        return next(codes), b"recorded output", b""
+
+    updated, experiments = run_base_tests_on_head(
+        tmp_path, context, findings, tmp_path / "evidence", runner=runner, digest="sha256:fake"
+    )
+    assert calls == ["base"] * 3 + ["head"] * 3
+    assert len(experiments) == 1  # File and function findings share one experiment.
+    assert experiments[0].hypothesis_id == "T1"
+    assert [e.exit_code for e in experiments[0].executions] == base_codes + head_codes
+    assert all(f.base_test_on_head_outcome == expected for f in updated)
+    assert all(f.base_test_on_head_outcome is None for f in findings)
+
+
+def test_base_tests_preserve_latin1_literal(inspect_diff, tmp_path):
+    (tmp_path / "README.md").write_text("Owned fixture repository.\n")
+    source = '# -*- coding: latin-1 -*-\ndef test_example():\n    assert "café" == "café"\n'
+    findings = inspect_diff(source.encode("latin-1"), None)
+    context = get_context(tmp_path, "HEAD~", "HEAD")
+    evidence_dir = tmp_path / "evidence"
+
+    def runner(image, code_dir, probe_dir, probe_name, timeout):
+        return 0, b"", b""
+
+    run_base_tests_on_head(
+        tmp_path, context, findings, evidence_dir, runner=runner, digest="fake"
+    )
+    with tokenize.open(evidence_dir / "probes/test_t1.py") as probe:
+        assert 'assert "café" == "café"' in probe.read()
+
+
+def test_base_tests_run_once_per_file_with_distinct_ids(inspect_diff, tmp_path):
+    second = tmp_path / "test_second.py"
+    second.write_text(TEST)
+    findings = inspect_diff(TEST, TEST.replace("2 == 2", "2 == 3"), dirty="invalid dirty source")
+    findings.append(TamperFinding(
+        test_path="test_second.py", test_name=None, kind="SKIPPED",
+        base_test_on_head_outcome=None,
+    ))
+    findings.append(findings[-1].model_copy(update={"kind": "XFAIL"}))
+    findings.append(findings[-1].model_copy(update={"kind": "ASSERTION_REMOVED"}))
+    context = get_context(tmp_path, "HEAD~", "HEAD")
+    names = []
+
+    def runner(image, code_dir, probe_dir, probe_name, timeout):
+        assert (probe_dir / probe_name).read_text() == TEST
+        names.append(probe_name)
+        return 0, b"", b""
+
+    updated, experiments = run_base_tests_on_head(
+        tmp_path, context, findings, tmp_path / "evidence", runner=runner, digest="fake"
+    )
+    assert names == ["test_t1.py"] * 6 + ["test_t2.py"] * 6
+    assert [e.hypothesis_id for e in experiments] == ["T1", "T2"]
+    assert all(f.base_test_on_head_outcome == "PASS" for f in updated)
+
+
+def test_added_test_without_base_version_is_error(inspect_diff, tmp_path):
+    findings = inspect_diff(None, TEST)
+    context = get_context(tmp_path, "HEAD~", "HEAD")
+    updated, experiments = run_base_tests_on_head(tmp_path, context, findings, tmp_path / "evidence")
+    assert experiments == []
+    assert [f.base_test_on_head_outcome for f in updated] == ["ERROR"]

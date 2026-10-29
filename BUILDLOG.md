@@ -172,6 +172,28 @@ All three commands exited 0. `graphify update .` exited 0 (no code-graph topolog
 - A probe whose tests were skipped exited 0, so it counted as passing on base without checking anything. The outcome plugin now turns any skip, xfail or xpass into exit 6 (ERROR); the constant is renamed `INVALID_PROBE_EXIT`. A module-level `importorskip` already exited 5 (ERROR); a test now covers it.
 - `ruff check src tests` clean; `pytest -q` 122 passed, including the Docker tests. The real Spark runs above were not repeated after these fixes.
 
+### T16 dynamic test-tamper checks — 2026-10-29
+- Encoding review fix: normalize committed base-test encoding declarations for explicit UTF-8 probe writes; added an offline Latin-1 `café` regression test. Verification: 155 tests passed in 21.10s; Ruff passed.
+- Added `run_base_tests_on_head`: each affected file's committed base test source runs three times on base and three on head through the sandbox, including files deleted on head. Experiments use T1, T2, …; all findings for one file share its result. FAIL requires base PASS 3/3 and head FAIL 3/3; head PASS 3/3 gives PASS; other execution outcomes give ERROR. No verdict decision or model call.
+- Offline coverage checks repeatability, errors/timeouts, deleted files, committed source, per-file deduplication, distinct experiment IDs, and newly added tests (no base source → ERROR without execution).
+- Docker was reachable with `proofmerge-runner:0.1`. Demo acceptance tests passed: `test-tamper` and `intended-change` each produced FAIL; `tenant-cache-regression` produced no findings or experiments.
+- Known limits: repository conftest fixtures are not loaded, so tests needing them yield ERROR; skip/xfail/xpass also yield ERROR. The existing archive helper cannot read a completely empty Git tree; Git/export/infrastructure exceptions propagate. The first full run reported `11 failed, 143 passed in 19.69s` because the new deleted-file fixture left an empty tree; retaining a README corrected the fixture. The first Ruff run found one import-order issue, corrected before the final checks.
+- Final verification (both commands exited 0):
+
+```text
+$ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+........................................................................ [ 46%]
+........................................................................ [ 93%]
+..........                                                               [100%]
+154 passed in 19.02s
+
+$ ../proofmerge-T3/.venv/bin/ruff check src tests
+All checks passed!
+```
+
+`git diff --check` passed. `graphify update .` exited 0.
+
+
 ### T21 Evidence manifest and replay — 2026-10-29
 - Added sorted SHA-256 manifests, detection of missing/changed/unlisted files, and rejection of symlinks and unsafe listed paths. Missing or invalid manifests return a problem instead of raising.
 - Added `proofmerge replay <proof.json>`: validates the proof and checks both manifest hashes and every experiment's recorded probe hash without executing probes. `probe` writes its manifest after `probe-run.json` as its final file write.
@@ -187,5 +209,6 @@ $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
 $ ../proofmerge-T3/.venv/bin/ruff check src tests
 All checks passed!
 ```
+
 - Docker was unreachable in this sandbox; the four Docker integration tests were skipped. Direct image inspection exited 1 with `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`.
 - Limits: hashes detect changes but are unsigned; replacing both proof and manifest is not authenticated. Checks assume a stationary evidence bundle, without concurrent filesystem modification. Replay does not re-run experiments or call models.

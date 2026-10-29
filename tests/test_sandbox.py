@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 
 from proofmerge import sandbox
+from proofmerge.context import get_context
 from proofmerge.sandbox import SandboxError, export_tree, outcome_for, run_experiment
+from proofmerge.tamper import find_tamper, run_base_tests_on_head
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,7 +71,8 @@ def test_outcome_for_counts_only_pytest_exit_1_as_failure(code, outcome):
     assert outcome_for(code) == outcome
 
 
-def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path):
+@pytest.mark.parametrize("probe_id", ["H1", "T1"])
+def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path, probe_id):
     path, base, head = repo
     seen: list[str] = []
 
@@ -81,7 +84,7 @@ def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path):
 
     evidence = tmp_path / "evidence"
     experiment = run_experiment(
-        path, base, head, "H1", "PROBE", evidence, runner=fake_runner, digest="sha256:img"
+        path, base, head, probe_id, "PROBE", evidence, runner=fake_runner, digest="sha256:img"
     )
     outcomes = [(e.revision, e.attempt, e.outcome) for e in experiment.executions]
     assert outcomes == [
@@ -89,7 +92,7 @@ def test_run_experiment_records_every_attempt_on_both_revisions(repo, tmp_path):
         ("head", 1, "FAIL"), ("head", 2, "FAIL"), ("head", 3, "FAIL"),
     ]  # fmt: skip
     assert experiment.test_source_sha256 == hashlib.sha256(b"PROBE").hexdigest()
-    assert (evidence / "probes" / "test_h1.py").read_text() == "PROBE"
+    assert (evidence / "probes" / f"test_{probe_id.lower()}.py").read_text() == "PROBE"
     assert (evidence / experiment.executions[3].stdout_path).read_bytes() == b"assert 4 == 6"
     assert {e.runner_image_digest for e in experiment.executions} == {"sha256:img"}
     assert {e.commit_sha for e in experiment.executions} == {base, head}
@@ -283,3 +286,21 @@ def test_docker_probe_calling_a_missing_function_is_error_not_fail(demo_repo, tm
     experiment = run_experiment(demo_repo, base, None, "H7", probe, tmp_path, attempts=1)
     assert [e.outcome for e in experiment.executions] == ["ERROR"]
     assert experiment.executions[0].exit_code == sandbox.INVALID_PROBE_EXIT
+
+
+@needs_docker
+@pytest.mark.parametrize(
+    ("candidate", "expected"),
+    [("test-tamper", "FAIL"), ("intended-change", "FAIL"), ("tenant-cache-regression", None)],
+)
+def test_docker_base_tests_on_head(demo_repo, tmp_path, candidate, expected):
+    context = get_context(demo_repo, "main", f"candidate/{candidate}")
+    findings = find_tamper(demo_repo, context)
+    updated, experiments = run_base_tests_on_head(demo_repo, context, findings, tmp_path)
+    if expected is None:
+        assert updated == [] and experiments == []
+    else:
+        assert updated and experiments
+        assert all(f.base_test_on_head_outcome == expected for f in updated)
+        for experiment in experiments:
+            assert [e.outcome for e in experiment.executions] == ["PASS"] * 3 + ["FAIL"] * 3

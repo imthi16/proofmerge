@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Runtime model: Muse Spark 1.3" src="https://img.shields.io/badge/Muse%20Spark-1.3-6CA0FF">
-  <img alt="Runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
+  <img alt="Planned runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
   <img alt="Track: Indie Developer" src="https://img.shields.io/badge/track-Indie%20Developer-2C3E52">
   <img alt="Status: early build" src="https://img.shields.io/badge/status-early%20build-E3B341">
 </p>
@@ -15,8 +15,10 @@ ask a second AI whether the code "looks good". It tries to find a test that
 passes on the original code and fails on the patch, runs that test on both
 versions, and reports what actually happened.
 
-Built solo for the Meta Global AI Developer Hackathon 2026 (Indie Developer
-track). Runtime intelligence: Meta Muse Spark 1.3 and Muse Wonder 1.0.
+Built solo for the Meta Global AI Developer Hackathon 2026.
+Track: Indie Developer · Theme: Push the Frontier.
+Runtime intelligence: Meta Muse Spark 1.3; Muse Wonder 1.0 is planned.
+License: [MIT](LICENSE).
 
 > [!IMPORTANT]
 > **Early build.** The parts marked 🟢 under [What works today](#what-works-today)
@@ -70,6 +72,9 @@ them apart.
 > never shown to a model. They are only used to score ProofMerge.
 
 ## ⚙️ How a verdict is reached
+
+This is the planned end-to-end workflow. The verdict engine and Muse Wonder
+summarizer are not built yet; implemented parts are listed below.
 
 ```mermaid
 flowchart LR
@@ -146,7 +151,8 @@ relies on, the same probe run 3 times on each commit, and why head failed.
 > intent claims and hypotheses come from a real Muse Spark run, and the failure
 > line comes from a real Docker run of the demo's ground-truth test. The verdict
 > and the grid were put together by hand, because the end-to-end pipeline does
-> not exist yet. The probe in a real run will be written by Spark.
+> not exist yet. `proofmerge probe` now writes and runs Spark probes separately;
+> this screenshot still uses the hand-written sample probe.
 > [Whole page](docs/assets/report-full-light.png).
 
 Render it yourself:
@@ -157,21 +163,26 @@ proofmerge report tests/fixtures/sample_proof_block.json --out report.html
 
 ## ✅ What works today
 
-| | Part | State |
-|---|---|---|
-| 🟢 | CLI skeleton (`proofmerge version`, `proofmerge smoke`) | Built, tested |
-| 🟢 | Git context: base/head SHAs, changed files, diff and its SHA-256 | Built, tested |
-| 🟢 | Meta API client: schema-checked JSON replies, a hard cap on calls, refuses `-contributor` models, never logs the key | Built, tested, one real Spark call made |
-| 🟢 | Demo shop with three candidate PRs and hidden ground truth | Built, checked |
-| 🟢 | Intent contract: Spark's claims are kept only if they quote the PR text exactly | Built, tested, real Spark runs |
-| 🟢 | Spark hypotheses, each tied to one claim (`proofmerge hypotheses`) | Built, tested, real Spark runs |
-| 🟢 | Isolated base/head runs in Docker: no network, no host secrets, read-only code, 3 attempts each | Built, tested; demo gives base PASS 3/3, head FAIL 3/3 |
-| 🟢 | Test-tamper check: deleted, skipped, xfailed or weakened tests in the diff | Built, tested |
-| 🟢 | `proof.json` format and `report.html` (`proofmerge report`) | Built, tested on sample proofs |
-| 🟢 | Benchmark batch 1: 5 faulty and 3 safe PRs with hidden ground truth | Built, checked |
-| 🟡 | Spark-written probes that must pass on base before head counts | In progress |
-| ⚪ | Verdict engine, Muse Wonder cross-check, `replay` | Planned |
-| ⚪ | ProofMerge's own results on the benchmark | Planned |
+| | Part | State | BUILDLOG entry |
+|---|---|---|---|
+| 🟢 | CLI skeleton (`proofmerge version`, `proofmerge smoke`) | Built, tested | Day 2 gate (2026-10-27) |
+| 🟢 | Git context: base/head SHAs, changed files, diff and its SHA-256 | Built, tested | Day 3 gate (2026-10-28) |
+| 🟢 | Meta API client: schema-checked JSON replies, a hard cap on calls, refuses `-contributor` models, never logs the key | Built, tested, one real Spark call made | Day 2 gate (2026-10-27) |
+| 🟢 | Demo shop with three candidate PRs and hidden ground truth | Built, checked | Day 2 gate; T17 demo recheck |
+| 🟢 | Intent contract: Spark's claims are kept only if they quote the PR text exactly | Built, tested, real Spark runs | Day 3 gate |
+| 🟢 | Spark hypotheses, each tied to one claim (`proofmerge hypotheses`) | Built, tested, real Spark runs | Day 3 gate; T7b |
+| 🟢 | Isolated base/head runs in Docker: no network, no host secrets, read-only code, 3 attempts each | Built, tested; demo gives base PASS 3/3, head FAIL 3/3 | T14 |
+| 🟢 | Test-tamper check: deleted, skipped, xfailed or weakened tests in the diff; affected base tests run on head | Built, tested; no verdict decision | T8 and lead review; T16 |
+| 🟢 | `proof.json` format and `report.html` (`proofmerge report`) | Built, tested on sample proofs | T13; T13b |
+| 🟢 | Benchmark batches 1 and 2: 12 faulty and 8 safe PRs with hidden ground truth | Built, checked; fixtures only, no accuracy result | T11; T17 |
+| 🟢 | Spark-written probes that must pass on base before head counts (`proofmerge probe`) | Built, tested, real Spark/Docker runs | T18 and Codex review fixes |
+| 🟢 | Evidence manifest and `proofmerge replay` | Built, tested; checks hashes without re-running experiments | T21 |
+| 🟢 | Evidence normalizer: repeated base/head outcomes mapped to findings | Built, tested; no final verdict | T25 |
+| ⚪ | End-to-end `proofmerge verify` | Planned | No completed checks recorded |
+| ⚪ | Verdict engine and Muse Wonder cross-check | Planned | T18 explicitly records no verdict; no Wonder checks recorded |
+| ⚪ | GitHub Action that runs on every PR | Planned | No completed checks recorded |
+| ⚪ | One-command install | Planned | No completed checks recorded |
+| ⚪ | ProofMerge's own results on the benchmark | Planned | T17 records no Spark runs on the new candidates |
 
 Day-by-day progress, with the real check results, is in [BUILDLOG.md](BUILDLOG.md).
 
@@ -223,9 +234,12 @@ src/proofmerge/
   meta.py       the only code that talks to the Meta API
   intent.py     intent claims, kept only if their quote is in the PR text
   hypotheses.py Spark's failure hypotheses, checked against the diff
+  probes.py     Spark probe drafts, base validation and repeated runs
   sandbox.py    runs a probe on base and head inside Docker
   tamper.py     finds tests the PR deleted, skipped or weakened
   evidence.py   the proof.json format
+  findings.py   normalizes repeated execution outcomes into findings
+  manifest.py   evidence hashes and integrity checks
   report.py     renders proof.json as report.html
   prompts/      the instructions given to Muse Spark
 tests/          offline tests; models are replaced with fakes
@@ -255,12 +269,14 @@ ORIGINALITY.md  what counts as new work for this hackathon
 > [!WARNING]
 > For now ProofMerge is only meant for the bundled demo project and other
 > repositories you own. It makes no safety promise for running untrusted
-> external code until isolated runs are built and tested. A PASS means the
-> tests that ran found nothing. It does not mean the code is correct or secure.
+> external code. Isolated runs have been checked on the bundled fixtures;
+> broader repository support remains unverified. A PASS means the tests that ran
+> found nothing. It does not mean the code is correct or secure.
 
 ## 🧰 How it was built
 
-Muse Spark and Muse Wonder are the only models ProofMerge uses at runtime.
+Muse Spark is the runtime model; Muse Wonder is the planned evidence summarizer.
+They are the only runtime models in the design.
 AI coding assistants were used as development tools while building it; every
 change was reviewed and checked by running the tests. See
 [ORIGINALITY.md](ORIGINALITY.md) for what was built during the event window.

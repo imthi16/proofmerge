@@ -193,6 +193,26 @@ All checks passed!
 
 `git diff --check` passed. `graphify update .` exited 0.
 
+
+### T21 Evidence manifest and replay — 2026-10-29
+- Added sorted SHA-256 manifests, detection of missing/changed/unlisted files, and rejection of symlinks and unsafe listed paths. Missing or invalid manifests return a problem instead of raising.
+- Added `proofmerge replay <proof.json>`: validates the proof and checks both manifest hashes and every experiment's recorded probe hash without executing probes. `probe` writes its manifest after `probe-run.json` as its final file write.
+- Added 23 tests covering integrity changes, malformed manifests, traversal, symlinks, replay exit codes, independent probe hashes and probe manifest integration.
+- Verification (both commands exited 0):
+```text
+$ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+........................................................................ [ 45%]
+............................................sss............s............ [ 90%]
+................                                                         [100%]
+156 passed, 4 skipped in 5.77s
+
+$ ../proofmerge-T3/.venv/bin/ruff check src tests
+All checks passed!
+```
+
+- Docker was unreachable in this sandbox; the four Docker integration tests were skipped. Direct image inspection exited 1 with `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`.
+- Limits: hashes detect changes but are unsigned; replacing both proof and manifest is not authenticated. Checks assume a stationary evidence bundle, without concurrent filesystem modification. Replay does not re-run experiments or call models.
+
 ### T25 Evidence normalizer — 2026-10-29
 - Added deterministic classification requiring exactly three agreeing PASS/FAIL runs per revision. Findings link to hypothesis claims; verification requires a regression, a matching base-passing probe, and a 64-character hexadecimal source hash. Non-H experiments are skipped; unknown H ids raise `ValueError`.
 - Hand-built experiment tests cover all classifications, disagreement, errors, timeouts, run counts, verification gates, claim mapping, and tamper filtering. Findings advertise `proofmerge report`, which the CLI implements; hash-checking replay remains a separate task.

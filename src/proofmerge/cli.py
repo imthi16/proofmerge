@@ -10,6 +10,12 @@ from proofmerge.context import ContextError, get_context
 from proofmerge.evidence import Proof
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
+from proofmerge.manifest import (
+    ManifestError,
+    evidence_sha256,
+    verify_manifest,
+    write_manifest,
+)
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.report import render_html
@@ -67,6 +73,33 @@ def report(
         typer.echo(f"report failed: {error}", err=True)
         raise typer.Exit(1) from None
     typer.echo(f"wrote {out}")
+
+
+@app.command()
+def replay(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+) -> None:
+    """Check recorded evidence and probe hashes without re-running experiments."""
+    evidence_dir = proof_json.parent
+    problems = verify_manifest(evidence_dir)
+    try:
+        evidence_sha256(evidence_dir, proof_json.name)
+        proof = Proof.model_validate_json(proof_json.read_text())
+        for experiment in proof.experiments:
+            try:
+                actual = evidence_sha256(evidence_dir, experiment.test_source_path)
+                if actual != experiment.test_source_sha256:
+                    problems.append(f"Probe hash mismatch: {experiment.test_source_path}.")
+            except ManifestError as error:
+                problems.append(str(error))
+    except (OSError, ValueError) as error:
+        problems.append(f"Cannot read proof: {error}.")
+    if problems:
+        for problem in problems:
+            typer.echo(problem)
+        raise typer.Exit(1)
+    manifest = json.loads((evidence_dir / "manifest.json").read_text())
+    typer.echo(f"evidence intact: {len(manifest['files'])} files")
 
 
 @app.command()
@@ -147,6 +180,11 @@ def probe(
         "experiments": [e.model_dump() for e in experiments],
     }
     (evidence_dir / "probe-run.json").write_text(json.dumps(report, indent=2))
+    try:
+        write_manifest(evidence_dir)
+    except (ManifestError, OSError) as error:
+        typer.echo(f"probe failed: {error}", err=True)
+        raise typer.Exit(1) from None
     for experiment in experiments:
         grid = {
             revision: "".join(x.outcome[0] for x in experiment.executions if x.revision == revision)

@@ -1,5 +1,7 @@
 import pytest
+from typer.testing import CliRunner
 
+from proofmerge.cli import app
 from proofmerge.evidence import Classification, Execution, Experiment, Outcome
 from proofmerge.findings import classify, findings_for
 from proofmerge.hypotheses import Hypothesis
@@ -143,6 +145,7 @@ def test_valid_regression_is_verified_and_tied_to_its_claim(source_hash: str):
         "verified": True,
         "reproducer_command": "proofmerge replay evidence/proof.json",
     }
+    assert CliRunner().invoke(app, ["replay", "--help"]).exit_code == 0
 
 
 def test_one_finding_per_h_experiment_in_input_order():

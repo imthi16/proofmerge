@@ -212,3 +212,8 @@ All checks passed!
 
 - Docker was unreachable in this sandbox; the four Docker integration tests were skipped. Direct image inspection exited 1 with `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`.
 - Limits: hashes detect changes but are unsigned; replacing both proof and manifest is not authenticated. Checks assume a stationary evidence bundle, without concurrent filesystem modification. Replay does not re-run experiments or call models.
+
+### T25 Evidence normalizer — 2026-10-29
+- Added deterministic classification requiring exactly three agreeing PASS/FAIL runs per revision. Findings link to hypothesis claims; verification requires a regression, a matching base-passing probe, and a 64-character hexadecimal source hash. Non-H experiments are skipped; unknown H ids raise `ValueError`.
+- Hand-built experiment tests cover all classifications, disagreement, errors, timeouts, run counts, verification gates, claim mapping, and tamper filtering. Findings advertise `proofmerge report`, which the CLI implements; hash-checking replay remains a separate task.
+- Checks (exit 0 for both): `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` → `199 passed, 4 skipped in 6.35s`; `../proofmerge-T3/.venv/bin/ruff check src tests` → `All checks passed!`. For pytest, cleared the inherited `PYTEST_ADDOPTS=-q` to show the summary and used a temporary PATH containing Git but no Docker; the four Docker integration tests skipped without invoking Docker.

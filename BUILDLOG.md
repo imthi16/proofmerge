@@ -415,4 +415,5 @@ All checks passed!
 - Re-run probes and logs go to a new retained temporary directory whose path is printed; the original bundle stays unchanged. Hash-only replay remains unchanged. Empty or malformed experiment records fail before execution. No model calls or new dependencies.
 - Added offline coverage for reproduction, changed base/head attempts, source preservation, pinned commits, tampered probes, missing commits, invalid records and runner failures, plus a scripted-model demo Docker integration test guarded on Docker/image availability.
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `462 passed, 9 skipped in 32.05s`. Docker availability guards account for the nine skips, including the new integration test. `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`. `git diff --check` passed.
+- Real Docker check: `replay --rerun` on the tenant-cache demo bundle (base `9dcc104`, head `32dff53`) printed `H1 base PPP head FFF: reproduced` and `H2 base PPP head FFF: reproduced`, exit 0; the bundle's file hashes were the same before and after. README and PRIOR_ART status lines updated.
 

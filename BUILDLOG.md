@@ -309,3 +309,16 @@ All checks passed!
   - H1 (C0) and H2 (C2), both Spark-written probes: base PASS 3/3, head FAIL 3/3, `AssertionError: assert 25.0 == 35.0` (tenant-b got tenant-a's price). Verdict BLOCK (the exit code was not captured in this run; exit codes are covered by the CLI tests). 4 model calls, 4,552 prompt / 7,683 completion tokens.
   - `proofmerge replay` on the bundle: `evidence intact: 37 files`.
   - Known limit seen in this run: H2's title is "cached price goes stale", but its probe checks tenant isolation, the same bug as H1. A probe is not yet checked against its hypothesis text.
+
+### 2026-10-29 — T28 GitHub composite action
+- Added the composite action, workflow documentation, and 25 offline tests covering credential skips, trusted action installation paths, literal PR input, exit capture, artifact publication configuration, comment creation/update, malformed evidence, and verdict policy.
+- Empty keys skip all work and comments. Missing evidence or inconsistent verify exits fail; BLOCK always fails, and REVIEW fails with `fail-on: review`. Marked bot comments are updated using a JSON input file; new comments use a body file.
+- Verification:
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  323 passed, 8 skipped in 11.80s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```
+- The eight Docker integration tests were skipped by their Docker/image availability guard. No real model calls or GitHub execution were performed. Real GitHub validation remains pending.

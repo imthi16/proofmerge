@@ -390,3 +390,7 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `428 passed, 8 skipped in 18.38s`. The eight skips are Docker availability guards.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `git diff --check` passed.
 - Follow-up: Wonder probe checks now receive full intent as untrusted context for verified CHANGE quotes, retaining the strict explanation rule and quote-only behavior without intent; offline request tests added. Checks: `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `431 passed, 8 skipped in 15.37s`; `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`. No real model calls.
+- Real check after this change (2026-10-29, Spark + Wonder + Docker, `bench/run_bench.py --only`):
+  - `boundary-qty-inclusive` (faulty) is now BLOCK; in run 1 it was REVIEW, "intent is missing".
+  - `price-error-type` (faulty) is BLOCK.
+  - `newsletter-promo-fix` (safe) is still BLOCK. Calling Wonder directly with the same input, it agreed the probe tests its hypothesis: legacy `{"subscribed": True}` customers lose news-5. It returned `explained_by_change: null`, because the intent asks to "wire the promotion check to the new customer field" but never says legacy-flag customers lose the promotion. That is the strict anti-laundering rule working as written, so the prompt was not loosened further for this case. It stays a reported false BLOCK against its label.

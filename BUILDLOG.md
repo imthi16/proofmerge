@@ -330,3 +330,10 @@ All checks passed!
   All checks passed!
   ```
 - The eight Docker integration tests were skipped by their Docker/image availability guard. No real model calls or GitHub execution were performed. Real GitHub validation remains pending.
+
+### 2026-10-29 — T29 benchmark runner
+- Added candidate filtering, bounded per-candidate clients, evidence paths, usage totals, provenance hashes, and results.json. Reports separate held-out counts and retains candidate errors without stopping the batch.
+- Offline tests cover all label/outcome combinations, selection, provenance, failure continuation, output preservation, and a real fixture-repository build with verification stubbed.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `312 passed, 8 skipped in 9.41s`.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `../proofmerge-T3/.venv/bin/ruff check bench/run_bench.py`: `All checks passed!`.
+- Full bench lint reports nine existing import-order errors in fixture files; those files were left unchanged. No real model benchmark was run.

@@ -236,3 +236,29 @@ def test_demo_test_tamper_blocks():
 def test_demo_intended_change_needs_review():
     result = decide(contract("CHANGE"), [], [], [tamper()])
     assert result.decision == "REVIEW"
+
+
+def test_mismatched_verified_probe_is_review_with_required_reason():
+    result = decide(contract(), [], [finding()], [], mismatched_probe_ids=frozenset({"H1"}))
+    assert result.decision == "REVIEW"
+    assert result.reasons == [
+        "H1 needs review because its probe may not test its hypothesis."
+    ]
+
+
+@pytest.mark.parametrize("other_evidence", ["regression", "tamper"])
+def test_mismatched_probe_does_not_remove_another_block(other_evidence):
+    findings = [finding()]
+    if other_evidence == "regression":
+        findings.append(finding(hypothesis_id="H2"))
+    result = decide(
+        contract(), [], findings, [tamper()] if other_evidence == "tamper" else [],
+        mismatched_probe_ids=frozenset({"H1"}),
+    )
+    assert result.decision == "BLOCK"
+    assert "H1 needs review because its probe may not test its hypothesis." in result.reasons
+
+
+def test_wonder_agreement_cannot_promote_change_claim_to_block():
+    result = decide(contract("CHANGE"), [], [finding()], [], mismatched_probe_ids=frozenset())
+    assert result.decision == "REVIEW"

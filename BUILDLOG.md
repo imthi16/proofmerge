@@ -337,3 +337,16 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `312 passed, 8 skipped in 9.41s`.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `../proofmerge-T3/.venv/bin/ruff check bench/run_bench.py`: `All checks passed!`.
 - Full bench lint reports nine existing import-order errors in fixture files; those files were left unchanged. No real model benchmark was run.
+
+### 2026-10-29 — T30 independent cross-checks
+- Added independent claim and probe checks, conservative verdict qualifications, report annotations, sorted proof fields with empty defaults, and a two-call budget allowance. Disagreement cannot create a BLOCK or PASS; unrelated hard evidence retains BLOCK precedence.
+- Offline tests cover agreement, disagreement, omissions, conflicting duplicates, input separation, schema validation, failure recording, proof bundles, budgets, and compatibility with older proofs. No real model calls were made.
+- Verification (extra quiet environment setting cleared for the test summary):
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  386 passed, 8 skipped in 22.54s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```
+- The eight Docker tests were skipped by their availability guard. `ruff check bench/run_bench.py` and `git diff --check` also passed.

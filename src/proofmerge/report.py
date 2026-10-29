@@ -94,8 +94,9 @@ def _claims(proof: Proof) -> str:
             if claim.source_quote is not None
             else '<p class="muted">implicit claim — not stated in the intent text</p>'
         )
+        contested = " · contested by Muse Wonder" if claim.id in proof.contested_claim_ids else ""
         blocks.append(
-            f'<section class="claim"><h3><code>{e(claim.id)}</code> · {e(claim.kind)}</h3>'
+            f'<section class="claim"><h3><code>{e(claim.id)}</code> · {e(claim.kind)}{contested}</h3>'
             f"<p>{e(claim.statement)}</p>{quote}</section>"
         )
     for rejected in proof.intent.rejected:
@@ -221,9 +222,13 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
         classification = "no finding recorded" if finding is None else finding.classification
         verified = " (verified)" if finding is not None and finding.verified else ""
         intended = " · possibly intended" if h.possibly_intended else ""
+        mismatch = (
+            "<p>Muse Wonder: probe may not test this hypothesis</p>"
+            if h.id in proof.mismatched_probe_ids else ""
+        )
         cards.append(
             f'<section class="card"><h3><code>{e(h.id)}</code> {e(h.title)}</h3>'
-            f"{_cited(claim, h.claim_id)}"
+            f"{_cited(claim, h.claim_id)}{mismatch}"
             f'<p class="muted">risk: {e(h.risk_category)}{intended}</p>'
             f"<p>{e(h.suspected_behavior)}</p>"
             f"<p><strong>Expected on base:</strong> {e(h.expected_base)}<br>"

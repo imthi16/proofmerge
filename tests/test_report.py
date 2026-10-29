@@ -141,3 +141,27 @@ def test_grid_rows_carry_short_shas_and_banner_the_run_id() -> None:
     assert f"base <code>{proof.base_sha[:7]}</code>" in page
     assert f"head <code>{proof.head_sha[:7]}</code>" in page
     assert f"run <code>{proof.run_id}</code>" in page
+
+
+def test_wonder_annotations_are_scoped_and_escape_untrusted_text():
+    proof = load("sample_proof_block.json").model_copy(deep=True)
+    claim = proof.intent.claims[1]
+    hypothesis = proof.hypotheses.hypotheses[0]
+    claim.id = "<script>claim</script>"
+    claim.source_quote = "<script>quote</script>"
+    hypothesis.id = "<script>hypothesis</script>"
+    proof.contested_claim_ids = [claim.id]
+    proof.mismatched_probe_ids = [hypothesis.id]
+    page = render_html(proof, FIXTURES)
+    assert page.count("contested by Muse Wonder") == 1
+    assert page.count("Muse Wonder: probe may not test this hypothesis") == 1
+    assert "<script>" not in page
+    for value in (claim.id, claim.source_quote, hypothesis.id):
+        assert html.escape(value) in page
+
+
+@pytest.mark.parametrize("name", SAMPLES)
+def test_old_proofs_render_without_wonder_annotations(name):
+    page = render_html(load(name), FIXTURES)
+    assert "contested by Muse Wonder" not in page
+    assert "Muse Wonder: probe may not test this hypothesis" not in page

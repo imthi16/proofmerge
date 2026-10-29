@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import signal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,7 +9,26 @@ import pytest
 from typer.testing import CliRunner
 
 from proofmerge import cli
-from proofmerge.manifest import ManifestError, verify_manifest, write_manifest
+from proofmerge.manifest import ManifestError, evidence_sha256, verify_manifest, write_manifest
+
+
+def test_non_regular_files_are_rejected(tmp_path):
+    os.mkfifo(tmp_path / "manifest.json")
+    os.mkfifo(tmp_path / "probe.py")
+
+    def expire(*_args):
+        raise TimeoutError("blocked reading a fifo")
+
+    signal.signal(signal.SIGALRM, expire)
+    signal.alarm(2)
+    try:
+        with pytest.raises(ManifestError, match="regular file"):
+            write_manifest(tmp_path)
+        assert verify_manifest(tmp_path) == ["Cannot verify manifest.json: not a regular file."]
+        with pytest.raises(ManifestError, match="regular file"):
+            evidence_sha256(tmp_path, "probe.py")
+    finally:
+        signal.alarm(0)
 
 
 def test_write_then_verify(tmp_path):

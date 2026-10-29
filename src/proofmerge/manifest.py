@@ -22,6 +22,8 @@ def evidence_sha256(evidence_dir: Path, relative_path: str) -> str:
         target = target / part
         if target.is_symlink():
             raise ManifestError(f"Symlink is not allowed: {relative_path}.")
+    if not target.is_file():
+        raise ManifestError(f"Not a regular file: {relative_path}.")
     try:
         return hashlib.sha256(target.read_bytes()).hexdigest()
     except (OSError, ValueError) as error:
@@ -56,6 +58,8 @@ def write_manifest(evidence_dir: Path) -> Path:
             raise ManifestError(" ".join(problems))
         hashes = {name: evidence_sha256(evidence_dir, name) for name in files}
         manifest = evidence_dir / "manifest.json"
+        if manifest.exists() and not manifest.is_file():
+            raise ManifestError("manifest.json is not a regular file.")
         manifest.write_text(json.dumps({"files": hashes}, indent=2, sort_keys=True) + "\n")
         return manifest
     except OSError as error:
@@ -69,6 +73,8 @@ def verify_manifest(evidence_dir: Path) -> list[str]:
         manifest = evidence_dir / "manifest.json"
         if manifest.is_symlink():
             return problems
+        if manifest.exists() and not manifest.is_file():
+            return [*problems, "Cannot verify manifest.json: not a regular file."]
         data = json.loads(manifest.read_text())
         if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
             raise ManifestError("expected an object containing a files object")

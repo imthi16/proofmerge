@@ -286,3 +286,10 @@ All checks passed!
 - Demo check rebuild + `python demo/check_demo.py` (exit 0): main PASS/PASS; intended-change PASS / n/a / FAIL; tenant-cache-regression PASS/FAIL/PASS; test-tamper PASS/FAIL/FAIL — same table as before batch 2.
 - Not verified here: no Spark probe runs against the new candidates yet (that is the batch-2 benchmark run, not the fixture task); TASKS.md is outside this worktree and was not edited by this agent.
 
+### T22 Benchmark and demo leakage cleanup — 2026-10-29
+- Neutralized cache docstrings and the boundary-test skip reason; removed ticket/approval cues and mutation disclosure from intents while preserving explicit intended changes and the newsletter fix description. Labels and candidate executable logic are unchanged. Added a separate tenant-b price assertion to the tenant-validation ground truth.
+- Build/check commands passed (exit 0): `PY=../proofmerge-T3/.venv/bin/python`; `B=$(mktemp -d)/bench && $PY demo/build_demo_repo.py $B --candidates bench/candidates && $PY demo/check_demo.py $B --ground-truth bench/ground_truth`; `D=$(mktemp -d)/demo && $PY demo/build_demo_repo.py $D && $PY demo/check_demo.py $D`.
+- Clean `git archive main` snapshot at `ccc3c033f78479cdadff71d3d0877620f2dfe24a`: demo table matches exactly; all 8 bench candidate rows match. Main lacks 12 newer candidates, so full bench table equality with main cannot be established. The full 20-candidate bench table exactly matches an unmodified `git archive HEAD` snapshot at `e188f4bfc0da19d6f16348e4ab463c7f686f1cdd`.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (exit 0): `238 passed, 7 skipped in 8.19s`.
+- `../proofmerge-T3/.venv/bin/ruff check src tests` (exit 0): `All checks passed!`; `git diff --check` passed.
+

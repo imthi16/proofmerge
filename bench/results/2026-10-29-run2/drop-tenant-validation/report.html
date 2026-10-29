@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofMerge drop-tenant-validation — BLOCK</title>
+<style>:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #212b38; --muted: #55657a; --border: #d4dce5;
+  --code-bg: #f2f5f8;
+  --pass-bg: #e7f5ea; --pass-fg: #1e6e33;
+  --review-bg: #fbf3dc; --review-fg: #6e4e06;
+  --block-bg: #fbe9e8; --block-fg: #a12622;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131c27; --fg: #e7edf4; --muted: #a3b2c4; --border: #2c3e52;
+    --code-bg: #0f1823;
+    --pass-bg: #12291b; --pass-fg: #5bc97a;
+    --review-bg: #2e2510; --review-fg: #e3b341;
+    --block-bg: #2e1614; --block-fg: #f47974;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main, .banner { max-width: 60rem; }
+main { margin: 0 auto; padding: 0 1rem 2rem; }
+.banner { border-left: 6px solid; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem auto; }
+.banner.pass { background: var(--pass-bg); color: var(--pass-fg); border-color: var(--pass-fg); }
+.banner.review { background: var(--review-bg); color: var(--review-fg); border-color: var(--review-fg); }
+.banner.block { background: var(--block-bg); color: var(--block-fg); border-color: var(--block-fg); }
+.banner .decision { font-size: 1.6rem; font-weight: 700; letter-spacing: .05em; margin: 0; }
+.banner .headline { font-weight: 600; margin: .25rem 0 0; }
+.banner .run { margin: .25rem 0 0; font-size: .9rem; }
+.banner ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+section { border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; margin: 1rem 0; }
+.claim.rejected { border-style: dashed; }
+h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+h3, h4 { font-size: 1rem; margin: .25rem 0; }
+blockquote { margin: .5rem 0 0; padding: .5rem .75rem; border-left: 3px solid var(--border); background: var(--code-bg); font-style: italic; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+code { background: var(--code-bg); padding: 0 .25rem; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: .75rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+table { border-collapse: collapse; margin: .5rem 0; }
+th, td { border: 1px solid var(--border); padding: .25rem .75rem; text-align: center; }
+.outcome.pass { color: var(--pass-fg); font-weight: 700; }
+.outcome.fail { color: var(--block-fg); font-weight: 700; }
+.outcome.error, .outcome.timeout { color: var(--review-fg); font-weight: 700; }
+.muted { color: var(--muted); }
+@media (max-width: 40rem) { body { font-size: 15px; } th, td { padding: .25rem .4rem; } }</style>
+</head>
+<body>
+<main>
+<header class="banner block">
+<p class="decision">BLOCK</p>
+<p class="headline">Verified regression — do not merge</p>
+<p class="run">run <code>drop-tenant-validation</code></p>
+<ul><li>H1 needs review because its probe may not test its hypothesis.</li><li>H2 is a verified regression against uncontested PRESERVE claim C0 with intent present.</li><li>H3 is a verified regression against uncontested PRESERVE claim C0 with intent present.</li></ul>
+</header><section><h2>Intent claims</h2><section class="claim"><h3><code>C0</code> · PRESERVE</h3><p>Behavior that the intent does not describe must not change.</p><p class="muted">implicit claim — not stated in the intent text</p></section><section class="claim"><h3><code>C1</code> · PRESERVE</h3><p>The price lookup returns the same prices as before.</p><blockquote>Returned prices should stay the same.</blockquote></section></section><section><h2>Test-tamper guard</h2><p>No tamper finding was recorded.</p></section><section><h2>Hypotheses and probes</h2><section class="card"><h3><code>H1</code> Valid tenant gets another tenant&#x27;s SKU price instead of error</h3><p class="muted">cites <code>C1</code> · PRESERVE</p><blockquote>Returned prices should stay the same.</blockquote><p>Muse Wonder: probe may not test this hypothesis</p><p class="muted">risk: data-isolation</p><p>tenant_id is ignored, so price_for with a valid tenant B and a sku that exists only in tenant A returns A&#x27;s price instead of raising. Concrete pattern: pick t1,t2 from _PRICES keys and sku s where s in _PRICES[t1] and s not in _PRICES[t2], call price_for(t2, s).</p><p><strong>Expected on base:</strong> Raises ValueError containing &#x27;Unknown SKU for tenant &lt;tenant&gt;: &lt;sku&gt;&#x27;<br><strong>Expected on head:</strong> Returns float price from the other tenant&#x27;s table, no exception</p><table><thead><tr><th></th><th>attempt 1</th><th>attempt 2</th><th>attempt 3</th></tr></thead><tbody><tr><th scope="row">base <code>9dcc104</code></th><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td></tr><tr><th scope="row">head <code>d01619a</code></th><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td></tr></tbody></table><h4>Why head failed (attempt 1)</h4><pre>E       AssertionError: assert 25.0 == 35.0
+E        +  where 25.0 = price_for(&#x27;tenant-b&#x27;, &#x27;widget&#x27;)
+E       Failed: DID NOT RAISE ValueError</pre><p>classification: <strong>REGRESSION</strong> (verified)</p><h4>Probe source</h4><pre>import pytest
+from demo_shop.pricing import price_for
+
+
+def test_tenant_b_price_isolated():
+    assert price_for(&quot;tenant-b&quot;, &quot;widget&quot;) == 35.0
+
+
+def test_unknown_tenant_rejected():
+    with pytest.raises(ValueError):
+        price_for(&quot;no-such-tenant&quot;, &quot;widget&quot;)
+</pre><h4>Reproduce</h4><pre><code>proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json</code></pre></section><section class="card"><h3><code>H2</code> Unknown tenant no longer rejected</h3><p class="muted">cites <code>C0</code> · PRESERVE</p><p class="muted">implicit: behavior the intent does not describe</p><p class="muted">risk: security</p><p>tenant_id is never checked, so price_for(&#x27;unknown-tenant-xyz&#x27;, s) where s is any existing sku returns a price instead of raising Unknown tenant. Base raises before looking at sku.</p><p><strong>Expected on base:</strong> Raises ValueError with message &#x27;Unknown tenant: unknown-tenant-xyz&#x27;<br><strong>Expected on head:</strong> Returns float price from whichever table contains the sku, no exception</p><table><thead><tr><th></th><th>attempt 1</th><th>attempt 2</th><th>attempt 3</th></tr></thead><tbody><tr><th scope="row">base <code>9dcc104</code></th><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td></tr><tr><th scope="row">head <code>d01619a</code></th><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td></tr></tbody></table><h4>Why head failed (attempt 1)</h4><pre>E           AssertionError: expected ValueError but returned 25.0
+E           assert False</pre><p>classification: <strong>REGRESSION</strong> (verified)</p><h4>Probe source</h4><pre>from demo_shop.pricing import price_for
+
+def test_unknown_tenant_rejected():
+    try:
+        result = price_for(&quot;unknown-tenant-xyz-123&quot;, &quot;widget&quot;)
+    except ValueError as e:
+        assert &quot;Unknown tenant: unknown-tenant-xyz-123&quot; in str(e)
+    else:
+        assert False, f&quot;expected ValueError but returned {result!r}&quot;
+</pre><h4>Reproduce</h4><pre><code>proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json</code></pre></section><section class="card"><h3><code>H3</code> Unknown SKU error message loses tenant context</h3><p class="muted">cites <code>C0</code> · PRESERVE</p><p class="muted">implicit: behavior the intent does not describe</p><p class="muted">risk: error-handling</p><p>For a sku absent from all tables, e.g. price_for(valid_tenant, &#x27;no-such-sku-xyz-123&#x27;), both revisions raise ValueError but head changes the message and drops tenant context that callers may match on.</p><p><strong>Expected on base:</strong> Raises ValueError with message containing both tenant id and sku, e.g. &#x27;Unknown SKU for tenant &lt;tenant&gt;: &lt;sku&gt;&#x27;<br><strong>Expected on head:</strong> Raises ValueError with message &#x27;Unknown SKU: &lt;sku&gt;&#x27; with no tenant id</p><table><thead><tr><th></th><th>attempt 1</th><th>attempt 2</th><th>attempt 3</th></tr></thead><tbody><tr><th scope="row">base <code>9dcc104</code></th><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td><td class="outcome pass">PASS</td></tr><tr><th scope="row">head <code>d01619a</code></th><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td><td class="outcome fail">FAIL</td></tr></tbody></table><h4>Why head failed (attempt 1)</h4><pre>E       AssertionError: assert &#x27;tenant-a&#x27; in &#x27;Unknown SKU: no-such-sku-xyz-123&#x27;</pre><p>classification: <strong>REGRESSION</strong> (verified)</p><h4>Probe source</h4><pre>import pytest
+from demo_shop.pricing import price_for
+
+def test_unknown_sku_error_mentions_tenant():
+    tenant = &quot;tenant-a&quot;
+    sku = &quot;no-such-sku-xyz-123&quot;
+    with pytest.raises(ValueError) as exc_info:
+        price_for(tenant, sku)
+    msg = str(exc_info.value)
+    assert tenant in msg
+    assert sku in msg
+</pre><h4>Reproduce</h4><pre><code>proofmerge replay /tmp/proofmerge-bench/2026-10-29-run2/drop-tenant-validation/proof.json</code></pre></section></section><section><h2>Provenance</h2>
+<ul>
+<li>base <code>9dcc10400d16c23a0db4f508c3678ffabf46b1f4</code></li>
+<li>head <code>d01619a2a2ba62d78fbe154cbf4a1836685bd187</code></li>
+<li>diff sha256 <code>a65c2f4ab982f202c3b235841e1c7e4bf26c3e3545cfb0b9816b513ae6bbf1be</code></li>
+<li>probe for <code>H1</code>: sha256 <code>e38ad3026e8b401d3ba2921d38ef7717ab8721bdec32ff30dc3190e3ce94e7e9</code></li><li>probe for <code>H2</code>: sha256 <code>8a46a1e1eb36acd1b3cd68533e784ad956353622588899c8452dba8228b15490</code></li><li>probe for <code>H3</code>: sha256 <code>d32924e9bb265a1eba96cdcf806a552dc27f747ef4e7a26c1c019b602827a846</code></li>
+<li>model usage: 7 calls, 7120 prompt tokens, 11921 completion tokens</li>
+</ul>
+<p class="muted">Hashes detect that a file changed after capture; they are not signatures.</p>
+</section><section class="scope"><h2>Scope</h2><ul><li>PASS means no regression was found within the tested scope; it does not prove the change correct.</li><li>Only the hypotheses listed in this proof were tested.</li></ul></section>
+</main>
+</body>
+</html>

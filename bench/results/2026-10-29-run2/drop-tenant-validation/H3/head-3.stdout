@@ -1,0 +1,17 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________________ test_unknown_sku_error_mentions_tenant ____________________
+
+    def test_unknown_sku_error_mentions_tenant():
+        tenant = "tenant-a"
+        sku = "no-such-sku-xyz-123"
+        with pytest.raises(ValueError) as exc_info:
+            price_for(tenant, sku)
+        msg = str(exc_info.value)
+>       assert tenant in msg
+E       AssertionError: assert 'tenant-a' in 'Unknown SKU: no-such-sku-xyz-123'
+
+../probes/test_h3.py:10: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h3.py::test_unknown_sku_error_mentions_tenant - Asserti...
+1 failed in 0.02s

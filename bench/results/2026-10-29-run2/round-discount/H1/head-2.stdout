@@ -1,0 +1,16 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________________ test_bulk_discount_101_exact _________________________
+
+    def test_bulk_discount_101_exact():
+>       assert bulk_discount(101) == pytest.approx(90.9)
+E       assert 91 == 90.9 ± 9.1e-05
+E         
+E         comparison failed
+E         Obtained: 91
+E         Expected: 90.9 ± 9.1e-05
+
+../probes/test_h1.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_bulk_discount_101_exact - assert 91 == 90.9...
+1 failed in 0.02s

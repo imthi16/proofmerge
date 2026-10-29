@@ -1,0 +1,28 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________________ test_line_totals_subscriptable ________________________
+
+    def test_line_totals_subscriptable():
+        result = line_totals([{"qty": 2, "price": 5}])
+        try:
+>           first = result[0]
+                    ^^^^^^^^^
+E           TypeError: 'generator' object is not subscriptable
+
+../probes/test_h2.py:6: TypeError
+
+During handling of the above exception, another exception occurred:
+
+    def test_line_totals_subscriptable():
+        result = line_totals([{"qty": 2, "price": 5}])
+        try:
+            first = result[0]
+        except TypeError:
+>           assert False, "line_totals result is not subscriptable"
+E           AssertionError: line_totals result is not subscriptable
+E           assert False
+
+../probes/test_h2.py:8: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_line_totals_subscriptable - AssertionError:...
+1 failed in 0.02s

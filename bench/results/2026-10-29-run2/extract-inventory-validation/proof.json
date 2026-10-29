@@ -1,0 +1,51 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "extract-inventory-validation",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "3e474cb71d9014db32d96858ef8be0041e251c8a",
+  "diff_sha256": "6863e911c5c9e3642ac350202a8ba0d24c9cb4c80e75aa8ef22474fd2588b969",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Reservation checks are performed by a reusable helper.",
+        "source_quote": "Extract the reservation checks into a helper for reuse"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "PASS",
+    "reasons": [
+      "No regression was found within the tested scope."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 2031,
+    "completion_tokens": 3265
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

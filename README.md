@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Runtime model: Muse Spark 1.3" src="https://img.shields.io/badge/Muse%20Spark-1.3-6CA0FF">
-  <img alt="Planned runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
+  <img alt="Runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
   <img alt="Track: Indie Developer" src="https://img.shields.io/badge/track-Indie%20Developer-2C3E52">
   <img alt="Status: early build" src="https://img.shields.io/badge/status-early%20build-E3B341">
 </p>
@@ -17,13 +17,14 @@ versions, and reports what actually happened.
 
 Built solo for the Meta Global AI Developer Hackathon 2026.
 Track: Indie Developer · Theme: Push the Frontier.
-Runtime intelligence: Meta Muse Spark 1.3; Muse Wonder 1.0 is planned.
+Runtime intelligence: Meta Muse Spark 1.3; Muse Wonder 1.0 cross-checks claims and probes.
 License: [MIT](LICENSE).
 
 > [!IMPORTANT]
 > **Early build.** The parts marked 🟢 under [What works today](#what-works-today)
-> are built and tested. The end-to-end `proofmerge verify` command is not built yet,
-> and nothing here describes a feature as working unless it is.
+> are built and tested. ProofMerge is for repositories you own or synthetic fixtures.
+> A PASS means no regression was found within the tested scope; it does not prove the
+> change correct or secure.
 
 ## 📦 Install
 
@@ -45,7 +46,7 @@ Run it on the bundled demo (the demo files need a clone; the tool itself does no
 ```bash
 git clone https://github.com/imthi16/proofmerge
 cd proofmerge
-python demo/build_demo_repo.py
+python3 demo/build_demo_repo.py
 proofmerge verify demo/.build/demo-shop \
   --base main --head candidate/tenant-cache-regression \
   --intent-file demo/candidates/tenant-cache-regression/intent.md \
@@ -100,8 +101,7 @@ them apart.
 
 ## ⚙️ How a verdict is reached
 
-This is the planned end-to-end workflow. The verdict engine and Muse Wonder
-summarizer are not built yet; implemented parts are listed below.
+This is the end-to-end workflow. Implemented parts are listed below.
 
 ```mermaid
 flowchart LR
@@ -111,7 +111,7 @@ flowchart LR
     C --> E["Plain-code classifier"]
     D --> E
     E --> V{"Verdict"}
-    E --> W["Muse Wonder<br/>summarises the evidence"]
+    E --> W["Muse Wonder<br/>cross-checks claims and probes"]
     V --> R["Report + proof.json + hashes"]
     W --> R
 
@@ -135,8 +135,8 @@ flowchart LR
 3. Run each test on the base version and on the patched version, separately
    and in isolation.
 4. Classify the results with plain code, not a model.
-5. Ask Muse Wonder to summarise the recorded evidence. It sees the test
-   results, not Spark's opinion, and it cannot change them.
+5. Ask Muse Wonder to independently cross-check each claim and probe. It can
+   only move a verdict toward REVIEW.
 6. Write a report, a `proof.json` file and hashes of every file used.
 
 How results map to a decision:
@@ -170,17 +170,12 @@ relies on, the same probe run 3 times on each commit, and why head failed.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/report-card-dark.png">
-  <img alt="Report card for H1: it cites claim C2, 'Returned prices must not change.' A grid shows the probe passing on base 1e6c838 in 3 of 3 attempts and failing on head 6796cac in 3 of 3, with the head failure 'assert 25.0 == 35.0', the probe source and a reproduce command." src="docs/assets/report-card-light.png" width="720">
+  <img alt="From a real run on the demo's tenant-cache PR (Muse Spark + Muse Wonder, Docker): the probe was written by Spark, base PASS 3/3, head FAIL 3/3; on the patch an unknown tenant gets a cached price instead of an error." src="docs/assets/report-card-real-light.png" width="720">
 </picture>
 
 > [!NOTE]
-> This screenshot is rendered from `tests/fixtures/sample_proof_block.json`. Its
-> intent claims and hypotheses come from a real Muse Spark run, and the failure
-> line comes from a real Docker run of the demo's ground-truth test. The verdict
-> and the grid were put together by hand, because the end-to-end pipeline does
-> not exist yet. `proofmerge probe` now writes and runs Spark probes separately;
-> this screenshot still uses the hand-written sample probe.
-> [Whole page](docs/assets/report-full-light.png).
+> From a real run on the demo's tenant-cache PR (Muse Spark + Muse Wonder, Docker): the probe was written by Spark, base PASS 3/3, head FAIL 3/3; on the patch an unknown tenant gets a cached price instead of an error.
+> [Whole page](docs/assets/report-full-real-light.png).
 
 Render it yourself:
 
@@ -205,13 +200,60 @@ proofmerge report tests/fixtures/sample_proof_block.json --out report.html
 | 🟢 | Spark-written probes that must pass on base before head counts (`proofmerge probe`) | Built, tested, real Spark/Docker runs | T18 and Codex review fixes |
 | 🟢 | Evidence manifest and `proofmerge replay` | Built, tested; checks hashes without re-running experiments | T21 |
 | 🟢 | Evidence normalizer: repeated base/head outcomes mapped to findings | Built, tested; no final verdict | T25 |
-| ⚪ | End-to-end `proofmerge verify` | Planned | No completed checks recorded |
-| ⚪ | Verdict engine and Muse Wonder cross-check | Planned | T18 explicitly records no verdict; no Wonder checks recorded |
-| ⚪ | GitHub Action that runs on every PR | Planned | No completed checks recorded |
-| ⚪ | One-command install | Planned | No completed checks recorded |
-| ⚪ | ProofMerge's own results on the benchmark | Planned | T17 records no Spark runs on the new candidates |
+| 🟢 | Deterministic verdict engine | Built, tested | T24 deterministic verdict engine (2026-10-29) |
+| 🟢 | End-to-end `proofmerge verify` | Built, tested; real demo run produced BLOCK | T23 end-to-end verification (2026-10-29) |
+| 🟢 | Muse Wonder cross-check | Built, tested | T30 independent cross-checks (2026-10-29) |
+| 🟢 | GitHub Action that runs on every PR | Built, not yet run on GitHub | T28 GitHub composite action (2026-10-29) |
+| 🟢 | One-command install and `proofmerge setup` | Built, tested | T31 Fresh install + `proofmerge setup` (2026-10-29) |
+| 🟢 | Benchmark runner (`bench/run_bench.py`) | Built, tested; two real runs recorded | Benchmark run 1; Benchmark run 2 (2026-10-29) |
+| ⚪ | Replay re-running experiments in Docker | Planned | No completed checks recorded |
+| ⚪ | PASS strength | Planned | No completed checks recorded |
 
 Day-by-day progress, with the real check results, is in [BUILDLOG.md](BUILDLOG.md).
+
+## 📊 Results
+
+20 synthetic pull requests on one small fixture (12 faulty, 8 safe); a smoke benchmark, not an accuracy claim.
+
+| | BLOCK | REVIEW | PASS |
+|---|---|---|---|
+| Faulty, not held out (8) | 8 | 0 | 0 |
+| Faulty, held out (4) | 4 | 0 | 0 |
+| Safe, not held out (5) | 1 | 2 | 2 |
+| Safe, held out (3) | 0 | 1 | 2 |
+
+90 model calls, 78,557 prompt and 98,448 completion tokens, 0 errors.
+
+- No faulty case was passed in either run.
+- One safe case (`newsletter-promo-fix`) is a false BLOCK: the hypothesis cited the implicit claim C0, but the behavior change it found is the one the PR's CHANGE claim asks for.
+- Run 2 came after fixes made in response to run 1, so it is not a clean held-out result.
+
+Per-candidate evidence for run 2, replayable with `proofmerge replay`: [bench/results/2026-10-29-run2](bench/results/2026-10-29-run2). Run 1 and the full comparison are in [bench/results/README.md](bench/results/README.md).
+
+## 🤖 Use it on your PRs
+
+Add the workflow from [docs/github-action.md](docs/github-action.md) to run ProofMerge on every pull request:
+
+```yaml
+name: ProofMerge
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: imthi16/proofmerge@main
+        with:
+          model-api-key: ${{ secrets.MODEL_API_KEY }}
+          fail-on: block
+          python-version: '3.13'
+```
 
 ## 🚀 Try it
 
@@ -236,7 +278,7 @@ ruff check src tests
 Build the demo repository, then compare its branches against the ground truth:
 
 ```bash
-python demo/build_demo_repo.py   # creates demo/.build/demo-shop
+python3 demo/build_demo_repo.py  # creates demo/.build/demo-shop
 python demo/check_demo.py        # prints the table shown above
 ```
 
@@ -302,7 +344,8 @@ ORIGINALITY.md  what counts as new work for this hackathon
 
 ## 🧰 How it was built
 
-Muse Spark is the runtime model; Muse Wonder is the planned evidence summarizer.
+Muse Spark and Muse Wonder are the runtime models. Wonder independently
+re-checks claims and probes; it can only move a verdict toward REVIEW.
 They are the only runtime models in the design.
 AI coding assistants were used as development tools while building it; every
 change was reviewed and checked by running the tests. See

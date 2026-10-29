@@ -172,9 +172,30 @@ All three commands exited 0. `graphify update .` exited 0 (no code-graph topolog
 - A probe whose tests were skipped exited 0, so it counted as passing on base without checking anything. The outcome plugin now turns any skip, xfail or xpass into exit 6 (ERROR); the constant is renamed `INVALID_PROBE_EXIT`. A module-level `importorskip` already exited 5 (ERROR); a test now covers it.
 - `ruff check src tests` clean; `pytest -q` 122 passed, including the Docker tests. The real Spark runs above were not repeated after these fixes.
 
+### T16 dynamic test-tamper checks — 2026-10-29
+- Encoding review fix: normalize committed base-test encoding declarations for explicit UTF-8 probe writes; added an offline Latin-1 `café` regression test. Verification: 155 tests passed in 21.10s; Ruff passed.
+- Added `run_base_tests_on_head`: each affected file's committed base test source runs three times on base and three on head through the sandbox, including files deleted on head. Experiments use T1, T2, …; all findings for one file share its result. FAIL requires base PASS 3/3 and head FAIL 3/3; head PASS 3/3 gives PASS; other execution outcomes give ERROR. No verdict decision or model call.
+- Offline coverage checks repeatability, errors/timeouts, deleted files, committed source, per-file deduplication, distinct experiment IDs, and newly added tests (no base source → ERROR without execution).
+- Docker was reachable with `proofmerge-runner:0.1`. Demo acceptance tests passed: `test-tamper` and `intended-change` each produced FAIL; `tenant-cache-regression` produced no findings or experiments.
+- Known limits: repository conftest fixtures are not loaded, so tests needing them yield ERROR; skip/xfail/xpass also yield ERROR. The existing archive helper cannot read a completely empty Git tree; Git/export/infrastructure exceptions propagate. The first full run reported `11 failed, 143 passed in 19.69s` because the new deleted-file fixture left an empty tree; retaining a README corrected the fixture. The first Ruff run found one import-order issue, corrected before the final checks.
+- Final verification (both commands exited 0):
+
+```text
+$ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+........................................................................ [ 46%]
+........................................................................ [ 93%]
+..........                                                               [100%]
+154 passed in 19.02s
+
+$ ../proofmerge-T3/.venv/bin/ruff check src tests
+All checks passed!
+```
+
+`git diff --check` passed. `graphify update .` exited 0.
+
 ### T17 benchmark batch 2 — OpenCode, 2026-10-29
 - Branch `task/T17-bench-batch2` from main 72ee0ce. Added 7 faulty + 5 safe bench candidates against `demo/demo-shop`, so the bench reaches 12 faulty + 8 safe, plus a new base module `orders.py` (order totals, per-line totals, customer ledger, promotions) with its own passing test file in the base.
-  - Faulty: `price-error-type` (unknown SKU raises LookupError instead of ValueError), `ledger-mutation-order` (rejected purchase mutates the ledger before the negative-amount validation), `line-totals-generator` (list return becomes a generator), `order-total-off-by-one` (positional-iteration rewrite drops the last line), `promo-rule-order` (rule-table refactor assumes dict insertion order, newsletter rule wins over VIP), `zero-price-unknown` (price lookup swallows unknown tenant/SKU and returns 0.0), `default-shipping-express` (default shipping argument changed to "express").
+  - Faulty: `price-error-type` (unknown SKU raises LookupError instead of ValueError), `ledger-mutation-order` (rejected purchase mutates the ledger before the negative-amount validation), `line-totals-generator` (list return becomes a generator), `order-total-off-by-one` (positional-iteration rewrite drops the last line), `promo-rule-order` (rule table lists news-5 before vip-10 and both still read `subscribed`, so dict order lets the newsletter promotion win over VIP), `zero-price-unknown` (price lookup swallows unknown tenant/SKU and returns 0.0), `default-shipping-express` (default shipping argument changed to "express").
   - Safe: `extract-inventory-validation` (checks extracted to a helper), `comprehension-line-totals` (loop → list comprehension, still a list), `intended-express-fee` (express fee 12 → 15 with updated tests and an explicit change intent, ground truth FAIL on base / PASS on head), `single-lookup-pricing` (.get rewrite, same exceptions and messages), `newsletter-promo-fix` (promotion checked against the renamed signup key, ground truth FAIL on base / PASS on head).
   - Base docstring of `promo_for` already promised newsletter subscribers the promotion; the base code reads the pre-rename field, so the fix restores documented behavior.
 - Leakage rules (T19) applied: new module fixtures and every patched file keep docstrings identical to base except where the change adds a helper; all 12 new intents are ticket-free, 1–3 sentences (varied wording, none uses the retired "No behavior change intended" sentence, none states its planted bug); the two held-out faulty kinds are absent from `src/proofmerge/prompts/hypotheses.md` "Where regressions hide" (dict iteration order, default argument changed); held-out safe: `extract-inventory-validation`, `single-lookup-pricing`; no skip/xfail markers introduced.

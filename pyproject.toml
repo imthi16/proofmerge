@@ -25,6 +25,9 @@ proofmerge = "proofmerge.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/proofmerge"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"docker/runner/Dockerfile" = "proofmerge/runner/Dockerfile"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

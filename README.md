@@ -25,6 +25,31 @@ License: [MIT](LICENSE).
 > are built and tested. The end-to-end `proofmerge verify` command is not built yet,
 > and nothing here describes a feature as working unless it is.
 
+## 📦 Install
+
+You need Python 3.11 or newer, Git and Docker.
+
+```bash
+uv tool install git+https://github.com/imthi16/proofmerge
+proofmerge setup          # builds the Docker runner image
+```
+
+Set your Meta developer key:
+
+```bash
+export MODEL_API_KEY=...  # never commit this
+```
+
+Run it on the bundled demo:
+
+```bash
+python demo/build_demo_repo.py
+proofmerge verify demo/.build/demo-shop \
+  --base main --head candidate/tenant-cache-regression \
+  --intent-file demo/candidates/tenant-cache-regression/intent.md \
+  --evidence-dir /tmp/proofmerge-evidence
+```
+
 ## 🔍 The problem in one table
 
 The repo ships a small demo shop and three pull requests an AI agent might

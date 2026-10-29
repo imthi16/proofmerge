@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -20,7 +21,7 @@ from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.report import render_html
-from proofmerge.sandbox import SandboxError
+from proofmerge.sandbox import SandboxError, image_digest, runner_dockerfile_path
 
 app = typer.Typer()
 
@@ -39,6 +40,37 @@ def main() -> None:
 def version() -> None:
     """Print the installed version."""
     typer.echo(f"proofmerge {__version__}")
+
+
+@app.command()
+def setup() -> None:
+    """Build the Docker runner image shipped with the package."""
+    try:
+        dockerfile = runner_dockerfile_path()
+        context_dir = dockerfile.parent
+    except SandboxError as error:
+        typer.echo(f"setup failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    try:
+        result = subprocess.run(
+            ["docker", "build", "-t", "proofmerge-runner:0.1", str(context_dir)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        typer.echo("setup failed: docker is not installed or not on PATH", err=True)
+        raise typer.Exit(1) from None
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "docker build failed"
+        typer.echo(f"setup failed: {message}", err=True)
+        raise typer.Exit(1) from None
+    try:
+        digest = image_digest()
+    except SandboxError as error:
+        typer.echo(f"setup failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"built runner image: {digest}")
 
 
 @app.command()

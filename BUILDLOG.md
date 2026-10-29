@@ -362,3 +362,23 @@ All checks passed!
 - Added regression coverage for rejected and omitted passing probes, all finding classifications, API/schema claim-check failures, and preserved BLOCK precedence. No real model calls were made.
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `399 passed, 8 skipped in 20.18s`. The eight skips are Docker availability guards.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `git diff --check` passed.
+
+### 2026-10-29 — T31 Fresh install + `proofmerge setup`
+- `pyproject.toml` now force-includes `docker/runner/Dockerfile` into the wheel as `proofmerge/runner/Dockerfile`; prompts are already packaged.
+- `proofmerge setup` builds `proofmerge-runner:0.1` from the packaged Dockerfile, located with `importlib.resources` and falling back to the repo's `docker/runner` when running from source. Docker is invoked with an argv list; missing Docker or a failed build exits 1 with a clear message. On success it prints the image id.
+- `sandbox.image_digest` now tells the user to run `proofmerge setup` when the image is missing.
+- README has a new "Install" section with `uv tool install`, `proofmerge setup`, a demo `verify` example, and the Docker/Python/MODEL_API_KEY requirements.
+- Added `tests/test_setup.py`: packaged Dockerfile resolution, source-checkout fallback, argv-list build call, missing-Docker and build-failure exits, and the updated image-not-found message.
+
+#### Verification
+- Wheel contents (`../proofmerge-T3/.venv/bin/python -m pip wheel . --no-deps -w /tmp/pm-wheel`):
+  ```text
+  proofmerge/prompts/hypotheses.md
+  proofmerge/prompts/probe.md
+  proofmerge/runner/Dockerfile
+  ```
+- Fresh venv install (`python3 -m venv /tmp/pm-venv && /tmp/pm-venv/bin/pip install /tmp/pm-wheel/proofmerge-*.whl`) succeeded.
+- `/tmp/pm-venv/bin/proofmerge --help` lists `setup` and `verify`.
+- `/tmp/pm-venv/bin/proofmerge setup` printed `built runner image: sha256:7174905168e20eba95778e38864657946941e275dedc412a3ddf07750ced7c69`.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: 331 passed, 8 skipped in 12.07s.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`.

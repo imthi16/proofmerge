@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from importlib import resources
 from pathlib import Path
 
 from proofmerge.evidence import Execution, Experiment, Outcome
@@ -105,9 +106,22 @@ def image_digest(image: str = RUNNER_IMAGE) -> str:
     )
     if result.returncode != 0:
         raise SandboxError(
-            f"runner image {image} not found; build it with `docker build -t {image} docker/runner`"
+            f"runner image {image} not found; run `proofmerge setup` to build it"
         )
     return result.stdout.strip()
+
+
+def runner_dockerfile_path() -> Path:
+    """Return the packaged Dockerfile, or the repo copy when running from source."""
+    resource = resources.files("proofmerge") / "runner" / "Dockerfile"
+    if resource.is_file():
+        return Path(resource)
+    # Source checkout fallback: sandbox.py is at src/proofmerge/sandbox.py.
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    fallback = repo_root / "docker" / "runner" / "Dockerfile"
+    if fallback.is_file():
+        return fallback
+    raise SandboxError("runner Dockerfile not found; is the package installed correctly?")
 
 
 def docker_argv(

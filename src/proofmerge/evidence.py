@@ -91,3 +91,5 @@ class Proof(BaseModel):
     tamper_findings: list[TamperFinding]
     verdict: Verdict
     model_usage: ModelUsage
+    contested_claim_ids: list[str] = []
+    mismatched_probe_ids: list[str] = []

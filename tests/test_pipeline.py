@@ -16,7 +16,7 @@ from proofmerge.context import ContextError
 from proofmerge.evidence import ModelUsage, Proof, TamperFinding
 from proofmerge.hypotheses import MAX_DIFF_CHARS, MAX_HYPOTHESES
 from proofmerge.manifest import verify_manifest, write_manifest
-from proofmerge.meta import MetaClient, MetaError
+from proofmerge.meta import WONDER_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS
 from proofmerge.sandbox import SandboxError
@@ -29,9 +29,12 @@ PROBE = "# GOOD\nfrom calc import double\ndef test_double():\n    assert double(
 
 
 class Replies:
-    """Script the two structured stages, then reuse the probe completion fake."""
+    """Script Spark stages and independent Wonder checks around probe completions."""
 
-    def __init__(self, *, claim="C1", location="calc.py::double", fail=None, probe=PROBE):
+    def __init__(self, *, claim="C1", location="calc.py::double", fail=None, probe=PROBE,
+                 wonder_claims=None, wonder_results=None):
+        self.wonder_claims = wonder_claims
+        self.wonder_results = wonder_results
         self.replies = [
             {"claims": [CONTRACT.claims[1].model_dump(exclude={"id"})]},
             {"hypotheses": [hypothesis(claim, [location])]},
@@ -46,6 +49,24 @@ class Replies:
         self.calls += 1
         if self.calls == self.fail:
             raise MetaError("scripted API unavailable")
+        if kwargs["model"] == WONDER_MODEL:
+            data = json.loads(kwargs["messages"][1]["content"])
+            if "claims" in data:
+                reply = {"claims": [
+                    {"id": c["id"], "kind": "PRESERVE"} for c in data["claims"]
+                ]}
+            else:
+                reply = {"results": [
+                    {"hypothesis_id": p["hypothesis_id"], "tests_hypothesis": True,
+                     "reason": "matches"} for p in data["probes"]
+                ]}
+            if "claims" in data and self.wonder_claims is not None:
+                reply = {"claims": self.wonder_claims}
+            if "probes" in data and self.wonder_results is not None:
+                reply = {"results": self.wonder_results}
+            response = FakeCompletions(content=json.dumps(reply)).create(**kwargs)
+            response.usage = SimpleNamespace(prompt_tokens=11, completion_tokens=7)
+            return response
         if not self.replies:
             return self.probes.create(**kwargs)
         response = FakeCompletions(content=json.dumps(self.replies.pop(0))).create(**kwargs)
@@ -91,8 +112,8 @@ def test_regression_bundle_and_last_write(tmp_path, monkeypatch):
     assert (proof.base_sha, proof.head_sha, proof.diff_sha256) == (
         context.base_sha, context.head_sha, context.diff_sha256
     )
-    assert proof.model_usage == ModelUsage(calls=3, prompt_tokens=22, completion_tokens=14)
-    assert client.calls == 3
+    assert proof.model_usage == ModelUsage(calls=5, prompt_tokens=44, completion_tokens=28)
+    assert client.calls == 5
     assert proof.findings[0].verified
     assert [e.outcome for e in proof.experiments[0].executions] == ["PASS"] * 3 + ["FAIL"] * 3
     assert snapshots == {p: p.read_bytes() for p in evidence.rglob("*") if p.is_file()}
@@ -116,7 +137,7 @@ def test_no_intent_regression_is_review(tmp_path):
     assert [c.id for c in proof.intent.claims] == ["C0"]
     assert proof.findings[0].classification == "REGRESSION"
     assert proof.verdict.decision == "REVIEW"
-    assert client.calls == 2
+    assert client.calls == 3
     assert_bundle(proof, evidence)
 
 
@@ -356,7 +377,7 @@ def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, statu
     assert all(reason in result.output for reason in proof.verdict.reasons)
     assert "calls=0 tokens: prompt=0 completion=0" in result.output
     assert seen["args"][3] == INTENT
-    assert seen["client"].max_calls == 2 + MAX_HYPOTHESES * MAX_BASE_RUNS
+    assert seen["client"].max_calls == 4 + MAX_HYPOTHESES * MAX_BASE_RUNS
 
 
 @pytest.mark.parametrize("error", [ContextError("bad ref"), ValueError("refused diff"), FileExistsError("exists")])
@@ -412,3 +433,131 @@ def test_docker_real_demo_end_to_end(demo_repo, tmp_path):
     assert proof.verdict.decision == "BLOCK"
     assert [e.outcome for e in proof.experiments[0].executions] == ["PASS"] * 3 + ["FAIL"] * 3
     assert_bundle(proof, tmp_path / "docker-evidence")
+
+
+@pytest.mark.parametrize("signal", ["flipped", "omitted-claim", "mismatch", "omitted-probe"])
+def test_wonder_disagreement_reaches_verdict_proof_and_report(tmp_path, signal):
+    kwargs = {
+        "flipped": {"wonder_claims": [{"id": "C1", "kind": "CHANGE"}]},
+        "omitted-claim": {"wonder_claims": []},
+        "mismatch": {"wonder_results": [
+            {"hypothesis_id": "H1", "tests_hypothesis": False, "reason": "wrong behavior"}
+        ]},
+        "omitted-probe": {"wonder_results": []},
+    }[signal]
+    proof, evidence, client, _ = execute(tmp_path, replies=Replies(**kwargs))
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == "REVIEW"
+    claim_signal = signal in {"flipped", "omitted-claim"}
+    assert proof.contested_claim_ids == (["C1"] if claim_signal else [])
+    assert proof.mismatched_probe_ids == ([] if claim_signal else ["H1"])
+    assert client.calls == 5
+    annotation = ("contested by Muse Wonder" if claim_signal
+                  else "Muse Wonder: probe may not test this hypothesis")
+    assert annotation in (evidence / "report.html").read_text()
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("call", [4, 5])
+@pytest.mark.parametrize("regression", [False, True])
+def test_wonder_meta_error_records_reason_writes_proof_and_preserves_block(tmp_path, call, regression):
+    runner = fake_runner([]) if regression else lambda *args: (0, b"", b"")
+    proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=call), runner=runner)
+    assert proof.verdict.decision == ("BLOCK" if regression else "REVIEW")
+    assert "scripted API unavailable" in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+def test_successful_claim_check_is_retained_when_probe_check_fails(tmp_path):
+    proof, evidence, _, _ = execute(tmp_path, replies=Replies(
+        fail=5, wonder_claims=[{"id": "C1", "kind": "CHANGE"}],
+    ))
+    assert proof.verdict.decision == "REVIEW"
+    assert proof.contested_claim_ids == ["C1"]
+    assert "scripted API unavailable" in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+def test_wonder_ids_are_sorted_in_proof_and_other_finding_still_blocks(tmp_path):
+    replies = Replies(wonder_results=[
+        {"hypothesis_id": id, "tests_hypothesis": False, "reason": "wrong behavior"}
+        for id in ("H2", "H1")
+    ])
+    replies.replies[1]["hypotheses"].extend([
+        hypothesis("C1", ["calc.py::double"]), hypothesis("C0", ["calc.py::double"]),
+    ])
+    replies.probes = ScriptedCompletions(PROBE, PROBE, PROBE)
+    # H3 is independently confirmed while H1/H2 are mismatched.
+    replies.wonder_results.append(
+        {"hypothesis_id": "H3", "tests_hypothesis": True, "reason": "matches"}
+    )
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.verdict.decision == "BLOCK"
+    assert proof.mismatched_probe_ids == ["H1", "H2"]
+    assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert "H2 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+def test_contested_claim_ids_are_sorted_in_proof(tmp_path):
+    replies = Replies(wonder_claims=[
+        {"id": id, "kind": "CHANGE"} for id in ("C3", "C1", "C2")
+    ])
+    replies.replies[0]["claims"] *= 3
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.contested_claim_ids == ["C1", "C2", "C3"]
+    assert proof.verdict.decision == "REVIEW"
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("invalid_stage", ["claims", "probes"])
+def test_invalid_wonder_reply_is_recorded_without_losing_evidence(tmp_path, invalid_stage):
+    replies = (Replies(wonder_claims=[{"id": "C1", "kind": "invalid"}])
+               if invalid_stage == "claims" else Replies(wonder_results=[
+                   {"hypothesis_id": "H1", "tests_hypothesis": "false", "reason": "invalid"}
+               ]))
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.verdict.decision == "BLOCK"
+    assert any("model reply did not match Checked" in reason for reason in proof.verdict.reasons)
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("results", [[], [
+    {"hypothesis_id": "H1", "tests_hypothesis": False, "reason": "unrelated assertions"}
+]])
+def test_passing_probe_rejected_by_wonder_requires_review(tmp_path, results):
+    proof, evidence, _, _ = execute(
+        tmp_path, replies=Replies(wonder_results=results), runner=lambda *args: (0, b"", b""),
+    )
+    assert proof.findings[0].classification == "NO_DIFFERENCE"
+    assert proof.mismatched_probe_ids == ["H1"]
+    assert proof.verdict.decision == "REVIEW"
+    assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("failure", ["api", "schema"])
+@pytest.mark.parametrize("other_regression", [False, True])
+def test_claim_check_failure_does_not_skip_probe_check(tmp_path, failure, other_regression):
+    replies = Replies(
+        fail=(5 if other_regression else 4) if failure == "api" else None,
+        wonder_claims=[{"id": "C1", "kind": "invalid"}] if failure == "schema" else None,
+        wonder_results=[
+            {"hypothesis_id": "H1", "tests_hypothesis": False, "reason": "wrong behavior"}
+        ],
+    )
+    if other_regression:
+        replies.replies[1]["hypotheses"].append(hypothesis("C0", ["calc.py::double"]))
+        replies.probes = ScriptedCompletions(PROBE, PROBE)
+        replies.wonder_results.append(
+            {"hypothesis_id": "H2", "tests_hypothesis": True, "reason": "matches"}
+        )
+    proof, evidence, client, _ = execute(tmp_path, replies=replies)
+    assert proof.mismatched_probe_ids == ["H1"]
+    assert proof.contested_claim_ids == []
+    assert client.calls == (6 if other_regression else 5)
+    assert proof.verdict.decision == ("BLOCK" if other_regression else "REVIEW")
+    error_text = "scripted API unavailable" if failure == "api" else "model reply did not match"
+    assert any(error_text in reason for reason in proof.verdict.reasons)
+    assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert_bundle(proof, evidence)

@@ -21,3 +21,13 @@ def test_unknown_decision_is_rejected():
     data["verdict"]["decision"] = "MERGE"
     with pytest.raises(ValidationError):
         Proof.model_validate(data)
+
+
+@pytest.mark.parametrize("name", ["sample_proof_block.json", "sample_proof_review.json"])
+def test_old_proofs_default_to_independent_empty_wonder_fields(name):
+    proof = Proof.model_validate_json((FIXTURES / name).read_text())
+    other = Proof.model_validate_json((FIXTURES / name).read_text())
+    assert proof.contested_claim_ids == proof.mismatched_probe_ids == []
+    proof.contested_claim_ids.append("C2")
+    proof.mismatched_probe_ids.append("H1")
+    assert other.contested_claim_ids == other.mismatched_probe_ids == []

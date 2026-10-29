@@ -106,7 +106,7 @@ def test_counts_held_out_errors_and_table(offline, tmp_path, monkeypatch, capsys
         assert base == "main"
         assert intent == (ROOT / "bench/candidates" / name / "intent.md").read_text()
         assert evidence == offline.out / name
-        assert client.max_calls == 2 + MAX_HYPOTHESES * MAX_BASE_RUNS
+        assert client.max_calls == 4 + MAX_HYPOTHESES * MAX_BASE_RUNS
     output = capsys.readouterr().out
     assert "%" not in output
     for text in ("Candidate", "Held out", "non_held_out:", "held_out:",

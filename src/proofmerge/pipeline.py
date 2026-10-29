@@ -15,6 +15,7 @@ from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
 from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
 from proofmerge.verdict import decide
+from proofmerge.wonder import check_probes, cross_check_claims
 
 
 def run_verify(
@@ -56,6 +57,16 @@ def run_verify(
                 experiments = done.get("experiments", experiments)
             errors.append(str(error))
 
+    contested_claim_ids, mismatched_probe_ids = frozenset(), frozenset()
+    try:
+        contested_claim_ids = cross_check_claims(contract, intent, client)
+    except MetaError as error:
+        errors.append(str(error))
+    try:
+        mismatched_probe_ids = check_probes(found.hypotheses, probes, client)
+    except MetaError as error:
+        errors.append(str(error))
+
     tamper, tamper_experiments = [], []
     try:
         tamper = find_tamper(repo, context)
@@ -75,6 +86,7 @@ def run_verify(
     # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
     verdict = decide(
         contract, found.hypotheses, findings, tamper,
+        contested_claim_ids=contested_claim_ids, mismatched_probe_ids=mismatched_probe_ids,
         errors=errors, intent_established=intent_established,
     )
     usage = [u for u in client.usage if u is not None]
@@ -90,6 +102,8 @@ def run_verify(
         findings=findings,
         tamper_findings=tamper,
         verdict=verdict,
+        contested_claim_ids=sorted(contested_claim_ids),
+        mismatched_probe_ids=sorted(mismatched_probe_ids),
         model_usage=ModelUsage(
             calls=client.calls,
             prompt_tokens=sum(u.prompt_tokens for u in usage),

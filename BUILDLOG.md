@@ -337,3 +337,28 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `312 passed, 8 skipped in 9.41s`.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `../proofmerge-T3/.venv/bin/ruff check bench/run_bench.py`: `All checks passed!`.
 - Full bench lint reports nine existing import-order errors in fixture files; those files were left unchanged. No real model benchmark was run.
+
+### 2026-10-29 — T30 independent cross-checks
+- Added independent claim and probe checks, conservative verdict qualifications, report annotations, sorted proof fields with empty defaults, and a two-call budget allowance. Disagreement cannot create a BLOCK or PASS; unrelated hard evidence retains BLOCK precedence.
+- Offline tests cover agreement, disagreement, omissions, conflicting duplicates, input separation, schema validation, failure recording, proof bundles, budgets, and compatibility with older proofs. No real model calls were made.
+- Verification (extra quiet environment setting cleared for the test summary):
+  ```text
+  $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  386 passed, 8 skipped in 22.54s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  All checks passed!
+  ```
+- The eight Docker tests were skipped by their availability guard. `ruff check bench/run_bench.py` and `git diff --check` also passed.
+- Real runs after this change, 2026-10-29 (Muse Spark + Muse Wonder 1.0, Docker), on the three demo candidates:
+  - tenant-cache-regression: BLOCK, exit 2. H1 (C2) and H2 (C0) verified regressions. Wonder marked H3's probe as not testing its hypothesis, so H3 alone is REVIEW. No claim contested. 7 calls, 6,970 prompt / 10,674 completion tokens.
+  - test-tamper: BLOCK, exit 2. H1 (C1) verified regression plus the tamper check. Nothing contested or mismatched. 5 calls.
+  - intended-change: REVIEW, exit 0, from the CHANGE claim and the changed tests. 3 calls.
+  - Full suite after the change: `pytest -q` 394 passed (Docker tests included); `ruff check src tests` clean.
+
+
+### 2026-10-29 — T30 review fixes
+- Probe mismatches now require REVIEW for every finding classification, including probes passing on both revisions. Claim-check errors no longer skip the independent probe check; unrelated verified regressions still BLOCK.
+- Added regression coverage for rejected and omitted passing probes, all finding classifications, API/schema claim-check failures, and preserved BLOCK precedence. No real model calls were made.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `399 passed, 8 skipped in 20.18s`. The eight skips are Docker availability guards.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `git diff --check` passed.

@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             intent = (ROOT / "bench/candidates" / name / "intent.md").read_text(
                 encoding="utf-8"
             )
-            client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
+            client = MetaClient(max_calls=4 + MAX_HYPOTHESES * MAX_BASE_RUNS)
             proof = pipeline.run_verify(
                 repo, "main", f"candidate/{name}", intent, out / name, client
             )

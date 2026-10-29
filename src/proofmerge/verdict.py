@@ -12,6 +12,8 @@ def decide(
     tamper: list[TamperFinding],
     contested_claim_ids: frozenset[str] = frozenset(),
     errors: list[str] | None = None,
+    *,
+    intent_established: bool = True,
 ) -> Verdict:
     """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
     claims = {claim.id: claim for claim in contract.claims}
@@ -56,7 +58,12 @@ def decide(
     for item in tamper:
         test = item.test_path + (f"::{item.test_name}" if item.test_name else "")
         if item.base_test_on_head_outcome == "FAIL":
-            if has_change:
+            if not intent_established:
+                reasons.append(
+                    f"Changed test {test} fails on head but needs review "
+                    "because intent extraction failed."
+                )
+            elif has_change:
                 reasons.append(
                     f"Changed test {test} fails on head but needs review "
                     "because the contract has a CHANGE claim."

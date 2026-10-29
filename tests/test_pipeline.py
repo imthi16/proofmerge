@@ -175,6 +175,104 @@ def test_failed_tamper_execution_keeps_verified_regression_block(tmp_path, monke
     assert verify_manifest(evidence) == []
 
 
+def test_later_probe_failure_keeps_completed_regression(tmp_path, monkeypatch):
+    import hashlib
+
+    from test_findings import experiment
+
+    from proofmerge import probes as probes_mod
+
+    replies = Replies()
+    replies.replies[1]["hypotheses"].append(hypothesis("C1", ["calc.py::double"]))
+    calls = {"n": 0}
+
+    def write_probe(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise MetaError("second probe failed")
+        return probes_mod.Probe(
+            hypothesis_id=args[3].id, test_source="assert True\n", drafts=1, passed_on_base=True
+        )
+
+    def run_experiment(*args, **kwargs):
+        evidence, rel = args[5], "probes/test_h1.py"
+        target = evidence / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        data = b"assert True\n"
+        target.write_bytes(data)
+        saved = experiment(["PASS"] * 3, ["FAIL"] * 3, hypothesis_id=args[3])
+        saved.test_source_path = rel
+        saved.test_source_sha256 = hashlib.sha256(data).hexdigest()
+        return saved
+
+    monkeypatch.setattr(probes_mod, "write_probe", write_probe)
+    monkeypatch.setattr(probes_mod, "run_experiment", run_experiment)
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert [item.hypothesis_id for item in proof.experiments] == ["H1"]
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == "BLOCK"
+    assert "second probe failed" in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+def test_later_tamper_run_keeps_earlier_fail(tmp_path, monkeypatch):
+    import hashlib
+
+    from test_findings import experiment
+
+    from proofmerge import tamper as tamper_mod
+
+    findings = [
+        TamperFinding(
+            test_path=path, test_name=None, kind="MODIFIED", base_test_on_head_outcome=None
+        )
+        for path in ("a_test.py", "b_test.py")
+    ]
+    monkeypatch.setattr(pipeline, "find_tamper", lambda *args: findings)
+
+    def fake_git(repo, *args, error):
+        return b"blob\0" if args[0] == "ls-tree" else b"#\n"
+
+    calls = {"n": 0}
+
+    def run_experiment(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise SandboxError("later tamper run failed")
+        evidence, rel = args[5], "probes/test_t1.py"
+        data = b"assert True\n"
+        target = evidence / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        saved = experiment(["PASS"] * 3, ["FAIL"] * 3, hypothesis_id=args[3])
+        saved.test_source_path = rel
+        saved.test_source_sha256 = hashlib.sha256(data).hexdigest()
+        return saved
+
+    monkeypatch.setattr(tamper_mod, "_git", fake_git)
+    monkeypatch.setattr(tamper_mod, "run_experiment", run_experiment)
+    proof, evidence, _, _ = execute(tmp_path)
+    assert proof.verdict.decision == "BLOCK"
+    assert [item.base_test_on_head_outcome for item in proof.tamper_findings] == ["FAIL", "ERROR"]
+    assert [item.hypothesis_id for item in proof.experiments if item.hypothesis_id.startswith("T")] == ["T1"]
+    assert "later tamper run failed" in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatch):
+    finding = TamperFinding(
+        test_path="test_calc.py", test_name=None, kind="MODIFIED",
+        base_test_on_head_outcome="FAIL",
+    )
+    monkeypatch.setattr(pipeline, "find_tamper", lambda *args: [finding])
+    monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *args, **kwargs: ([finding], []))
+    proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=1))
+    assert proof.verdict.decision == "REVIEW"
+    assert any("intent extraction failed" in reason for reason in proof.verdict.reasons)
+    assert "scripted API unavailable" in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
 def test_api_failure_keeps_tamper_fail_block(tmp_path, monkeypatch):
     finding = TamperFinding(
         test_path="test_calc.py", test_name=None, kind="MODIFIED",

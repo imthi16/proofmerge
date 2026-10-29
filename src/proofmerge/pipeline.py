@@ -36,15 +36,25 @@ def run_verify(
     contract = IntentContract(claims=[C0], rejected=[])
     found = HypothesisSet(hypotheses=[], rejected=[])
     probes, experiments = [], []
+    intent_established = False
     try:
         contract = extract_intent(intent, client)
-        found = generate_hypotheses(context, contract, client)
-        probes, experiments = probe_hypotheses(
-            repo, context, contract, found.hypotheses, client, evidence_dir,
-            runner=runner, digest=digest,
-        )
-    except (MetaError, SandboxError, OSError, ValueError) as error:
+        intent_established = True
+    except (MetaError, OSError, ValueError) as error:
         errors.append(str(error))
+    if intent_established:
+        try:
+            found = generate_hypotheses(context, contract, client)
+            probes, experiments = probe_hypotheses(
+                repo, context, contract, found.hypotheses, client, evidence_dir,
+                runner=runner, digest=digest,
+            )
+        except (MetaError, SandboxError, OSError, ValueError) as error:
+            done = getattr(error, "completed", None)
+            if isinstance(done, dict):
+                probes = done.get("probes", probes)
+                experiments = done.get("experiments", experiments)
+            errors.append(str(error))
 
     tamper, tamper_experiments = [], []
     try:
@@ -53,13 +63,20 @@ def run_verify(
             repo, context, tamper, evidence_dir, runner=runner, digest=digest
         )
     except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
+        done = getattr(error, "completed", None)
+        if isinstance(done, dict):
+            tamper = done.get("tamper", tamper)
+            tamper_experiments = done.get("experiments", tamper_experiments)
         errors.append(str(error))
 
     findings = findings_for(
         experiments, found.hypotheses, probes, proof_path=str(evidence_dir / "proof.json")
     )
     # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
-    verdict = decide(contract, found.hypotheses, findings, tamper, errors=errors)
+    verdict = decide(
+        contract, found.hypotheses, findings, tamper,
+        errors=errors, intent_established=intent_established,
+    )
     usage = [u for u in client.usage if u is not None]
     proof = Proof(
         proofmerge_version=__version__,

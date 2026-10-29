@@ -295,11 +295,11 @@ All checks passed!
 ### 2026-10-29 — T23 end-to-end verification
 - Added `proofmerge verify`: resolves revisions, extracts intent, generates and runs probes, checks changed tests, normalizes findings, and writes `proof.json`, `report.html`, then the manifest as the final write.
 - Added 31 acceptance and failure-path tests, including the real Docker demo producing base PASS 3/3, head FAIL 3/3, BLOCK, and an intact replay bundle. All model replies in tests are scripted.
-- API/client-setup, sandbox and tamper failures produce REVIEW with recorded reasons; completed evidence is retained. Execution ERROR/TIMEOUT also requires REVIEW. Added an opt-in `review_on_error` argument to `decide` because its existing BLOCK precedence could otherwise override a failed run; default behavior is unchanged.
+- API/client-setup, sandbox and tamper-stage failures are recorded as REVIEW reasons and completed evidence is kept. They never erase hard evidence: a verified base PASS 3/3 / head FAIL 3/3 regression, or a base test failing on head with no CHANGE claim, still gives BLOCK (the verdict engine's precedence is unchanged). A run that fails before any such evidence exists gives REVIEW.
 - Verification:
   ```text
   $ PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
-  306 passed in 25.35s
+  306 passed in 24.97s (Docker tests included)
 
   $ ../proofmerge-T3/.venv/bin/ruff check src tests
   All checks passed!

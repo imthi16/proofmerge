@@ -133,7 +133,7 @@ def test_runner_exception_is_recorded(tmp_path, error):
 
 @pytest.mark.parametrize("stage", ["static", "dynamic"])
 @pytest.mark.parametrize("error_type", [TamperError, SandboxError, ContextError, OSError])
-def test_tamper_failure_reviews_even_verified_regression(tmp_path, monkeypatch, stage, error_type):
+def test_tamper_stage_failure_keeps_verified_regression_block(tmp_path, monkeypatch, stage, error_type):
     finding = TamperFinding(
         test_path="test_calc.py", test_name=None, kind="MODIFIED",
         base_test_on_head_outcome=None,
@@ -146,14 +146,14 @@ def test_tamper_failure_reviews_even_verified_regression(tmp_path, monkeypatch, 
     monkeypatch.setattr(pipeline, "run_base_tests_on_head", fail)
     proof, evidence, _, _ = execute(tmp_path)
     assert proof.findings[0].verified
-    assert proof.verdict.decision == "REVIEW"
+    assert proof.verdict.decision == "BLOCK"
     assert "tamper stage unavailable" in proof.verdict.reasons
     assert proof.tamper_findings == ([] if stage == "static" else [finding])
     assert_bundle(proof, evidence)
 
 
 @pytest.mark.parametrize("outcome", ["ERROR", "TIMEOUT"])
-def test_failed_tamper_execution_reviews_verified_regression(tmp_path, monkeypatch, outcome):
+def test_failed_tamper_execution_keeps_verified_regression_block(tmp_path, monkeypatch, outcome):
     from test_findings import experiment
 
     tamper_experiment = experiment(["PASS"] * 3, [outcome] * 3)
@@ -168,14 +168,14 @@ def test_failed_tamper_execution_reviews_verified_regression(tmp_path, monkeypat
     )
     proof, evidence, _, _ = execute(tmp_path)
     assert proof.findings[0].verified
-    assert proof.verdict.decision == "REVIEW"
+    assert proof.verdict.decision == "BLOCK"
     assert any(outcome in reason for reason in proof.verdict.reasons)
     # The hand-built tamper experiment has no recorded files; check the proof and manifest.
     assert Proof.model_validate_json((evidence / "proof.json").read_text()) == proof
     assert verify_manifest(evidence) == []
 
 
-def test_api_failure_reviews_successful_tamper_fail(tmp_path, monkeypatch):
+def test_api_failure_keeps_tamper_fail_block(tmp_path, monkeypatch):
     finding = TamperFinding(
         test_path="test_calc.py", test_name=None, kind="MODIFIED",
         base_test_on_head_outcome="FAIL",
@@ -183,7 +183,7 @@ def test_api_failure_reviews_successful_tamper_fail(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "find_tamper", lambda *a: [finding])
     monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *a, **k: ([finding], []))
     proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=2))
-    assert proof.verdict.decision == "REVIEW"
+    assert proof.verdict.decision == "BLOCK"
     assert proof.tamper_findings == [finding]
     assert "scripted API unavailable" in proof.verdict.reasons
     assert_bundle(proof, evidence)

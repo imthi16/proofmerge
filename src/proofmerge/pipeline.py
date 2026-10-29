@@ -55,23 +55,11 @@ def run_verify(
     except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
         errors.append(str(error))
 
-    for experiment in experiments + tamper_experiments:
-        for execution in experiment.executions:
-            if execution.outcome in {"ERROR", "TIMEOUT"}:
-                errors.append(
-                    f"{experiment.hypothesis_id} {execution.revision} attempt "
-                    f"{execution.attempt}: {execution.outcome}"
-                )
-    for finding in tamper:
-        if finding.base_test_on_head_outcome in {"ERROR", "TIMEOUT"}:
-            errors.append(f"{finding.test_path}: {finding.base_test_on_head_outcome}")
-
     findings = findings_for(
         experiments, found.hypotheses, probes, proof_path=str(evidence_dir / "proof.json")
     )
-    verdict = decide(
-        contract, found.hypotheses, findings, tamper, errors=errors, review_on_error=True
-    )
+    # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
+    verdict = decide(contract, found.hypotheses, findings, tamper, errors=errors)
     usage = [u for u in client.usage if u is not None]
     proof = Proof(
         proofmerge_version=__version__,

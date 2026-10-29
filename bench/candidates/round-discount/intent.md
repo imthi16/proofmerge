@@ -1,1 +1,1 @@
-Clean up the bulk discount helper. No behavior change intended.
+Clean up the bulk discount helper. Same results as before.

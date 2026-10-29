@@ -1,1 +1,1 @@
-Simplify price lookup by relying on SKU uniqueness across tenants.
+Simplify the price lookup path. Returned prices should stay the same.

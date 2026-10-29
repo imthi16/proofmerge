@@ -1,1 +1,1 @@
-Avoid copying the stock dict on every reservation for performance.
+Speed up stock reservation.

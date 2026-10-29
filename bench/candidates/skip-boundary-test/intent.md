@@ -1,1 +1,1 @@
-Tidy the pricing module and its test suite. No behavior change intended.
+Tidy the pricing module and its test suite. Output should not change.

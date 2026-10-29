@@ -310,6 +310,14 @@ All checks passed!
   - `proofmerge replay` on the bundle: `evidence intact: 37 files`.
   - Known limit seen in this run: H2's title is "cached price goes stale", but its probe checks tenant isolation, the same bug as H1. A probe is not yet checked against its hypothesis text.
 
+### T22 Benchmark and demo leakage cleanup — 2026-10-29
+- Neutralized cache docstrings and the boundary-test skip reason; removed ticket/approval cues and mutation disclosure from intents while preserving explicit intended changes and the newsletter fix description. Labels and candidate executable logic are unchanged. Added a separate tenant-b price assertion to the tenant-validation ground truth.
+- Build/check commands passed (exit 0): `PY=../proofmerge-T3/.venv/bin/python`; `B=$(mktemp -d)/bench && $PY demo/build_demo_repo.py $B --candidates bench/candidates && $PY demo/check_demo.py $B --ground-truth bench/ground_truth`; `D=$(mktemp -d)/demo && $PY demo/build_demo_repo.py $D && $PY demo/check_demo.py $D`.
+- Compared against a `git archive` of main at `e188f4b`: the 20-candidate bench table and the 3-candidate demo table are identical before and after (lead re-run, all four checks exit 0).
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (exit 0): `238 passed, 7 skipped in 8.19s`.
+- `../proofmerge-T3/.venv/bin/ruff check src tests` (exit 0): `All checks passed!`; `git diff --check` passed.
+- Intent prompt (`intent.py`): the PRESERVE rule no longer quotes the benchmark's own sentence "No behavior change intended"; it now says a general statement that results or behavior do not change is a PRESERVE claim. The hypotheses prompt is unchanged; its sha256 before benchmark runs is `7b7bde5be0de5a370da585ee767be267034ca79b9a0c4aec86788e480ba04309`. After this edit `pytest -q`: 245 passed (Docker tests included); `ruff check src tests`: clean. Real Spark runs were not repeated after the prompt change.
+
 ### 2026-10-29 — T28 GitHub composite action
 - Added the composite action, workflow documentation, and 25 offline tests covering credential skips, trusted action installation paths, literal PR input, exit capture, artifact publication configuration, comment creation/update, malformed evidence, and verdict policy.
 - Empty keys skip all work and comments. Missing evidence or inconsistent verify exits fail; BLOCK always fails, and REVIEW fails with `fail-on: review`. Marked bot comments are updated using a JSON input file; new comments use a body file.

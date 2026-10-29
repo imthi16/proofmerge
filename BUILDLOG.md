@@ -173,6 +173,7 @@ All three commands exited 0. `graphify update .` exited 0 (no code-graph topolog
 - `ruff check src tests` clean; `pytest -q` 122 passed, including the Docker tests. The real Spark runs above were not repeated after these fixes.
 
 ### T16 dynamic test-tamper checks — 2026-10-29
+- Encoding review fix: normalize committed base-test encoding declarations for explicit UTF-8 probe writes; added an offline Latin-1 `café` regression test. Verification: 155 tests passed in 21.10s; Ruff passed.
 - Added `run_base_tests_on_head`: each affected file's committed base test source runs three times on base and three on head through the sandbox, including files deleted on head. Experiments use T1, T2, …; all findings for one file share its result. FAIL requires base PASS 3/3 and head FAIL 3/3; head PASS 3/3 gives PASS; other execution outcomes give ERROR. No verdict decision or model call.
 - Offline coverage checks repeatability, errors/timeouts, deleted files, committed source, per-file deduplication, distinct experiment IDs, and newly added tests (no base source → ERROR without execution).
 - Docker was reachable with `proofmerge-runner:0.1`. Demo acceptance tests passed: `test-tamper` and `intended-change` each produced FAIL; `tenant-cache-regression` produced no findings or experiments.

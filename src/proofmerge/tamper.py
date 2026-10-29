@@ -2,6 +2,7 @@
 
 import ast
 import io
+import re
 import tokenize
 from pathlib import Path, PurePosixPath
 
@@ -216,11 +217,20 @@ def run_base_tests_on_head(
             repo, "show", f"{context.base_sha}:{path}",
             error=f"Cannot read test file {path!r} at {context.base_sha}",
         )
+        encoding, header = tokenize.detect_encoding(io.BytesIO(source).readline)
+        lines = source.decode(encoding).split("\n", len(header))
+        # Match the UTF-8 probe write, changing only comments Python inspected
+        # for an encoding declaration (never text inside a multiline literal).
+        for index in range(len(header)):
+            lines[index] = re.sub(
+                r"^([ \t\f]*#.*?coding[:=][ \t]*)([-\w.]+)",
+                r"\g<1>utf-8", lines[index], flags=re.ASCII,
+            )
         # shortcut: repository conftest.py fixtures are not loaded by the isolated
         # probe; tests needing them read ERROR. Upgrade when fixture support is needed.
         experiment = run_experiment(
             repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
-            source.decode(tokenize.detect_encoding(io.BytesIO(source).readline)[0]),
+            "\n".join(lines),
             evidence_dir, runner=runner, digest=digest, attempts=3,
         )
         experiments.append(experiment)

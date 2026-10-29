@@ -1,6 +1,7 @@
 """Inspect owned committed fixtures only; never import or execute their contents."""
 
 import subprocess
+import tokenize
 
 import pytest
 
@@ -24,7 +25,10 @@ def inspect_diff(tmp_path):
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
         if before is not None:
-            target.write_text(before)
+            if isinstance(before, bytes):
+                target.write_bytes(before)
+            else:
+                target.write_text(before)
         git("add", ".")
         git("commit", "--allow-empty", "-m", "base")
         base = git("rev-parse", "HEAD")
@@ -245,6 +249,23 @@ def test_base_tests_on_head_rule(inspect_diff, tmp_path, base_codes, head_codes,
     assert [e.exit_code for e in experiments[0].executions] == base_codes + head_codes
     assert all(f.base_test_on_head_outcome == expected for f in updated)
     assert all(f.base_test_on_head_outcome is None for f in findings)
+
+
+def test_base_tests_preserve_latin1_literal(inspect_diff, tmp_path):
+    (tmp_path / "README.md").write_text("Owned fixture repository.\n")
+    source = '# -*- coding: latin-1 -*-\ndef test_example():\n    assert "café" == "café"\n'
+    findings = inspect_diff(source.encode("latin-1"), None)
+    context = get_context(tmp_path, "HEAD~", "HEAD")
+    evidence_dir = tmp_path / "evidence"
+
+    def runner(image, code_dir, probe_dir, probe_name, timeout):
+        return 0, b"", b""
+
+    run_base_tests_on_head(
+        tmp_path, context, findings, evidence_dir, runner=runner, digest="fake"
+    )
+    with tokenize.open(evidence_dir / "probes/test_t1.py") as probe:
+        assert 'assert "café" == "café"' in probe.read()
 
 
 def test_base_tests_run_once_per_file_with_distinct_ids(inspect_diff, tmp_path):

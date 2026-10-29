@@ -208,7 +208,7 @@ def run_experiment(
     probe_name = f"test_{hypothesis_id.lower()}.py"
     probe_dir = evidence_dir / "probes"
     probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source)
+    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
     (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
     open_to_runner(probe_dir)
     log_dir = evidence_dir / hypothesis_id

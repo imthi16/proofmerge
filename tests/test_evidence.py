@@ -27,7 +27,12 @@ def test_unknown_decision_is_rejected():
 def test_old_proofs_default_to_independent_empty_wonder_fields(name):
     proof = Proof.model_validate_json((FIXTURES / name).read_text())
     other = Proof.model_validate_json((FIXTURES / name).read_text())
-    assert proof.contested_claim_ids == proof.mismatched_probe_ids == []
+    assert proof.contested_claim_ids == proof.mismatched_probe_ids == proof.explained_probe_ids == []
+    assert proof.explained_probe_claim_ids == {}
     proof.contested_claim_ids.append("C2")
     proof.mismatched_probe_ids.append("H1")
+    proof.explained_probe_ids.append("H1")
+    proof.explained_probe_claim_ids["H1"] = "C1"
+    assert other.explained_probe_ids == []
+    assert other.explained_probe_claim_ids == {}
     assert other.contested_claim_ids == other.mismatched_probe_ids == []

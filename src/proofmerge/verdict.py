@@ -14,11 +14,15 @@ def decide(
     errors: list[str] | None = None,
     *,
     intent_established: bool = True,
+    intent_given: bool = True,
+    explained_probe_ids: frozenset[str] = frozenset(),
+    explained_probe_claim_ids: dict[str, str] | None = None,
     mismatched_probe_ids: frozenset[str] = frozenset(),
 ) -> Verdict:
     """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
     claims = {claim.id: claim for claim in contract.claims}
-    has_intent = any(claim.id != C0.id for claim in contract.claims)
+    explicit = any(claim.id != C0.id for claim in contract.claims)
+    has_intent = intent_given and not (not explicit and contract.rejected)
     has_change = any(claim.kind == "CHANGE" for claim in contract.claims)
     reasons: list[str] = []
     unresolved: list[str] = []
@@ -34,6 +38,14 @@ def decide(
             raise ValueError(f"unknown claim id: {finding.claim_id!r}")
         claim = claims[finding.claim_id]
         if finding.classification == "REGRESSION" and finding.verified:
+            if finding.hypothesis_id in explained_probe_ids:
+                change_id = (explained_probe_claim_ids or {}).get(finding.hypothesis_id)
+                change = claims.get(change_id)
+                if change is not None and change.kind == "CHANGE":
+                    reasons.append(f"{finding.hypothesis_id} may be the intended change {change.id}.")
+                else:
+                    reasons.append(f"{finding.hypothesis_id} may be the intended change.")
+                continue
             qualifications = []
             if claim.kind == "CHANGE":
                 qualifications.append(f"{claim.id} is a CHANGE claim")

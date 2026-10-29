@@ -226,9 +226,13 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
             "<p>Muse Wonder: probe may not test this hypothesis</p>"
             if h.id in proof.mismatched_probe_ids else ""
         )
+        explained = ""
+        if h.id in proof.explained_probe_ids:
+            change_id = proof.explained_probe_claim_ids.get(h.id, "")
+            explained = f"<p>Muse Wonder: may be the intended change {e(change_id)}</p>"
         cards.append(
             f'<section class="card"><h3><code>{e(h.id)}</code> {e(h.title)}</h3>'
-            f"{_cited(claim, h.claim_id)}{mismatch}"
+            f"{_cited(claim, h.claim_id)}{mismatch}{explained}"
             f'<p class="muted">risk: {e(h.risk_category)}{intended}</p>'
             f"<p>{e(h.suspected_behavior)}</p>"
             f"<p><strong>Expected on base:</strong> {e(h.expected_base)}<br>"

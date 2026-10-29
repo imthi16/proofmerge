@@ -356,3 +356,9 @@ All checks passed!
   - intended-change: REVIEW, exit 0, from the CHANGE claim and the changed tests. 3 calls.
   - Full suite after the change: `pytest -q` 394 passed (Docker tests included); `ruff check src tests` clean.
 
+
+### 2026-10-29 — T30 review fixes
+- Probe mismatches now require REVIEW for every finding classification, including probes passing on both revisions. Claim-check errors no longer skip the independent probe check; unrelated verified regressions still BLOCK.
+- Added regression coverage for rejected and omitted passing probes, all finding classifications, API/schema claim-check failures, and preserved BLOCK precedence. No real model calls were made.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (extra quiet environment setting cleared): `399 passed, 8 skipped in 20.18s`. The eight skips are Docker availability guards.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`; `git diff --check` passed.

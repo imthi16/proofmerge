@@ -60,6 +60,9 @@ def run_verify(
     contested_claim_ids, mismatched_probe_ids = frozenset(), frozenset()
     try:
         contested_claim_ids = cross_check_claims(contract, intent, client)
+    except MetaError as error:
+        errors.append(str(error))
+    try:
         mismatched_probe_ids = check_probes(found.hypotheses, probes, client)
     except MetaError as error:
         errors.append(str(error))

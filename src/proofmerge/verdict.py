@@ -24,6 +24,11 @@ def decide(
     unresolved: list[str] = []
     block = False
 
+    for hypothesis_id in sorted(mismatched_probe_ids):
+        reasons.append(
+            f"{hypothesis_id} needs review because its probe may not test its hypothesis."
+        )
+
     for finding in findings:
         if finding.claim_id not in claims:
             raise ValueError(f"unknown claim id: {finding.claim_id!r}")
@@ -36,11 +41,6 @@ def decide(
                 qualifications.append(f"{claim.id} is contested")
             if not has_intent:
                 qualifications.append("intent is missing")
-            if finding.hypothesis_id in mismatched_probe_ids:
-                reasons.append(
-                    f"{finding.hypothesis_id} needs review because its probe may not test "
-                    "its hypothesis."
-                )
             if qualifications:
                 reasons.append(
                     f"{finding.hypothesis_id} needs review because "

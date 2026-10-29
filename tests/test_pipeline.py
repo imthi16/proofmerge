@@ -520,3 +520,44 @@ def test_invalid_wonder_reply_is_recorded_without_losing_evidence(tmp_path, inva
     assert proof.verdict.decision == "BLOCK"
     assert any("model reply did not match Checked" in reason for reason in proof.verdict.reasons)
     assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("results", [[], [
+    {"hypothesis_id": "H1", "tests_hypothesis": False, "reason": "unrelated assertions"}
+]])
+def test_passing_probe_rejected_by_wonder_requires_review(tmp_path, results):
+    proof, evidence, _, _ = execute(
+        tmp_path, replies=Replies(wonder_results=results), runner=lambda *args: (0, b"", b""),
+    )
+    assert proof.findings[0].classification == "NO_DIFFERENCE"
+    assert proof.mismatched_probe_ids == ["H1"]
+    assert proof.verdict.decision == "REVIEW"
+    assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("failure", ["api", "schema"])
+@pytest.mark.parametrize("other_regression", [False, True])
+def test_claim_check_failure_does_not_skip_probe_check(tmp_path, failure, other_regression):
+    replies = Replies(
+        fail=(5 if other_regression else 4) if failure == "api" else None,
+        wonder_claims=[{"id": "C1", "kind": "invalid"}] if failure == "schema" else None,
+        wonder_results=[
+            {"hypothesis_id": "H1", "tests_hypothesis": False, "reason": "wrong behavior"}
+        ],
+    )
+    if other_regression:
+        replies.replies[1]["hypotheses"].append(hypothesis("C0", ["calc.py::double"]))
+        replies.probes = ScriptedCompletions(PROBE, PROBE)
+        replies.wonder_results.append(
+            {"hypothesis_id": "H2", "tests_hypothesis": True, "reason": "matches"}
+        )
+    proof, evidence, client, _ = execute(tmp_path, replies=replies)
+    assert proof.mismatched_probe_ids == ["H1"]
+    assert proof.contested_claim_ids == []
+    assert client.calls == (6 if other_regression else 5)
+    assert proof.verdict.decision == ("BLOCK" if other_regression else "REVIEW")
+    error_text = "scripted API unavailable" if failure == "api" else "model reply did not match"
+    assert any(error_text in reason for reason in proof.verdict.reasons)
+    assert "H1 needs review because its probe may not test its hypothesis." in proof.verdict.reasons
+    assert_bundle(proof, evidence)

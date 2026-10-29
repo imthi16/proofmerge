@@ -262,3 +262,29 @@ def test_mismatched_probe_does_not_remove_another_block(other_evidence):
 def test_wonder_agreement_cannot_promote_change_claim_to_block():
     result = decide(contract("CHANGE"), [], [finding()], [], mismatched_probe_ids=frozenset())
     assert result.decision == "REVIEW"
+
+
+@pytest.mark.parametrize("classification, verified", [
+    ("NO_DIFFERENCE", False), ("REGRESSION", True), ("REGRESSION", False),
+    ("INCONCLUSIVE", False), ("EXISTING_FAILURE", False), ("POSSIBLE_FIX", False),
+])
+def test_probe_mismatch_requires_review_for_every_classification(classification, verified):
+    result = decide(
+        contract(), [hypothesis()],
+        [finding(classification=classification, verified=verified)], [],
+        mismatched_probe_ids=frozenset({"H1"}),
+    )
+    assert result.decision == "REVIEW"
+    assert result.reasons.count(
+        "H1 needs review because its probe may not test its hypothesis."
+    ) == 1
+
+
+def test_passing_mismatched_probe_keeps_unrelated_regression_block():
+    result = decide(
+        contract(), [hypothesis(), hypothesis("H2")],
+        [finding(classification="NO_DIFFERENCE", verified=False), finding(hypothesis_id="H2")],
+        [], mismatched_probe_ids=frozenset({"H1"}),
+    )
+    assert result.decision == "BLOCK"
+    assert "H1 needs review because its probe may not test its hypothesis." in result.reasons

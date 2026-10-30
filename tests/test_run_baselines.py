@@ -84,8 +84,16 @@ def test_suite_outcomes_and_skip(offline, code, decision):
         assert execution["exit_code"] == code
 
 
+def test_metadata_records_cli_default_model(monkeypatch):
+    monkeypatch.setenv("PROOFMERGE_BACKEND", "claude-cli")
+    monkeypatch.delenv("PROOFMERGE_SPARK_MODEL", raising=False)
+    assert bench.metadata()["spark_model"] == "CLI default"
+
+
 @pytest.mark.parametrize("reply", ["BLOCK", "NOT_BLOCK"])
-def test_spark_single_call_full_input_usage_and_metadata(offline, reply):
+def test_spark_single_call_full_input_usage_and_metadata(offline, reply, monkeypatch):
+    monkeypatch.delenv("PROOFMERGE_BACKEND", raising=False)
+    monkeypatch.delenv("PROOFMERGE_SPARK_MODEL", raising=False)
     offline.reply = reply
     data, result = run(offline)
     assert result["baseline_b"] == {"decision": reply, "reason": "reviewed"}

@@ -417,3 +417,49 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `462 passed, 9 skipped in 32.05s`. Docker availability guards account for the nine skips, including the new integration test. `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`. `git diff --check` passed.
 - Real Docker check: `replay --rerun` on the tenant-cache demo bundle (base `9dcc104`, head `32dff53`) printed `H1 base PPP head FFF: reproduced` and `H2 base PPP head FFF: reproduced`, exit 0; the bundle's file hashes were the same before and after. README and PRIOR_ART status lines updated.
 
+### 2026-10-30 — T43 Benchmark batch 3: fresh held-out set
+- Added 4 faulty + 4 safe candidates, all marked `"held_out": true`, growing the bench to 16 faulty + 12 safe. New behavior lives in a base module `demo/demo-shop/src/demo_shop/cart.py` (coupon lookup, SKU listing, cart line merging, item filtering, stock release, free-shipping threshold, tenant SKU lookup) with passing base tests in `demo/demo-shop/tests/test_cart.py`.
+- Faulty (BLOCK):
+  - `coupon-lookup-exact`: removed case/whitespace normalization from `apply_coupon`.
+  - `sku-list-order`: `list_skus` returns insertion order instead of sorted SKUs.
+  - `cart-line-merge`: `merge_lines` no longer combines duplicate SKUs.
+  - `item-filter-stop`: `process_valid` uses `break` instead of `continue` on an invalid item, dropping all later items.
+- Safe (NOT_BLOCK):
+  - `extract-line-total`: rename/extract refactor — extracts `_line_total` helper in `orders.py` and uses it in `order_total` and `line_totals`.
+  - `precompute-tenant-skus`: performance change — precomputes tenant SKU lists; results identical to base.
+  - `intended-free-shipping-threshold`: intended rule change — raises free-shipping threshold from 100 to 150 with updated tests and an explicit CHANGE intent.
+  - `release-stock-guard`: bug fix — `release_stock` now rejects negative quantities; ground truth is base FAIL / head PASS.
+- Leakage rules applied: new base docstrings left unchanged on every patch except where a safe helper is introduced; intents are 1–2 sentences, ticket-free, never use the retired sentence, and none of the faulty intents states the planted behavior. The four faulty kinds are not listed in `src/proofmerge/prompts/hypotheses.md` "Where regressions hide" and were not present in the bench before. No skip/xfail markers were added.
+
+#### Verification
+- `python demo/build_demo_repo.py bench/.build/bench-shop --candidates bench/candidates --force`
+- `python demo/check_demo.py bench/.build/bench-shop --ground-truth bench/ground_truth` (exit 0). All 28 branches have an existing-suite PASS; all 16 faulty candidates show ground-truth FAIL; all 12 safe candidates show ground-truth PASS.
+- New-candidate ground truth on base (`main`) vs head:
+
+```text
+candidate                            label      base_gt    head_gt
+coupon-lookup-exact                  BLOCK      PASS       FAIL
+sku-list-order                       BLOCK      PASS       FAIL
+cart-line-merge                      BLOCK      PASS       FAIL
+item-filter-stop                     BLOCK      PASS       FAIL
+extract-line-total                   NOT_BLOCK  PASS       PASS
+precompute-tenant-skus               NOT_BLOCK  PASS       PASS
+intended-free-shipping-threshold     NOT_BLOCK  FAIL       PASS
+release-stock-guard                  NOT_BLOCK  FAIL       PASS
+```
+
+- `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`:
+  ```text
+  478 passed in 41.97s
+  ```
+- `../proofmerge-T3/.venv/bin/ruff check src tests`:
+  ```text
+  All checks passed!
+  ```
+- `../proofmerge-T3/.venv/bin/ruff check bench/run_bench.py`:
+  ```text
+  All checks passed!
+  ```
+- The default demo check (`python demo/build_demo_repo.py demo/.build/demo-shop --force && python demo/check_demo.py demo/.build/demo-shop`) also exits 0; the added `cart.py` tests run on all demo branches and pass.
+- Note: `ruff check src tests` found one pre-existing import-formatting issue in `tests/test_sandbox.py`; it was corrected with `ruff check src tests --fix` before the final check.
+

@@ -1,0 +1,47 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_exact_quantity_reservation_allowed ____________________
+
+    def test_exact_quantity_reservation_allowed():
+        from demo_shop.inventory import reserve
+        try:
+>           result = reserve({"WIDGET": 5}, "WIDGET", 5)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../probes/test_h1.py:4: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stock = {'WIDGET': 5}, sku = 'WIDGET', qty = 5
+
+    def reserve(stock: dict, sku: str, qty: int) -> dict:
+        """Reserve qty units of sku from stock and return updated stock.
+    
+        Raises:
+            ValueError: When sku is unknown or qty exceeds available stock.
+        """
+        if sku not in stock:
+            raise ValueError(f"Unknown SKU: {sku}")
+        available = stock[sku]
+        if qty >= available:
+>           raise ValueError(
+                f"Insufficient stock for {sku}: requested {qty}, available {available}"
+            )
+E           ValueError: Insufficient stock for WIDGET: requested 5, available 5
+
+src/demo_shop/inventory.py:14: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_exact_quantity_reservation_allowed():
+        from demo_shop.inventory import reserve
+        try:
+            result = reserve({"WIDGET": 5}, "WIDGET", 5)
+        except ValueError:
+>           assert False, "reserve raised ValueError for qty == available, expected success"
+E           AssertionError: reserve raised ValueError for qty == available, expected success
+E           assert False
+
+../probes/test_h1.py:6: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_exact_quantity_reservation_allowed - Assert...
+1 failed in 0.01s

@@ -1,0 +1,23 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_non_string_code_raises_attribute_error __________________
+
+    def test_non_string_code_raises_attribute_error():
+        with pytest.raises(AttributeError):
+>           apply_coupon({'save10': 0.1}, None)
+
+../probes/test_h3.py:6: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+coupons = {'save10': 0.1}, code = None
+
+    def apply_coupon(coupons: dict[str, float], code: str) -> float:
+        """Return the discount for a coupon code."""
+        if code not in coupons:
+>           raise ValueError(f"Unknown coupon: {code}")
+E           ValueError: Unknown coupon: None
+
+src/demo_shop/cart.py:7: ValueError
+=========================== short test summary info ============================
+FAILED ../probes/test_h3.py::test_non_string_code_raises_attribute_error - Va...
+1 failed in 0.01s

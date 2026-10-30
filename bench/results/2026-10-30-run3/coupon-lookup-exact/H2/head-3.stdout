@@ -1,0 +1,38 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_apply_coupon_strips_whitespace ______________________
+
+    def test_apply_coupon_strips_whitespace():
+        from demo_shop.cart import apply_coupon
+        try:
+>           result = apply_coupon({"save10": 0.1}, "  save10  ")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../probes/test_h2.py:4: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+coupons = {'save10': 0.1}, code = '  save10  '
+
+    def apply_coupon(coupons: dict[str, float], code: str) -> float:
+        """Return the discount for a coupon code."""
+        if code not in coupons:
+>           raise ValueError(f"Unknown coupon: {code}")
+E           ValueError: Unknown coupon:   save10
+
+src/demo_shop/cart.py:7: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_apply_coupon_strips_whitespace():
+        from demo_shop.cart import apply_coupon
+        try:
+            result = apply_coupon({"save10": 0.1}, "  save10  ")
+        except ValueError:
+>           assert False, "apply_coupon raised ValueError for whitespace-padded code"
+E           AssertionError: apply_coupon raised ValueError for whitespace-padded code
+E           assert False
+
+../probes/test_h2.py:6: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_apply_coupon_strips_whitespace - AssertionE...
+1 failed in 0.01s

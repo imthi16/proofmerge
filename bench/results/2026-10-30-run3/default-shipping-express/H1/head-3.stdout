@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_default_shipping_is_standard _______________________
+
+    def test_default_shipping_is_standard():
+>       assert order_total([{"price": 10.0, "qty": 1}]) == 15.0
+E       AssertionError: assert 22.0 == 15.0
+E        +  where 22.0 = order_total([{'price': 10.0, 'qty': 1}])
+
+../probes/test_h1.py:4: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_default_shipping_is_standard - AssertionErr...
+1 failed in 0.01s

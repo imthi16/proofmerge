@@ -1,0 +1,45 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "extract-inventory-validation",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "4a29a92d56361792f8c5151502e19d9bb86be6e4",
+  "diff_sha256": "6863e911c5c9e3642ac350202a8ba0d24c9cb4c80e75aa8ef22474fd2588b969",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "PASS",
+    "reasons": [
+      "No regression was found within the tested scope."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 2,
+    "prompt_tokens": 1751,
+    "completion_tokens": 1828
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

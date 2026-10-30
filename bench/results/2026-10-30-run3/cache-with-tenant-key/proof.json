@@ -1,0 +1,92 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "cache-with-tenant-key",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "cf9aee875c9563629c9c097fe8f0111ccf7b5781",
+  "diff_sha256": "201b45797edbecd636d1abcf713a64eb6a67c7400debe86917fce67a97959ab7",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Price results are cached for reuse.",
+        "source_quote": "Add price caching"
+      },
+      {
+        "id": "C2",
+        "kind": "PRESERVE",
+        "statement": "Tenant isolation remains enforced.",
+        "source_quote": "preserving tenant isolation"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C1",
+        "title": "Stale cached price after price table update",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "After _PRICES['tenant-b']['widget'] is updated from 35.0 to 99.0, price_for returns stale cached 35.0 instead of current price.",
+        "expected_base": "Second call returns 99.0 (current table value) for price_for('tenant-b','widget') after _PRICES['tenant-b']['widget'] is set to 99.0",
+        "expected_head": "Second call returns 35.0 (original cached value) for same input",
+        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget'), mutate _PRICES['tenant-b']['widget'] to 99.0, call price_for again and compare return values on base vs head.",
+        "risk_category": "state",
+        "falsification_criteria": "If head returns the updated table value (99.0) on the second call after mutation, this hypothesis is wrong.",
+        "possibly_intended": true,
+        "id": "H1"
+      },
+      {
+        "claim_id": "C2",
+        "title": "Removed tenant still returns cached price",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "Cache lookup happens before tenant validation, so a previously cached (tenant-b, widget) still returns a price after tenant-b is removed from _PRICES, bypassing tenant existence check.",
+        "expected_base": "Raises ValueError('Unknown tenant: tenant-b') on price_for('tenant-b','widget') after tenant entry is removed",
+        "expected_head": "Returns 35.0 from cache for same input instead of raising",
+        "test_intent": "Clear _price_cache, call price_for('tenant-b','widget') to populate cache, delete _PRICES['tenant-b'], then call price_for('tenant-b','widget') again and observe return vs exception.",
+        "risk_category": "security",
+        "falsification_criteria": "If head raises ValueError for removed tenant when value was previously cached, this hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H2"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "H1 was not tested: Stale cached price after price table update.",
+      "H2 was not tested: Removed tenant still returns cached price."
+    ],
+    "unresolved_risks": [
+      "H1 was not tested: Stale cached price after price table update",
+      "H2 was not tested: Removed tenant still returns cached price"
+    ],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 5,
+    "prompt_tokens": 4764,
+    "completion_tokens": 6652
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

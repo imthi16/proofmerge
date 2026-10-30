@@ -1,0 +1,19 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_reserve_does_not_mutate_input ______________________
+
+    def test_reserve_does_not_mutate_input():
+        stock = {"WIDGET": 10}
+        result = reserve(stock, "WIDGET", 2)
+        assert result == {"WIDGET": 8}
+>       assert stock == {"WIDGET": 10}
+E       AssertionError: assert {'WIDGET': 8} == {'WIDGET': 10}
+E         
+E         Differing items:
+E         {'WIDGET': 8} != {'WIDGET': 10}
+E         Use -v to get more diff
+
+../probes/test_h1.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_reserve_does_not_mutate_input - AssertionEr...
+1 failed in 0.01s

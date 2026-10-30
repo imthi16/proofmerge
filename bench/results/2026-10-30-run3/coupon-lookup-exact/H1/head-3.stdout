@@ -1,0 +1,36 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_apply_coupon_case_insensitive ______________________
+
+    def test_apply_coupon_case_insensitive():
+        try:
+>           discount = apply_coupon({"save10": 0.1}, "SAVE10")
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../probes/test_h1.py:5: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+coupons = {'save10': 0.1}, code = 'SAVE10'
+
+    def apply_coupon(coupons: dict[str, float], code: str) -> float:
+        """Return the discount for a coupon code."""
+        if code not in coupons:
+>           raise ValueError(f"Unknown coupon: {code}")
+E           ValueError: Unknown coupon: SAVE10
+
+src/demo_shop/cart.py:7: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_apply_coupon_case_insensitive():
+        try:
+            discount = apply_coupon({"save10": 0.1}, "SAVE10")
+        except ValueError:
+>           assert False, "base should normalize 'SAVE10' to 'save10' and return 0.1"
+E           AssertionError: base should normalize 'SAVE10' to 'save10' and return 0.1
+E           assert False
+
+../probes/test_h1.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_apply_coupon_case_insensitive - AssertionEr...
+1 failed in 0.01s

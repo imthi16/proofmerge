@@ -1,0 +1,14 @@
+.F......                                                                 [100%]
+=================================== FAILURES ===================================
+______________ test_order_total_express_with_cancelled_last_line _______________
+
+    def test_order_total_express_with_cancelled_last_line():
+        items = [{"qty": 2, "price": 4.0}, {"qty": 0, "price": 3.0}]
+>       assert order_total(items, shipping="express") == 20.0
+E       AssertionError: assert 23.0 == 20.0
+E        +  where 23.0 = order_total([{'qty': 2, 'price': 4.0}, {'qty': 0, 'price': 3.0}], shipping='express')
+
+../probes/test_t1.py:13: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_t1.py::test_order_total_express_with_cancelled_last_line
+1 failed, 7 passed in 0.02s

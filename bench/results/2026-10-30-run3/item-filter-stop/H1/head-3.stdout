@@ -1,0 +1,17 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________________ test_process_valid_skips_only_invalid _____________________
+
+    def test_process_valid_skips_only_invalid():
+        items = [{'sku': 'A'}, {'price': 1}, {'sku': 'B'}]
+        result = process_valid(items)
+>       assert result == [{'sku': 'A'}, {'sku': 'B'}]
+E       AssertionError: assert [{'sku': 'A'}] == [{'sku': 'A'}, {'sku': 'B'}]
+E         
+E         Right contains one more item: {'sku': 'B'}
+E         Use -v to get more diff
+
+../probes/test_h1.py:6: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_process_valid_skips_only_invalid - Assertio...
+1 failed in 0.01s

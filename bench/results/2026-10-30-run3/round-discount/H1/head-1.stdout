@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_bulk_discount_preserves_cents ______________________
+
+    def test_bulk_discount_preserves_cents():
+>       assert bulk_discount(105.0) == 94.5
+E       assert 94 == 94.5
+E        +  where 94 = bulk_discount(105.0)
+
+../probes/test_h1.py:4: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_bulk_discount_preserves_cents - assert 94 =...
+1 failed in 0.01s

@@ -256,6 +256,23 @@ the description is **unverified**.
 | [qodo-ai/qodo-cover](https://github.com/qodo-ai/qodo-cover) | AGPL-3.0 | 2026-04-05 | "An AI-Powered Tool for Automated Test Generation and Code Coverage Enhancement" | raises coverage; no base/head comparison is described |
 | [The-PR-Agent/pr-agent](https://github.com/The-PR-Agent/pr-agent) | MIT | 2026-10-28 | "PR Agent: The Original Open-Source PR Reviewer." | review comments; no test execution is described |
 
+## Commercial reviewers that run code
+
+Read on 2026-10-30 from each vendor's own page. Neither was tried, so how they work
+beyond those pages is **unverified**.
+
+- **CodeRabbit** describes, in its post on
+  [context engineering for AI code reviews](https://www.coderabbit.ai/blog/context-engineering-ai-code-reviews),
+  running verification in a sandbox as part of its review.
+- **Greptile TREX** is presented as
+  ["AI code review that runs your code"](https://www.greptile.com/trex).
+
+Running code during review is therefore not what sets ProofMerge apart. What these
+pages do not describe, and what ProofMerge is built around, is the combination below:
+the same probe run on base and on the patch with repeated attempts, intent claims that
+must quote the PR, a test-tamper check, REVIEW instead of a guess, and a hashed evidence
+bundle anyone can replay.
+
 ## What ProofMerge adds
 
 No single part below is claimed as new. The contribution is the combination, built for

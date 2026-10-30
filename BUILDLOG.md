@@ -277,10 +277,10 @@ newsletter-promo-fix             FAIL               PASS
   - 7 faulty: base PASS / head FAIL. 3 safe: base PASS / head PASS. Intended fee change and the bug fix: base FAIL / head PASS.
 
 ```text
-$ PYTEST_ADDOPTS= /home/imthiyas/Documents/hackathon/proofmerge-T3/.venv/bin/python -m pytest -q
+$ PYTEST_ADDOPTS= ../proofmerge-T3/.venv/bin/python -m pytest -q
 137 passed in 11.94s
 
-$ /home/imthiyas/Documents/hackathon/proofmerge-T3/.venv/bin/ruff check src tests
+$ ../proofmerge-T3/.venv/bin/ruff check src tests
 All checks passed!
 ```
 - Demo check rebuild + `python demo/check_demo.py` (exit 0): main PASS/PASS; intended-change PASS / n/a / FAIL; tenant-cache-regression PASS/FAIL/PASS; test-tamper PASS/FAIL/FAIL — same table as before batch 2.
@@ -468,4 +468,23 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
   ```
 - The default demo check (`python demo/build_demo_repo.py demo/.build/demo-shop --force && python demo/check_demo.py demo/.build/demo-shop`) also exits 0; the added `cart.py` tests run on all demo branches and pass.
 - Note: `ruff check src tests` found one pre-existing import-formatting issue in `tests/test_sandbox.py`; it was corrected with `ruff check src tests --fix` before the final check.
+
+### 2026-10-30 — T45 Audit fixes + final demo bundles
+- Copied final demo evidence bundles unchanged from `research/runs/2026-10-29-final-demo/` to `demo/runs/2026-10-29/`: `tenant-cache-take2`, `test-tamper`, `intended-change`.
+- `proofmerge replay` on each bundle printed `evidence intact` (37, 33 and 16 files).
+- Scanned the copied bundles for `/home/`, `/tmp/claude`, `sk-`, `ghp_`, `Bearer` and email addresses; no matches.
+- README token line now cites `demo/runs/2026-10-29/tenant-cache-take2/proof.json`; added `demo/runs/2026-10-29/README.md` with verdicts, SHAs and replay command.
+- `docs/PRIOR_ART.md` status line now says hash-checking replay and `replay --rerun` are built.
+- Two older BUILDLOG.md commands used an absolute path to the shared virtualenv; they now use the relative `../proofmerge-T3/.venv/bin/` form used elsewhere. No author home path remains in tracked files.
+- Verification:
+  ```text
+  $ PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q
+  478 passed in 42.92s
+
+  $ ../proofmerge-T3/.venv/bin/ruff check src tests
+  I001 [*] Import block is un-sorted or un-formatted
+    --> tests/test_sandbox.py:1:1
+  Found 1 error.
+  ```
+- The ruff error is in `tests/test_sandbox.py`, which this task does not edit.
 

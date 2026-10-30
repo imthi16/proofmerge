@@ -1,0 +1,75 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "precompute-tenant-skus",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "6b86fa329b937c6a4a355f3d7da83007f9bcd09c",
+  "diff_sha256": "61a72cc054fa5ba4e5e9974064efbab6c04e5229c9644f8eb78ec7185c67cd9f",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Tenant SKU lists are precomputed.",
+        "source_quote": "Precompute tenant SKU lists"
+      },
+      {
+        "id": "C2",
+        "kind": "CHANGE",
+        "statement": "Catalog queries run faster.",
+        "source_quote": "speed up catalog queries"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "tenant_skus misses SKUs added after import",
+        "changed_locations": [
+          "src/demo_shop/cart.py::tenant_skus"
+        ],
+        "suspected_behavior": "After cart is imported, adding a new tenant or SKU to demo_shop.pricing._PRICES is invisible to head because _TENANT_SKUS was snapshotted at import; e.g. adding _PRICES['__new_tenant__']={'SKU-NEW-1': 1.0} then tenant_skus('__new_tenant__') misses it.",
+        "expected_base": "['SKU-NEW-1'] (sorted keys of the newly added tenant entry)",
+        "expected_head": "[] (tenant unknown at import time, snapshot miss)",
+        "test_intent": "Import demo_shop.cart then demo_shop.pricing, add a fresh tenant key with one SKU to pricing._PRICES, call cart.tenant_skus for that tenant and assert it equals sorted(pricing._PRICES[tenant]); base passes, head returns [].",
+        "risk_category": "state",
+        "falsification_criteria": "If head tenant_skus returns the late-added SKUs matching base after _PRICES is mutated post-import, this hypothesis is wrong.",
+        "possibly_intended": true,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "H1 was not tested: tenant_skus misses SKUs added after import."
+    ],
+    "unresolved_risks": [
+      "H1 was not tested: tenant_skus misses SKUs added after import"
+    ],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 4,
+    "prompt_tokens": 3607,
+    "completion_tokens": 6462
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

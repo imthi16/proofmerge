@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_unknown_tenant_with_valid_sku_raises ___________________
+
+    def test_unknown_tenant_with_valid_sku_raises():
+>       with pytest.raises(ValueError, match="Unknown tenant"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+../probes/test_h2.py:5: Failed
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_unknown_tenant_with_valid_sku_raises - Fail...
+1 failed in 0.01s

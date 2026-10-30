@@ -158,31 +158,46 @@ How results map to a decision:
 
 ## Results
 
-Twenty synthetic pull requests on one small fixture, 12 faulty and 8 safe. This
-is a smoke benchmark, not an accuracy claim. Run 2, on main `bcd0032`:
+Twenty-eight synthetic pull requests on one small fixture, 16 faulty and 12
+safe. This is a smoke benchmark, not an accuracy claim: the intents name the
+changed function. Run 3, on main `5df3735`. Rules were frozen before batch 3
+was written, so the held-out slice is the clean number. Counts come from
+[run 3 results.json](bench/results/2026-10-30-run3/results.json).
 
-| | BLOCK | REVIEW | PASS |
-|---|---|---|---|
-| Faulty, not held out (8) | 8 | 0 | 0 |
-| Faulty, held out (4) | 4 | 0 | 0 |
-| Safe, not held out (5) | 1 | 2 | 2 |
-| Safe, held out (3) | 0 | 1 | 2 |
+| Label and slice | BLOCK | REVIEW | PASS | ERROR |
+|---|---:|---:|---:|---:|
+| Faulty, all (16) | 14 | 2 | 0 | 0 |
+| Safe, all (12) | 1 | 6 | 5 | 0 |
+| Faulty, held out (8) | 6 | 2 | 0 | 0 |
+| Safe, held out (7) | 0 | 4 | 3 | 0 |
 
-90 model calls, 78,557 prompt and 98,448 completion tokens, 0 errors.
+121 model calls, 0 errors. PASS means no regression found within tested scope.
 
-- No faulty case was passed in either run.
-- One safe case, `newsletter-promo-fix`, is a false BLOCK. The test found a real
-  behavior change: customers on the old field lose a promotion. The PR's
-  description doesn't say that explicitly, and ProofMerge's rule for "this
-  change is intended" is strict on purpose, so a vague sentence can't hide a
-  regression.
-- Run 2 came after fixes made in response to run 1, so it is not a clean
-  held-out result.
+- No faulty case was passed.
+- One safe case, `newsletter-promo-fix` (not held out), is a false BLOCK, as in
+  run 2. The probe found a real behavior change: customers on the old field
+  lose a promotion. The PR's description doesn't say that explicitly, and the
+  rule for "this change is intended" is strict on purpose, so a vague sentence
+  can't hide a regression.
 
-Every candidate's evidence for run 2 is in
-[bench/results/2026-10-29-run2](bench/results/2026-10-29-run2), and each one
-can be checked with `proofmerge replay`. Run 1 and the comparison between runs
-are in [bench/results/README.md](bench/results/README.md).
+The [baseline results](bench/results/2026-10-30-baselines/results.json) cover
+the same candidates:
+
+| Method | Faulty BLOCK / total | Safe BLOCK / total | Model calls |
+|---|---:|---:|---:|
+| Base tests run on head in Docker (A) | 1 / 16 | 3 / 12 | 0 |
+| One-shot Spark opinion (B) | 16 / 16 | 0 / 12 | 28 |
+| ProofMerge ([run 3](bench/results/2026-10-30-run3)) | 14 / 16 | 1 / 12 | 121 |
+
+Baseline B scored every candidate correctly, so this bench does not separate
+the approaches on accuracy. ProofMerge's difference is evidence: a BLOCK is
+backed by a Spark-written probe that passes on base 3/3 and fails on head 3/3,
+recorded and replayable with `proofmerge replay`. Baseline B gives an
+unverifiable opinion with no repro. See [the detailed results](bench/results/README.md)
+and [baseline bundles](bench/results/2026-10-30-baselines).
+
+History: [run 2](bench/results/2026-10-29-run2) followed rule changes and was
+not a clean held-out evaluation.
 
 ## Install
 
@@ -258,7 +273,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested offline; not yet run on GitHub |
-| Benchmark runner and two recorded runs | Built; results above |
+| Benchmark runner, three recorded runs and two baselines | Built; results above |
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | PASS strength (how hard ProofMerge looked) | Planned |
 

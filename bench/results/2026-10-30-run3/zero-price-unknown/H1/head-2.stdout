@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________________ test_unknown_tenant_raises __________________________
+
+    def test_unknown_tenant_raises():
+>       with pytest.raises(ValueError, match="Unknown tenant"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+../probes/test_h1.py:5: Failed
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_unknown_tenant_raises - Failed: DID NOT RAI...
+1 failed in 0.01s

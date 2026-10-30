@@ -1,0 +1,444 @@
+{
+  "metadata": {
+    "git_sha": "5df3735d1de66590e00859b21af858eb5baaa3eb",
+    "hypotheses_sha256": "7b7bde5be0de5a370da585ee767be267034ca79b9a0c4aec86788e480ba04309",
+    "intent_sha256": "f7bf2487dbd57ec5a8e5229e4fdf4a021c3894e1822b3d8fbe79d521f58d8cf8",
+    "spark_model": "muse-spark-1.3",
+    "date": "2026-10-30T10:04:28.533565+00:00"
+  },
+  "candidates": {
+    "boundary-qty-inclusive": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3443,
+        "completion": 4900
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/boundary-qty-inclusive"
+    },
+    "drop-tenant-validation": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H3 needs review because its probe may not test its hypothesis.",
+        "H1 is a verified regression against uncontested PRESERVE claim C2 with intent present.",
+        "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 7,
+      "tokens": {
+        "prompt": 6971,
+        "completion": 11926
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/drop-tenant-validation"
+    },
+    "round-discount": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3642,
+        "completion": 9687
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/round-discount"
+    },
+    "mutate-stock": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3773,
+        "completion": 5055
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/mutate-stock"
+    },
+    "skip-boundary-test": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present.",
+        "Changed test tests/test_pricing.py fails on head and the contract has no CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head and the contract has no CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head and the contract has no CHANGE claim."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4097,
+        "completion": 11750
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/skip-boundary-test"
+    },
+    "price-error-type": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3587,
+        "completion": 4993
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/price-error-type"
+    },
+    "ledger-mutation-order": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 5346,
+        "completion": 5990
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/ledger-mutation-order"
+    },
+    "order-total-off-by-one": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4060,
+        "completion": 4819
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/order-total-off-by-one"
+    },
+    "line-totals-generator": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H3 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 6,
+      "tokens": {
+        "prompt": 7071,
+        "completion": 7253
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/line-totals-generator"
+    },
+    "promo-rule-order": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4115,
+        "completion": 4646
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/promo-rule-order"
+    },
+    "zero-price-unknown": {
+      "label": "BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H2 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 6,
+      "tokens": {
+        "prompt": 5307,
+        "completion": 7862
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/zero-price-unknown"
+    },
+    "default-shipping-express": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because its probe may not test its hypothesis."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3932,
+        "completion": 5866
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/default-shipping-express"
+    },
+    "pure-refactor-constants": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 1955,
+        "completion": 1535
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/pure-refactor-constants"
+    },
+    "intended-discount-rate": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "Changed test tests/test_pricing.py fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_pricing.py::test_bulk_discount_above_threshold fails on head but needs review because the contract has a CHANGE claim."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 2060,
+        "completion": 2006
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/intended-discount-rate"
+    },
+    "cache-with-tenant-key": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 was not tested: Stale cached price after price table update.",
+        "H2 was not tested: Removed tenant still returns cached price."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4764,
+        "completion": 6652
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/cache-with-tenant-key"
+    },
+    "extract-inventory-validation": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 2,
+      "tokens": {
+        "prompt": 1751,
+        "completion": 1828
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/extract-inventory-validation"
+    },
+    "comprehension-line-totals": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 2,
+      "tokens": {
+        "prompt": 1603,
+        "completion": 2079
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/comprehension-line-totals"
+    },
+    "intended-express-fee": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "REVIEW",
+      "reasons": [
+        "Changed test tests/test_orders.py fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_orders.py::test_order_total_express_with_cancelled_last_line fails on head but needs review because the contract has a CHANGE claim."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 2050,
+        "completion": 1924
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/intended-express-fee"
+    },
+    "single-lookup-pricing": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 was not tested: None-valued price treated as unknown SKU."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3271,
+        "completion": 5894
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/single-lookup-pricing"
+    },
+    "newsletter-promo-fix": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "Changed test tests/test_orders.py needs review because its outcome is PASS."
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 4495,
+        "completion": 7646
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/newsletter-promo-fix"
+    },
+    "coupon-lookup-exact": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H2 needs review because its probe may not test its hypothesis.",
+        "H3 needs review because its probe may not test its hypothesis.",
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present.",
+        "H3 needs review because its classification is INCONCLUSIVE."
+      ],
+      "model_calls": 7,
+      "tokens": {
+        "prompt": 7268,
+        "completion": 10795
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/coupon-lookup-exact"
+    },
+    "sku-list-order": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3674,
+        "completion": 4274
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/sku-list-order"
+    },
+    "cart-line-merge": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "BLOCK",
+      "reasons": [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3762,
+        "completion": 3164
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/cart-line-merge"
+    },
+    "item-filter-stop": {
+      "label": "BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 needs review because C1 is a CHANGE claim, C1 is contested.",
+        "model reply did not match CheckedProbes (1 errors)"
+      ],
+      "model_calls": 5,
+      "tokens": {
+        "prompt": 3924,
+        "completion": 13678
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/item-filter-stop"
+    },
+    "extract-line-total": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 2,
+      "tokens": {
+        "prompt": 1726,
+        "completion": 974
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/extract-line-total"
+    },
+    "precompute-tenant-skus": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "H1 was not tested: tenant_skus misses SKUs added after import."
+      ],
+      "model_calls": 4,
+      "tokens": {
+        "prompt": 3607,
+        "completion": 6462
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/precompute-tenant-skus"
+    },
+    "intended-free-shipping-threshold": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "REVIEW",
+      "reasons": [
+        "Changed test tests/test_cart.py fails on head but needs review because the contract has a CHANGE claim.",
+        "Changed test tests/test_cart.py::test_qualifies_free_shipping_at_threshold fails on head but needs review because the contract has a CHANGE claim."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 2002,
+        "completion": 1958
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/intended-free-shipping-threshold"
+    },
+    "release-stock-guard": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "decision": "PASS",
+      "reasons": [
+        "No regression was found within the tested scope."
+      ],
+      "model_calls": 3,
+      "tokens": {
+        "prompt": 1912,
+        "completion": 2911
+      },
+      "evidence_dir": "/tmp/proofmerge-bench/2026-10-30-run3/release-stock-guard"
+    }
+  },
+  "summary": {
+    "non_held_out": {
+      "faulty_BLOCK": 8,
+      "faulty_REVIEW": 0,
+      "faulty_PASS": 0,
+      "faulty_ERROR": 0,
+      "safe_BLOCK": 1,
+      "safe_REVIEW": 2,
+      "safe_PASS": 2,
+      "safe_ERROR": 0
+    },
+    "held_out": {
+      "faulty_BLOCK": 6,
+      "faulty_REVIEW": 2,
+      "faulty_PASS": 0,
+      "faulty_ERROR": 0,
+      "safe_BLOCK": 0,
+      "safe_REVIEW": 4,
+      "safe_PASS": 3,
+      "safe_ERROR": 0
+    }
+  }
+}

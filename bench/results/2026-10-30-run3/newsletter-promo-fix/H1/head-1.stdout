@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_subscribed_customer_gets_news_promotion _________________
+
+    def test_subscribed_customer_gets_news_promotion():
+>       assert promo_for({"subscribed": True}) == "news-5"
+E       AssertionError: assert 'none' == 'news-5'
+E         
+E         - news-5
+E         + none
+
+../probes/test_h1.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_subscribed_customer_gets_news_promotion - A...
+1 failed in 0.01s

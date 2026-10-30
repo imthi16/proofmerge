@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________________ test_line_totals_reusable ___________________________
+
+    def test_line_totals_reusable():
+        items = [{"qty": 2, "price": 10.0}, {"qty": 1, "price": 5.0}]
+        result = line_totals(items)
+        assert list(result) == [20.0, 5.0]
+>       assert list(result) == [20.0, 5.0]
+E       assert [] == [20.0, 5.0]
+E         
+E         Right contains 2 more items, first extra item: 20.0
+E         Use -v to get more diff
+
+../probes/test_h2.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_line_totals_reusable - assert [] == [20.0, ...
+1 failed in 0.01s

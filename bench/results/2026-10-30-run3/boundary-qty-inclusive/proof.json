@@ -1,0 +1,198 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "boundary-qty-inclusive",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "9095a3baf9b98da52f9743edff73ec793f4b1ba2",
+  "diff_sha256": "57df868479870a62662400f1eb4c402fa1a9a653ab51e9b8ca65561ff8b1d885",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "Exact-quantity reservation rejected",
+        "changed_locations": [
+          "src/demo_shop/inventory.py::reserve"
+        ],
+        "suspected_behavior": "Reserving exactly the available quantity (e.g., stock={'WIDGET':5}, qty=5) is rejected on head but was allowed on base due to >= vs >.",
+        "expected_base": "No ValueError; reserve({'WIDGET': 5}, 'WIDGET', 5) succeeds",
+        "expected_head": "Raises ValueError: Insufficient stock for WIDGET: requested 5, available 5",
+        "test_intent": "Call reserve({'WIDGET':5}, 'WIDGET', 5) on base and head; assert base does not raise Insufficient stock while head raises ValueError.",
+        "risk_category": "boundary",
+        "falsification_criteria": "Hypothesis is wrong if head does not raise for qty == available, or if base also raises for qty == available.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "b86bc43f1a0f92d1c49b07cb1122cd920cb41937cd74c50a5948c65bb437bcf5",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 504,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "9095a3baf9b98da52f9743edff73ec793f4b1ba2",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 503,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "9095a3baf9b98da52f9743edff73ec793f4b1ba2",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 504,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "9095a3baf9b98da52f9743edff73ec793f4b1ba2",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 503,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-30-run3/boundary-qty-inclusive/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 4,
+    "prompt_tokens": 3443,
+    "completion_tokens": 4900
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

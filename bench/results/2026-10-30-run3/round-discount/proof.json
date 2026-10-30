@@ -1,0 +1,204 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "round-discount",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "174fbc4c361b6cac77dd2a532f909911bc38c43c",
+  "diff_sha256": "81f493468abc68c92e8e976a4e1b2678704c5fc6cb0e5b8503b3d751d13bc336",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "PRESERVE",
+        "statement": "The bulk discount helper produces the same results as before the cleanup.",
+        "source_quote": "Same results as before."
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C1",
+        "title": "round() truncates fractional discounted total",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::bulk_discount"
+        ],
+        "suspected_behavior": "For total=105.0, base returns 105*0.9=94.5 but head applies round() and returns 94, losing cents.",
+        "expected_base": "94.5 (float)",
+        "expected_head": "94 (int, rounded)",
+        "test_intent": "Call bulk_discount(105.0) and check result equals 94.5; base passes, head returns 94 and fails.",
+        "risk_category": "arithmetic",
+        "falsification_criteria": "Hypothesis is wrong if bulk_discount(105.0) returns the same value (94.5) on both base and head.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "4441d5c8dfc8c9cb7fd8a756ee10e9111dd527b33305d448275a5ef4fd0622a9",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 504,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "174fbc4c361b6cac77dd2a532f909911bc38c43c",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 503,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "174fbc4c361b6cac77dd2a532f909911bc38c43c",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 505,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "174fbc4c361b6cac77dd2a532f909911bc38c43c",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 505,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C1",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-bench/2026-10-30-run3/round-discount/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 is a verified regression against uncontested PRESERVE claim C1 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 5,
+    "prompt_tokens": 3642,
+    "completion_tokens": 9687
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

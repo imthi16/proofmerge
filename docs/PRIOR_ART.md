@@ -259,8 +259,8 @@ the description is **unverified**.
 ## What ProofMerge adds
 
 No single part below is claimed as new. The contribution is the combination, built for
-AI-agent pull requests. Status on 2026-10-29: items 1 to 4 are built (hash-checking replay and
-`proofmerge replay --rerun`); item 5 has a first recorded run in `bench/results/`, with no baseline comparison yet.
+AI-agent pull requests. Status on 2026-10-30: items 1 to 4 are built (hash-checking replay and
+`proofmerge replay --rerun`); item 5 includes a [baseline comparison](../bench/results/2026-10-30-baselines/results.json).
 
 1. An explicit intent contract whose claims must quote the PR text exactly, checked by
    code and shown in the report.
@@ -269,7 +269,7 @@ AI-agent pull requests. Status on 2026-10-29: items 1 to 4 are built (hash-check
 3. A deterministic verdict that says REVIEW instead of guessing, where a model can only
    lower confidence.
 4. A replayable evidence bundle: commands, exit codes, commit SHAs and file hashes.
-5. Real benchmark numbers against simple baselines.
+5. Real benchmark numbers against simple baselines ([results](../bench/results/2026-10-30-baselines/results.json)).
 
 ## Not covered here
 

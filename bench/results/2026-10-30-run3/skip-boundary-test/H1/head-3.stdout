@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_bulk_discount_at_threshold ________________________
+
+    def test_bulk_discount_at_threshold():
+>       assert bulk_discount(100) == 90.0
+E       assert 100 == 90.0
+E        +  where 100 = bulk_discount(100)
+
+../probes/test_h1.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_bulk_discount_at_threshold - assert 100 == ...
+1 failed in 0.01s

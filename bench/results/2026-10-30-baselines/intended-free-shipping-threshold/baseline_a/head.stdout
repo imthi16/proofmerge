@@ -1,0 +1,13 @@
+.....F.................                                                  [100%]
+=================================== FAILURES ===================================
+__________________ test_qualifies_free_shipping_at_threshold ___________________
+
+    def test_qualifies_free_shipping_at_threshold():
+>       assert qualifies_free_shipping(100) is True
+E       assert False is True
+E        +  where False = qualifies_free_shipping(100)
+
+../probes/tests/test_cart.py:34: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/tests/test_cart.py::test_qualifies_free_shipping_at_threshold
+1 failed, 22 passed in 0.03s

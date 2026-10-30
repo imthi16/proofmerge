@@ -1,0 +1,194 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "intended-free-shipping-threshold",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "d8699995a0b823349ef27a1bcbea04459b2c8c91",
+  "diff_sha256": "b4a4a23b6984a8a740866fa05ddc5f47c7af27ad0ebd5f930565ced9d494a62a",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Free shipping is granted when the order total reaches 150 instead of 100.",
+        "source_quote": "Raise the free-shipping threshold from 100 to 150"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "T1",
+      "test_source_path": "probes/test_t1.py",
+      "test_source_sha256": "851603d26c9303fa86dbb512e92def645a4db55b0c16cca5621839805c50b057",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "stdout_path": "T1/base-1.stdout",
+          "stderr_path": "T1/base-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 505,
+          "stdout_path": "T1/base-2.stdout",
+          "stderr_path": "T1/base-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 504,
+          "stdout_path": "T1/base-3.stdout",
+          "stderr_path": "T1/base-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d8699995a0b823349ef27a1bcbea04459b2c8c91",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 503,
+          "stdout_path": "T1/head-1.stdout",
+          "stderr_path": "T1/head-1.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d8699995a0b823349ef27a1bcbea04459b2c8c91",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 604,
+          "stdout_path": "T1/head-2.stdout",
+          "stderr_path": "T1/head-2.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "d8699995a0b823349ef27a1bcbea04459b2c8c91",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 504,
+          "stdout_path": "T1/head-3.stdout",
+          "stderr_path": "T1/head-3.stderr",
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "tamper_findings": [
+    {
+      "test_path": "tests/test_cart.py",
+      "test_name": null,
+      "kind": "MODIFIED",
+      "base_test_on_head_outcome": "FAIL"
+    },
+    {
+      "test_path": "tests/test_cart.py",
+      "test_name": "test_qualifies_free_shipping_at_threshold",
+      "kind": "MODIFIED",
+      "base_test_on_head_outcome": "FAIL"
+    }
+  ],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "Changed test tests/test_cart.py fails on head but needs review because the contract has a CHANGE claim.",
+      "Changed test tests/test_cart.py::test_qualifies_free_shipping_at_threshold fails on head but needs review because the contract has a CHANGE claim."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 2002,
+    "completion_tokens": 1958
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

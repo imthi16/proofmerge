@@ -18,5 +18,13 @@
   "comprehension-line-totals": {"verdict": "NOT_BLOCK"},
   "intended-express-fee": {"verdict": "NOT_BLOCK"},
   "single-lookup-pricing": {"verdict": "NOT_BLOCK", "held_out": true},
-  "newsletter-promo-fix": {"verdict": "NOT_BLOCK"}
+  "newsletter-promo-fix": {"verdict": "NOT_BLOCK"},
+  "coupon-lookup-exact": {"verdict": "BLOCK", "held_out": true},
+  "sku-list-order": {"verdict": "BLOCK", "held_out": true},
+  "cart-line-merge": {"verdict": "BLOCK", "held_out": true},
+  "item-filter-stop": {"verdict": "BLOCK", "held_out": true},
+  "extract-line-total": {"verdict": "NOT_BLOCK", "held_out": true},
+  "precompute-tenant-skus": {"verdict": "NOT_BLOCK", "held_out": true},
+  "intended-free-shipping-threshold": {"verdict": "NOT_BLOCK", "held_out": true},
+  "release-stock-guard": {"verdict": "NOT_BLOCK", "held_out": true}
 }

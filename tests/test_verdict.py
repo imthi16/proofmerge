@@ -236,8 +236,9 @@ def test_demo_test_tamper_blocks():
     assert result.decision == "BLOCK"
 
 
-def test_demo_intended_change_needs_review():
-    result = decide(contract("CHANGE"), [], [], [tamper()])
+@pytest.mark.parametrize("wonder_checked", [False, True])
+def test_demo_intended_change_needs_review(wonder_checked):
+    result = decide(contract("CHANGE"), [], [], [tamper()], wonder_checked=wonder_checked)
     assert result.decision == "REVIEW"
 
 
@@ -263,8 +264,10 @@ def test_mismatched_probe_does_not_remove_another_block(other_evidence):
 
 
 def test_wonder_agreement_cannot_promote_change_claim_to_block():
-    result = decide(contract("CHANGE"), [], [finding()], [], mismatched_probe_ids=frozenset())
+    result = decide(contract("CHANGE"), [], [finding()], [], wonder_checked=True,
+                    explained_probe_claim_ids={"H1": "C2"})
     assert result.decision == "REVIEW"
+    assert result.reasons == ["H1 may be the intended change C2."]
 
 
 @pytest.mark.parametrize("classification, verified", [
@@ -323,3 +326,66 @@ def test_explanation_cannot_turn_inconclusive_evidence_into_block_or_pass():
     result = decide(contract(), [], [finding(classification="INCONCLUSIVE", verified=False)], [],
                     explained_probe_ids=frozenset({"H1"}))
     assert result.decision == "REVIEW"
+
+
+@pytest.mark.parametrize("change_id", [None, "C0", "C99"])
+def test_checked_change_requires_a_change_claim_explanation(change_id):
+    result = decide(
+        contract("CHANGE"), [], [finding()], [], wonder_checked=True,
+        explained_probe_ids=frozenset({"H1"}) if change_id else frozenset(),
+        explained_probe_claim_ids={"H1": change_id} if change_id else {},
+    )
+    assert result.decision == "BLOCK"
+    assert result.reasons == [
+        "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ]
+
+
+def test_checked_change_explained_by_another_change_claim_is_review():
+    intent = contract("CHANGE")
+    intent.claims.append(intent.claims[1].model_copy(update={"id": "C3"}))
+    result = decide(
+        intent, [], [finding()], [], wonder_checked=True,
+        explained_probe_ids=frozenset({"H1"}), explained_probe_claim_ids={"H1": "C3"},
+    )
+    assert result.decision == "REVIEW"
+    assert result.reasons == ["H1 may be the intended change C3."]
+
+
+@pytest.mark.parametrize("wonder_checked", [False, True])
+@pytest.mark.parametrize("qualification", ["contested", "mismatched", "no intent", "unverified"])
+def test_unexplained_change_keeps_other_review_qualifications(wonder_checked, qualification):
+    result = decide(
+        contract("CHANGE"), [], [finding(verified=qualification != "unverified")], [],
+        wonder_checked=wonder_checked,
+        contested_claim_ids=frozenset({"C2"}) if qualification == "contested" else frozenset(),
+        mismatched_probe_ids=frozenset({"H1"}) if qualification == "mismatched" else frozenset(),
+        intent_given=qualification != "no intent",
+    )
+    assert result.decision == "REVIEW"
+
+
+@pytest.mark.parametrize("classification", [
+    "NO_DIFFERENCE", "INCONCLUSIVE", "EXISTING_FAILURE", "POSSIBLE_FIX",
+])
+def test_checked_change_without_regression_cannot_block(classification):
+    result = decide(
+        contract("CHANGE"), [], [finding(classification=classification, verified=False)], [],
+        wonder_checked=True,
+    )
+    assert result.decision == ("PASS" if classification == "NO_DIFFERENCE" else "REVIEW")
+
+
+def test_unchecked_change_keeps_legacy_review_default():
+    result = decide(contract("CHANGE"), [], [finding()], [])
+    assert result.decision == "REVIEW"
+    assert result.reasons == ["H1 needs review because C2 is a CHANGE claim."]
+
+
+def test_same_change_explanation_does_not_remove_another_block():
+    result = decide(
+        contract("CHANGE"), [], [finding(), finding("C0", hypothesis_id="H2")], [],
+        wonder_checked=True, explained_probe_claim_ids={"H1": "C2"},
+    )
+    assert result.decision == "BLOCK"
+    assert "H1 may be the intended change C2." in result.reasons

@@ -235,6 +235,20 @@ jobs:
           python-version: '3.13'
 ```
 
+### In your coding agent
+
+[skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill
+that tells a coding agent to run `proofmerge verify` on its own branch before it
+calls a change done, and to report the verdict without softening it. For Claude
+Code:
+
+```bash
+cp -r skills/proofmerge ~/.claude/skills/
+```
+
+Other agents that read the Agent Skills format take the same folder in their
+own skills directory.
+
 ### Working on ProofMerge itself
 
 ```bash
@@ -261,6 +275,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Benchmark runner and two recorded runs | Built; results above |
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | PASS strength (how hard ProofMerge looked) | Planned |
+| Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in
 [BUILDLOG.md](BUILDLOG.md).
@@ -275,8 +290,12 @@ Each row has a dated entry with its real check results in
 - Hashes show that a file changed after the run. They are not signatures and
   don't prove who produced the evidence.
 - A model can still guess wrong. Spark may cite a different claim from one run
-  to the next, which can change a verdict between BLOCK and REVIEW. Both runs in
-  `bench/results/` show this.
+  to the next, which can change a verdict between BLOCK and REVIEW. The recorded
+  runs in `bench/results/` show this.
+- ProofMerge calls Meta's Muse Spark 1.3 and Muse Wonder 1.0 only, through the
+  Meta API. Other model providers are not supported, and the benchmark numbers
+  hold for these two models only. The coding agent that runs the skill can use
+  any model.
 
 > [!WARNING]
 > ProofMerge makes no safety promise for running untrusted external code.
@@ -306,7 +325,7 @@ src/proofmerge/
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth
-bench/           twenty benchmark PRs, ground truth, runner and results
+bench/           28 benchmark PRs, ground truth, runner and results
 action.yml       the GitHub Action
 docs/            spec, plan, Meta API notes, prior art, Action guide
 BUILDLOG.md      what was actually built, and when

@@ -494,3 +494,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `498 passed in 52.28s`.
 - `../proofmerge-T3/.venv/bin/ruff check src tests bench`: `Found 84 errors.` All 84 affected files are byte-identical to HEAD (existing import-order, SIM114 and BLE001 findings). `ruff check bench/run_baselines.py tests/test_run_baselines.py`: `All checks passed!`. These unrelated files were left unchanged.
 - Real Docker run, `--skip-model --out /tmp/proofmerge-bench/baseline-a-check`: 20 candidates, zero model calls, zero runner errors. Non-held-out faulty: 1 BLOCK / 7 NOT_BLOCK; held-out faulty: 0 BLOCK / 4 NOT_BLOCK. Non-held-out safe: 2 BLOCK / 3 NOT_BLOCK; held-out safe: 0 BLOCK / 3 NOT_BLOCK. The safe blocks are intended-discount-rate and intended-express-fee: original tests reject their intended changes. Output is retained outside the repository. No real model review was run.
+
+### 2026-10-30 — T48 Agent Skill
+- Added `skills/proofmerge/SKILL.md`, an Agent Skill that tells a coding agent to commit its change, write the intent before it sees a verdict, run `proofmerge verify`, and report PASS / REVIEW / BLOCK as ProofMerge states it. It forbids editing tests, probes, intent or evidence to change a verdict, and caps fix attempts at two before handing back to the user.
+- `tests/test_skill.py` checks the frontmatter, that every `proofmerge` command and option the skill names exists in the CLI, and that its call budget (19) matches `verify`.
+- README: install line for Claude Code and a "What works today" row. Not yet used by an agent on a real task.
+- `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `530 passed`. `ruff check src tests`: all checks passed.

@@ -302,10 +302,38 @@ def test_config_docker_argv_has_isolation_and_mount_and_env(monkeypatch, tmp_pat
         (126, b"", b"", "ERROR"),
         (127, b"", b"", "ERROR"),
         (137, b"", b"", "ERROR"),
+        (sandbox.OUTPUT_LIMIT_EXIT, b"--- FAIL: TestProofMergeProbe", b"", "ERROR"),
     ],
 )
 def test_outcome_for_config_mapping(exit_code, stdout, stderr, expected):
     assert outcome_for_config(exit_code, CONFIG, stdout, stderr) == expected
+
+
+def test_run_config_experiment_runs_the_recorded_image_id(repo, tmp_path):
+    path, base, head = repo
+    images = []
+
+    def runner(config, code_dir, probe_source, timeout):
+        images.append(config.image)
+        return 0, b"", b""
+
+    experiment = sandbox.run_config_experiment(
+        path, base, head, "H1", "package pricing\n", CONFIG, tmp_path / "ev",
+        runner=runner, digest="sha256:abc", attempts=1,
+    )
+    assert images == ["sha256:abc", "sha256:abc"]
+    assert {e.runner_image_digest for e in experiment.executions} == {"sha256:abc"}
+
+
+def test_open_to_runner_keeps_executable_bits(tmp_path):
+    script, data = tmp_path / "gradlew", tmp_path / "data.txt"
+    script.write_text("#!/bin/sh\n")
+    data.write_text("x")
+    script.chmod(0o700)
+    data.chmod(0o600)
+    sandbox.open_to_runner(tmp_path)
+    assert script.stat().st_mode & 0o777 == 0o755
+    assert data.stat().st_mode & 0o777 == 0o644
 
 
 def test_outcome_for_config_timeout():

@@ -91,7 +91,9 @@ def open_to_runner(root: Path) -> None:
     for path in [root, *root.rglob("*")]:
         if path.is_symlink():
             continue  # chmod would follow it; the data filter keeps links inside the tree
-        path.chmod(0o755 if path.is_dir() else 0o644)
+        # Keep git's executable bit so a repo script (./gradlew) can still run.
+        executable = path.is_dir() or path.stat().st_mode & 0o100
+        path.chmod(0o755 if executable else 0o644)
 
 
 def outcome_for(exit_code: int | None) -> Outcome:
@@ -290,7 +292,7 @@ def outcome_for_config(
         return "TIMEOUT"
     if exit_code in config.pass_exit_codes:
         return "PASS"
-    if is_runner_failure(exit_code):
+    if is_runner_failure(exit_code) or exit_code == OUTPUT_LIMIT_EXIT:
         return "ERROR"
     combined = (stdout + stderr).decode(errors="replace")
     if re.search(config.assertion_failure, combined):
@@ -386,6 +388,8 @@ def run_config_experiment(
         raise SandboxError(f"bad hypothesis id: {hypothesis_id!r}")
     if digest is None:
         digest = image_digest(config.image)
+    # Run the image ID that is recorded, not a tag that could be retagged mid-run.
+    pinned = config.model_copy(update={"image": digest})
     evidence_dir = evidence_dir.resolve()
     suffix = Path(config.probe_path).suffix or ""
     probe_name = f"test_{hypothesis_id.lower()}{suffix}"
@@ -406,7 +410,7 @@ def run_config_experiment(
             open_to_runner(code_dir)
             for attempt in range(1, attempts + 1):
                 start = time.monotonic()
-                exit_code, stdout, stderr = runner(config, code_dir, probe_source, timeout)
+                exit_code, stdout, stderr = runner(pinned, code_dir, probe_source, timeout)
                 duration_ms = round((time.monotonic() - start) * 1000)
                 stem = f"{revision}-{attempt}"
                 (log_dir / f"{stem}.stdout").write_bytes(stdout)

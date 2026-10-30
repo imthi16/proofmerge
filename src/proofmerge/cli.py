@@ -211,12 +211,11 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
             raise ValueError(f"repository {repo} lacks recorded commit {sha} (or is not readable)")
     if not proof.experiments:
         raise ValueError("no recorded experiments to re-run")
-    config = None
-    if proof.language != "python":
-        # Same rule as verify: the test setup comes from the recorded base commit.
-        config = load_config(repo, proof.base_sha)
-        if config is None or config.language != proof.language:
-            raise ValueError(f"{repo} has no .proofmerge.toml for {proof.language} at the base commit")
+    # Same rule as verify: the test setup comes from the recorded base commit, and a
+    # config there means verify used the config runner, whatever its language.
+    config = load_config(repo, proof.base_sha)
+    if (config.language if config else "python") != proof.language:
+        raise ValueError(f"{repo} has no .proofmerge.toml for {proof.language} at the base commit")
     seen = set()
     for experiment in proof.experiments:
         identifier = experiment.hypothesis_id

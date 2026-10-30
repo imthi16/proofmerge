@@ -341,11 +341,12 @@ def test_docker_demo_proof_reproduces(demo_repo, tmp_path, monkeypatch):
     assert snapshot(evidence) == before
 
 
-def test_config_language_reruns_with_base_config(bundle, monkeypatch):
+@pytest.mark.parametrize("language", ["go", "python"])
+def test_config_language_reruns_with_base_config(bundle, monkeypatch, language):
     path, repo, proof = bundle
     git(repo, "checkout", "-q", proof.base_sha)
     (repo / ".proofmerge.toml").write_text(
-        'language = "go"\nimage = "golang:1.23-alpine"\nprobe_path = "p_test.go"\n'
+        'language = "' + language + '"\nimage = "golang:1.23-alpine"\nprobe_path = "p_test.go"\n'
         'test_command = ["go", "test"]\nassertion_failure = "--- FAIL"\n'
     )
     git(repo, "add", ".proofmerge.toml")
@@ -363,7 +364,7 @@ def test_config_language_reruns_with_base_config(bundle, monkeypatch):
     monkeypatch.setattr(cli, "run_experiment", lambda *a, **k: pytest.fail("pytest runner used"))
 
     def to_config_base(data):
-        data.update(language="go", base_sha=base)
+        data.update(language=language, base_sha=base)
         for experiment in data["experiments"]:
             for execution in experiment["executions"]:
                 if execution["revision"] == "base":
@@ -372,7 +373,7 @@ def test_config_language_reruns_with_base_config(bundle, monkeypatch):
     rewrite(path, to_config_base)
     result = invoke(path, repo)
     assert result.exit_code == 0, result.output
-    assert seen and all(entry == (base, "go") for entry in seen)
+    assert seen and all(entry == (base, language) for entry in seen)
 
 
 def test_config_language_without_base_config_fails(bundle, monkeypatch):

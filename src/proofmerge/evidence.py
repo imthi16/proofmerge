@@ -88,6 +88,7 @@ class Proof(BaseModel):
     base_sha: str
     head_sha: str
     diff_sha256: str
+    language: str = "python"  # default keeps older proofs valid
     intent: IntentContract
     hypotheses: HypothesisSet
     experiments: list[Experiment]

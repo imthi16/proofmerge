@@ -11,6 +11,7 @@ from proofmerge.intent import C0, IntentContract, extract_intent
 from proofmerge.manifest import write_manifest
 from proofmerge.meta import SPARK_MODEL, WONDER_MODEL, MetaClient, MetaError
 from proofmerge.probes import probe_hypotheses
+from proofmerge.project_config import ProjectConfig, load_config
 from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
 from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
@@ -28,10 +29,13 @@ def run_verify(
     *,
     runner: Runner = docker_runner,
     digest: str | None = None,
+    config: ProjectConfig | None = None,
 ) -> Proof:
     """Resolve context, collect evidence, adjudicate, then seal the bundle last."""
     context = get_context(repo, base, head)
     check_diff(context)
+    if config is None:
+        config = load_config(repo, context.base_sha)
     evidence_dir.mkdir(parents=True)
     errors: list[str] = []
     contract = IntentContract(claims=[C0], rejected=[])
@@ -45,10 +49,10 @@ def run_verify(
         errors.append(str(error))
     if intent_established:
         try:
-            found = generate_hypotheses(context, contract, client)
+            found = generate_hypotheses(context, contract, client, config=config)
             probes, experiments = probe_hypotheses(
                 repo, context, contract, found.hypotheses, client, evidence_dir,
-                runner=runner, digest=digest,
+                config=config, runner=runner, digest=digest,
             )
         except (MetaError, SandboxError, OSError, ValueError) as error:
             done = getattr(error, "completed", None)
@@ -73,17 +77,18 @@ def run_verify(
         errors.append(str(error))
 
     tamper, tamper_experiments = [], []
-    try:
-        tamper = find_tamper(repo, context)
-        tamper, tamper_experiments = run_base_tests_on_head(
-            repo, context, tamper, evidence_dir, runner=runner, digest=digest
-        )
-    except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
-        done = getattr(error, "completed", None)
-        if isinstance(done, dict):
-            tamper = done.get("tamper", tamper)
-            tamper_experiments = done.get("experiments", tamper_experiments)
-        errors.append(str(error))
+    if config is None:
+        try:
+            tamper = find_tamper(repo, context)
+            tamper, tamper_experiments = run_base_tests_on_head(
+                repo, context, tamper, evidence_dir, runner=runner, digest=digest
+            )
+        except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
+            done = getattr(error, "completed", None)
+            if isinstance(done, dict):
+                tamper = done.get("tamper", tamper)
+                tamper_experiments = done.get("experiments", tamper_experiments)
+            errors.append(str(error))
 
     findings = findings_for(
         experiments, found.hypotheses, probes, proof_path=str(evidence_dir / "proof.json")
@@ -98,6 +103,11 @@ def run_verify(
         explained_probe_claim_ids=explained_probe_claim_ids,
         wonder_checked=wonder_checked,
     )
+    if config is not None:
+        verdict.scope_limitations.append(
+            f"Test-tamper guard is not available for {config.language}; "
+            "changed tests were not re-run."
+        )
     usage = [u for u in client.usage if u is not None]
     proof = Proof(
         proofmerge_version=__version__,
@@ -105,6 +115,7 @@ def run_verify(
         base_sha=context.base_sha,
         head_sha=context.head_sha,
         diff_sha256=context.diff_sha256,
+        language=config.language if config is not None else "python",
         intent=contract,
         hypotheses=found,
         experiments=experiments + tamper_experiments,

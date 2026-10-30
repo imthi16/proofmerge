@@ -13,12 +13,13 @@ from typer.testing import CliRunner
 
 from proofmerge import __version__, cli, pipeline
 from proofmerge.context import ContextError
-from proofmerge.evidence import ModelUsage, Proof, TamperFinding
-from proofmerge.hypotheses import MAX_DIFF_CHARS, MAX_HYPOTHESES
+from proofmerge.evidence import Execution, Experiment, ModelUsage, Proof, TamperFinding
+from proofmerge.hypotheses import MAX_DIFF_CHARS, MAX_HYPOTHESES, Hypothesis, HypothesisSet
 from proofmerge.manifest import verify_manifest, write_manifest
 from proofmerge.meta import WONDER_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS
+from proofmerge.project_config import ProjectConfig, load_config
 from proofmerge.sandbox import SandboxError
 from proofmerge.tamper import TamperError
 
@@ -673,3 +674,100 @@ def test_change_citation_uses_successful_probe_check_after_claim_check_error(tmp
     error = "scripted API unavailable" if failure == "api" else "model reply did not match"
     assert any(error in reason for reason in proof.verdict.reasons)
     assert_bundle(proof, evidence)
+
+
+GO_CONFIG_TOML = """language = "go"
+image = "golang:1.23-alpine"
+probe_path = "pricing/proofmerge_probe_test.go"
+test_command = ["go", "test", "-count=1", "-run", "TestProofMergeProbe", "./pricing"]
+assertion_failure = "FAIL: TestProofMergeProbe"
+
+[env]
+GOCACHE = "/tmp/gocache"
+HOME = "/tmp"
+"""
+
+
+def make_config_repo(tmp_path: Path) -> tuple[Path, str, ProjectConfig]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@example.com")
+    git(repo, "config", "user.name", "t")
+    (repo / ".proofmerge.toml").write_text(GO_CONFIG_TOML, encoding="utf-8")
+    (repo / "calc.py").write_text("def double(x):\n    return x * 2\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    base = git(repo, "rev-parse", "HEAD")
+    (repo / "calc.py").write_text("def double(x):\n    return x + 2\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "head")
+    return repo, base, load_config(repo, base)
+
+
+def test_config_language_skips_tamper_and_adds_scope_limitation(tmp_path, monkeypatch):
+    repo, base, config = make_config_repo(tmp_path)
+    head = git(repo, "rev-parse", "HEAD")
+
+    probe_experiment = Experiment(
+        hypothesis_id="H1",
+        test_source_path="probes/test_h1.go",
+        test_source_sha256="0" * 64,
+        timeout_seconds=60,
+        executions=[
+            Execution(
+                revision=revision,
+                commit_sha=sha,
+                attempt=attempt,
+                command_argv=list(config.test_command),
+                exit_code=0 if revision == "base" else 1,
+                outcome="PASS" if revision == "base" else "FAIL",
+                duration_ms=1,
+                stdout_path=f"H1/{revision}-{attempt}.stdout",
+                stderr_path=f"H1/{revision}-{attempt}.stderr",
+                runner_image_digest="sha256:go",
+            )
+            for revision, sha in (("base", base), ("head", head))
+            for attempt in range(1, 4)
+        ],
+    )
+
+    h1 = Hypothesis(
+        id="H1",
+        claim_id="C0",
+        title="double changes",
+        changed_locations=["calc.py::double"],
+        suspected_behavior="double returns wrong value",
+        expected_base="double(3) == 6",
+        expected_head="double(3) == 5",
+        test_intent="call double(3)",
+        risk_category="arithmetic",
+        falsification_criteria="double(3) == 6 on head",
+        possibly_intended=False,
+    )
+    monkeypatch.setattr(
+        pipeline, "generate_hypotheses", lambda *a, **k: HypothesisSet(hypotheses=[h1], rejected=[])
+    )
+    from proofmerge.probes import Probe
+
+    monkeypatch.setattr(
+        pipeline,
+        "probe_hypotheses",
+        lambda *a, **k: (
+            [Probe(hypothesis_id="H1", test_source="x", drafts=1, passed_on_base=True)],
+            [probe_experiment],
+        ),
+    )
+    evidence = tmp_path / "ev"
+    proof = run_verify(
+        repo, base, head, None, evidence, MetaClient(Replies()), config=config
+    )
+    assert proof.language == "go"
+    assert proof.tamper_findings == []
+    assert any(
+        "Test-tamper guard is not available for go" in item
+        for item in proof.verdict.scope_limitations
+    )
+    assert [e.outcome for e in proof.experiments[0].executions] == ["PASS"] * 3 + ["FAIL"] * 3
+    assert Proof.model_validate_json((evidence / "proof.json").read_text()) == proof
+    assert proof.verdict.decision in (evidence / "report.html").read_text()

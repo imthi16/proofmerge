@@ -11,11 +11,14 @@ import pytest
 
 from proofmerge import sandbox
 from proofmerge.context import get_context
+from proofmerge.project_config import ProjectConfig
 from proofmerge.sandbox import (
     SandboxError,
+    config_docker_argv,
     export_tree,
     is_runner_failure,
     outcome_for,
+    outcome_for_config,
     run_experiment,
 )
 from proofmerge.tamper import find_tamper, run_base_tests_on_head
@@ -256,6 +259,85 @@ def test_run_experiment_without_head_runs_only_base(repo, tmp_path):
     )
     assert [e.revision for e in experiment.executions] == ["base"] * 3
     assert (tmp_path / "probes" / "conftest.py").read_text() == sandbox.OUTCOME_PLUGIN
+
+
+CONFIG = ProjectConfig(
+    language="go",
+    image="golang:1.23-alpine",
+    probe_path="pricing/proofmerge_probe_test.go",
+    test_command=["go", "test", "-count=1", "-run", "TestProofMergeProbe", "./pricing"],
+    assertion_failure="FAIL: TestProofMergeProbe",
+    env={"GOCACHE": "/tmp/gocache", "HOME": "/tmp"},
+    tmpfs_mb=512,
+)
+
+
+def test_config_docker_argv_has_isolation_and_mount_and_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROOFMERGE_JOB_ID", "job-42")
+    code_dir = tmp_path / "code"
+    code_dir.mkdir()
+    argv = config_docker_argv("test", CONFIG, code_dir)
+    assert argv[0:3] == ["docker", "run", "--rm"]
+    assert "--network" in argv and "none" in argv
+    assert "--read-only" in argv
+    assert "--tmpfs" in argv and "/tmp:rw,exec,size=512m" in argv
+    assert "--env" in argv
+    assert "GOCACHE=/tmp/gocache" in argv
+    assert "HOME=/tmp" in argv
+    assert "--label" in argv and "proofmerge.job=job-42" in argv
+    assert f"{code_dir}:/work:ro" in argv
+    assert "--workdir" in argv and "/work" in argv
+    assert "golang:1.23-alpine" in argv
+    assert CONFIG.test_command == argv[-len(CONFIG.test_command) :]
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "stdout", "stderr", "expected"),
+    [
+        (0, b"", b"", "PASS"),
+        (1, b"", b"--- FAIL: TestProofMergeProbe", "FAIL"),
+        (1, b"", b"something else", "ERROR"),
+        (2, b"", b"--- FAIL: TestProofMergeProbe", "FAIL"),
+        (125, b"", b"", "ERROR"),
+        (126, b"", b"", "ERROR"),
+        (127, b"", b"", "ERROR"),
+        (137, b"", b"", "ERROR"),
+        (sandbox.OUTPUT_LIMIT_EXIT, b"--- FAIL: TestProofMergeProbe", b"", "ERROR"),
+    ],
+)
+def test_outcome_for_config_mapping(exit_code, stdout, stderr, expected):
+    assert outcome_for_config(exit_code, CONFIG, stdout, stderr) == expected
+
+
+def test_run_config_experiment_runs_the_recorded_image_id(repo, tmp_path):
+    path, base, head = repo
+    images = []
+
+    def runner(config, code_dir, probe_source, timeout):
+        images.append(config.image)
+        return 0, b"", b""
+
+    experiment = sandbox.run_config_experiment(
+        path, base, head, "H1", "package pricing\n", CONFIG, tmp_path / "ev",
+        runner=runner, digest="sha256:abc", attempts=1,
+    )
+    assert images == ["sha256:abc", "sha256:abc"]
+    assert {e.runner_image_digest for e in experiment.executions} == {"sha256:abc"}
+
+
+def test_open_to_runner_keeps_executable_bits(tmp_path):
+    script, data = tmp_path / "gradlew", tmp_path / "data.txt"
+    script.write_text("#!/bin/sh\n")
+    data.write_text("x")
+    script.chmod(0o700)
+    data.chmod(0o600)
+    sandbox.open_to_runner(tmp_path)
+    assert script.stat().st_mode & 0o777 == 0o755
+    assert data.stat().st_mode & 0o777 == 0o644
+
+
+def test_outcome_for_config_timeout():
+    assert outcome_for_config(None, CONFIG, b"", b"") == "TIMEOUT"
 
 
 PLUGIN_CASES = {

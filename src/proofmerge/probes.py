@@ -3,10 +3,15 @@
 Spark sees base results only. After a failed base run it gets that run's output and
 may revise the probe, up to MAX_BASE_RUNS runs. Head runs only once the probe passes
 on base, so a probe can never be fitted to head's behavior.
+
+For repositories with `.proofmerge.toml`, the generic prompt is used and the
+Python-only `private_names` check is skipped: other languages may not expose a
+public/private boundary we can inspect statically.
 """
 
 import ast
 import json
+import shlex
 import subprocess
 from importlib import resources
 from pathlib import Path
@@ -18,13 +23,23 @@ from proofmerge.evidence import Experiment
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import IntentContract
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
-from proofmerge.sandbox import Runner, SandboxError, docker_runner, image_digest, run_experiment
+from proofmerge.project_config import ProjectConfig
+from proofmerge.sandbox import (
+    Runner,
+    SandboxError,
+    config_docker_runner,
+    docker_runner,
+    image_digest,
+    run_config_experiment,
+    run_experiment,
+)
 
 MAX_BASE_RUNS = 3
 MAX_SOURCE_CHARS = 60_000  # base source sent to Spark, over all changed files
 MAX_PROBE_CHARS = 20_000
 MAX_FEEDBACK_CHARS = 4_000  # tail of each base log sent back to Spark
 PROMPT = (resources.files("proofmerge") / "prompts" / "probe.md").read_text()
+GENERIC_PROMPT = (resources.files("proofmerge") / "prompts" / "probe_generic.md").read_text()
 
 
 class ProposedProbe(BaseModel):
@@ -100,6 +115,18 @@ def _tail(path: Path) -> str:
     return path.read_bytes()[-MAX_FEEDBACK_CHARS:].decode(errors="replace")
 
 
+def _probe_prompt(config: ProjectConfig | None) -> str:
+    """Return the developer prompt for Spark, with generic placeholders filled."""
+    if config is None:
+        return PROMPT
+    return (
+        GENERIC_PROMPT.replace("{language}", config.language)
+        .replace("{probe_path}", config.probe_path)
+        .replace("{test_command}", shlex.join(config.test_command))
+        .replace("{assertion_failure}", config.assertion_failure)
+    )
+
+
 def write_probe(
     repo: Path,
     context: GitContext,
@@ -109,6 +136,7 @@ def write_probe(
     evidence_dir: Path,
     *,
     sources: str,
+    config: ProjectConfig | None = None,
     runner: Runner = docker_runner,
     digest: str,
 ) -> Probe:
@@ -123,10 +151,11 @@ def write_probe(
     )
     history: list[dict[str, str]] = []
     source = ""
+    prompt = _probe_prompt(config)
     for run in range(1, MAX_BASE_RUNS + 1):
         reply = client.structured(
             SPARK_MODEL,
-            developer=PROMPT,
+            developer=prompt,
             user=user,
             schema=ProposedProbe,
             history=history,
@@ -138,7 +167,7 @@ def write_probe(
                 hypothesis_id=hypothesis.id, test_source="", drafts=run, passed_on_base=False
             )
         history.append({"role": "assistant", "content": reply.model_dump_json()})
-        private = private_names(source)
+        private = [] if config is not None else private_names(source)
         if len(source) > MAX_PROBE_CHARS:
             problem = f"The probe is over {MAX_PROBE_CHARS} characters; shorten it."
         elif private:
@@ -152,17 +181,31 @@ def write_probe(
             history.append({"role": "user", "content": problem})
             continue
         draft_dir = evidence_dir / "drafts" / f"{hypothesis.id}-{run}"
-        experiment = run_experiment(
-            repo,
-            context.base_sha,
-            None,
-            hypothesis.id,
-            source,
-            draft_dir,
-            runner=runner,
-            digest=digest,
-            attempts=1,
-        )
+        if config is not None:
+            experiment = run_config_experiment(
+                repo,
+                context.base_sha,
+                None,
+                hypothesis.id,
+                source,
+                config,
+                draft_dir,
+                runner=config_docker_runner,
+                digest=digest,
+                attempts=1,
+            )
+        else:
+            experiment = run_experiment(
+                repo,
+                context.base_sha,
+                None,
+                hypothesis.id,
+                source,
+                draft_dir,
+                runner=runner,
+                digest=digest,
+                attempts=1,
+            )
         execution = experiment.executions[0]
         if execution.outcome == "PASS":
             return Probe(
@@ -197,12 +240,13 @@ def probe_hypotheses(
     client: MetaClient,
     evidence_dir: Path,
     *,
+    config: ProjectConfig | None = None,
     runner: Runner = docker_runner,
     digest: str | None = None,
 ) -> tuple[list[Probe], list[Experiment]]:
     """Write a probe per hypothesis; run each one that passed on base on base and head."""
     if digest is None:
-        digest = image_digest()
+        digest = image_digest(config.image) if config is not None else image_digest()
     sources = base_sources(repo, context)
     probes: list[Probe] = []
     experiments: list[Experiment] = []
@@ -216,23 +260,39 @@ def probe_hypotheses(
                 client,
                 evidence_dir,
                 sources=sources,
+                config=config,
                 runner=runner,
                 digest=digest,
             )
             probes.append(probe)
             if probe.passed_on_base:
-                experiments.append(
-                    run_experiment(
-                        repo,
-                        context.base_sha,
-                        context.head_sha,
-                        hypothesis.id,
-                        probe.test_source,
-                        evidence_dir,
-                        runner=runner,
-                        digest=digest,
+                if config is not None:
+                    experiments.append(
+                        run_config_experiment(
+                            repo,
+                            context.base_sha,
+                            context.head_sha,
+                            hypothesis.id,
+                            probe.test_source,
+                            config,
+                            evidence_dir,
+                            runner=config_docker_runner,
+                            digest=digest,
+                        )
                     )
-                )
+                else:
+                    experiments.append(
+                        run_experiment(
+                            repo,
+                            context.base_sha,
+                            context.head_sha,
+                            hypothesis.id,
+                            probe.test_source,
+                            evidence_dir,
+                            runner=runner,
+                            digest=digest,
+                        )
+                    )
         except (MetaError, SandboxError, OSError, ValueError) as error:
             # ponytail: partials ride on the exception; a result type if more callers need them
             error.completed = {"probes": probes, "experiments": experiments}

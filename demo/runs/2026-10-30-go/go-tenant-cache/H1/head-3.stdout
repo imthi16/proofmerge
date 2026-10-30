@@ -1,0 +1,5 @@
+--- FAIL: TestProofMergeProbe (0.00s)
+    proofmerge_probe_test.go:18: second call with unknown tenant succeeded with price 25, want unknown-tenant error
+FAIL
+FAIL	goshop/pricing	0.003s
+FAIL

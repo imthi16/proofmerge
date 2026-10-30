@@ -148,17 +148,21 @@ def scope_receipt(proof: Proof) -> list[str]:
     valid = [i for i, e in probes.items()
              if all(r.outcome == "PASS" for r in e.executions if r.revision == "base")]
     lines = [f"Spark proposed {_plural(len(ids), 'hypothesis', 'hypotheses')}."]
+    # Tamper experiments (T1, T2…) are one run per changed test file whose base version exists.
+    tamper_runs = [e for e in proof.experiments if e.hypothesis_id not in ids and e.executions]
     if probes:
         lines.append(f"{_plural(len(probes), 'probe')} ran on base and head, "
                      f"{_plural(attempts, 'attempt')} each; {len(valid)} passed on base every time.")
+    elif tamper_runs:
+        lines.append("No hypothesis probe ran; only the changed tests below were run.")
     else:
         lines.append("No probe ran, so nothing in this run tested the change directly.")
     unprobed = [i for i in ids if i not in probes]
     if unprobed:
         lines.append(f"No probe ran for {', '.join(unprobed)}.")
-    changed = len(proof.tamper_findings)
-    lines.append(f"{_plural(changed, 'test')} changed by the pull request "
-                 f"{'was' if changed == 1 else 'were'} run from base on head.")
+    n = len(tamper_runs)
+    lines.append(f"{_plural(n, 'test file')} changed by the pull request "
+                 f"{'was' if n == 1 else 'were'} run from base on head.")
     if proof.verdict.decision == "PASS":
         lines.append("PASS covers only these checks.")
     return lines

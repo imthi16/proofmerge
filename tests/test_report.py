@@ -196,7 +196,17 @@ def test_receipt_flags_a_pass_with_no_probe() -> None:
     assert scope_receipt(proof) == [
         "Spark proposed 0 hypotheses.",
         "No probe ran, so nothing in this run tested the change directly.",
-        "0 tests changed by the pull request were run from base on head.",
+        "0 test files changed by the pull request were run from base on head.",
         "PASS covers only these checks.",
     ]
 
+
+
+def test_receipt_counts_tamper_runs_per_file_not_findings() -> None:
+    proof = Proof.model_validate_json(
+        (Path(__file__).parent.parent / "demo/runs/2026-10-29/intended-change/proof.json").read_text()
+    )
+    assert len(proof.tamper_findings) == 4  # four findings, all in one test file
+    lines = scope_receipt(proof)
+    assert "No hypothesis probe ran; only the changed tests below were run." in lines
+    assert "1 test file changed by the pull request was run from base on head." in lines

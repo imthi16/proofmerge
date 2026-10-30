@@ -1,0 +1,14 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_tenant_prices_are_independent ______________________
+
+    def test_tenant_prices_are_independent():
+        assert price_for("tenant-b", "widget") == 35.0
+>       assert price_for("tenant-a", "widget") == 25.0
+E       AssertionError: assert 35.0 == 25.0
+E        +  where 35.0 = price_for('tenant-a', 'widget')
+
+../probes/test_h2.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_tenant_prices_are_independent - AssertionEr...
+1 failed in 0.02s

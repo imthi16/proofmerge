@@ -44,6 +44,8 @@ report: /tmp/proofmerge-demo/tenant-cache-take2/report.html
 calls=6 tokens: prompt=5702 completion=9902
 ```
 
+(Token totals from `demo/runs/2026-10-29/tenant-cache-take2/proof.json`.)
+
 The report has one card per hypothesis. This is H1, unedited:
 
 <p align="center">

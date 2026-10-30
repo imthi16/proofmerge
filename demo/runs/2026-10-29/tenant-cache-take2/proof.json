@@ -1,0 +1,363 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "tenant-cache-take2",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+  "diff_sha256": "f3da398996f7e775292a3de8432bba91377a6ba96f499fa42de204977e490d07",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Price lookup uses caching.",
+        "source_quote": "Add caching to price lookup"
+      },
+      {
+        "id": "C2",
+        "kind": "PRESERVE",
+        "statement": "Returned prices are identical before and after the change.",
+        "source_quote": "Returned prices must not change"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "Cached SKU bypasses unknown-tenant check",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "After price_for('tenant-b','widget') caches sku 'widget', price_for('no-such-tenant','widget') returns the cached price instead of raising ValueError, because cache key is sku-only and checked before tenant validation.",
+        "expected_base": "ValueError('Unknown tenant: no-such-tenant') on the second call - base checks tenant_id first and is stateless",
+        "expected_head": "35.0 on the second call - early `if sku in _price_cache: return` returns cached tenant-b price before tenant validation",
+        "test_intent": "Call price_for('tenant-b','widget') to prime cache, then with pytest.raises(ValueError) call price_for('no-such-tenant','widget') with same sku; fails on head if it returns a float.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "If head raises ValueError for unknown tenant with sku 'widget' after priming the cache with price_for('tenant-b','widget'), this hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H1"
+      },
+      {
+        "claim_id": "C2",
+        "title": "Price update ignored after caching - stale return",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "Once price_for('tenant-b','widget') is called, later change to _PRICES['tenant-b']['widget'] (e.g. to 99.0) is ignored and stale 35.0 is returned.",
+        "expected_base": "99.0 on second call - base does `return table[sku]` fresh from _PRICES every time",
+        "expected_head": "35.0 on second call - first call stored `_price_cache['widget']=35.0` and second call early-returns it ignoring table update",
+        "test_intent": "Call price_for('tenant-b','widget'), then set _PRICES['tenant-b']['widget']=99.0 (restore in finally), call price_for('tenant-b','widget') again and assert result equals 99.0.",
+        "risk_category": "state",
+        "falsification_criteria": "If head returns the updated 99.0 price after _PRICES mutation, this hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H2"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.py",
+      "test_source_sha256": "3d8b8c5d45a84495f7c0baf239bb6301cae645426e1f38dda7931ac2ba1c63fb",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 703,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 703,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 703,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "H2",
+      "test_source_path": "probes/test_h2.py",
+      "test_source_sha256": "fc7e93d3ed307e2eb5af032193159cc4774a0dbaa5c4f1c99d510d8c7d1d31dd",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 704,
+          "stdout_path": "H2/base-1.stdout",
+          "stderr_path": "H2/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 705,
+          "stdout_path": "H2/base-2.stdout",
+          "stderr_path": "H2/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 704,
+          "stdout_path": "H2/base-3.stdout",
+          "stderr_path": "H2/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "H2/head-1.stdout",
+          "stderr_path": "H2/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H2/head-2.stdout",
+          "stderr_path": "H2/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "32dff53e10ceca845ca2e9418907826101155d01",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_h2.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 705,
+          "stdout_path": "H2/head-3.stdout",
+          "stderr_path": "H2/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C0",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-demo/tenant-cache-take2/proof.json"
+    },
+    {
+      "hypothesis_id": "H2",
+      "claim_id": "C2",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-demo/tenant-cache-take2/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H2 needs review because its probe may not test its hypothesis.",
+      "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 6,
+    "prompt_tokens": 5702,
+    "completion_tokens": 9902
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [
+    "H2"
+  ],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

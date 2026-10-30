@@ -118,7 +118,9 @@ def test_counts_held_out_errors_and_table(offline, tmp_path, monkeypatch, capsys
     assert all("shell" not in kwargs for _, kwargs in offline.commands)
 
 
-def test_metadata_and_repeatable_selection_limit(offline):
+def test_metadata_and_repeatable_selection_limit(offline, monkeypatch):
+    monkeypatch.delenv("PROOFMERGE_BACKEND", raising=False)
+    monkeypatch.delenv("PROOFMERGE_SPARK_MODEL", raising=False)
     names = list(json.loads(bench.LABELS.read_text()))
     assert bench.main([
         "--out", str(offline.out), "--only", names[2], "--only", names[0],
@@ -135,6 +137,12 @@ def test_metadata_and_repeatable_selection_limit(offline):
         assert meta[key] == hashlib.sha256((ROOT / "src/proofmerge" / relative).read_bytes()).hexdigest()
     assert meta["spark_model"] == SPARK_MODEL
     assert datetime.fromisoformat(meta["date"]).utcoffset().total_seconds() == 0
+
+
+def test_metadata_records_cli_default_model(monkeypatch):
+    monkeypatch.setenv("PROOFMERGE_BACKEND", "claude-cli")
+    monkeypatch.delenv("PROOFMERGE_SPARK_MODEL", raising=False)
+    assert bench.metadata()["spark_model"] == "CLI default"
 
 
 def test_builds_bench_repo_using_demo_builder(offline, monkeypatch):

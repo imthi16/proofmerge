@@ -85,7 +85,7 @@ def setup() -> None:
 
 @app.command()
 def smoke() -> None:
-    """Make ONE real Muse Spark call to check API access (uses MODEL_API_KEY)."""
+    """Make ONE real Spark-role call to check model access (Muse Spark by default)."""
     try:
         client = MetaClient(max_calls=1)
         reply = client.structured(
@@ -97,7 +97,8 @@ def smoke() -> None:
     except MetaError as error:
         typer.echo(f"smoke failed: {error}", err=True)
         raise typer.Exit(1) from None
-    typer.echo(f"{SPARK_MODEL}: ok={reply.ok} message={reply.message!r}")
+    model = client.models[SPARK_MODEL] or "CLI default model"
+    typer.echo(f"{model} via {client.endpoint}: ok={reply.ok} message={reply.message!r}")
     usage = client.usage[-1]
     if usage is not None:
         typer.echo(f"tokens: prompt={usage.prompt_tokens} completion={usage.completion_tokens}")

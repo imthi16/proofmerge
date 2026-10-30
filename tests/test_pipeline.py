@@ -589,15 +589,18 @@ def test_all_proposed_claims_rejected_keeps_c0_regression_review(tmp_path):
 
 
 @pytest.mark.parametrize("explanation, expected", [
-    ("C1", "REVIEW"), ("C0", "BLOCK"), ("C99", "BLOCK"),
+    ("C1", "REVIEW"), ("C0", "BLOCK"), ("C99", "BLOCK"), (None, "BLOCK"),
 ])
-def test_explained_change_reaches_verdict_proof_and_report(tmp_path, explanation, expected):
+@pytest.mark.parametrize("claim", ["C0", "C1"])
+def test_explained_change_reaches_verdict_proof_and_report(tmp_path, explanation, expected, claim):
     intent = "Use the new customer field for promotion eligibility."
-    replies = Replies(claim="C0", wonder_claims=[{"id": "C1", "kind": "CHANGE"}],
+    replies = Replies(claim=claim, wonder_claims=[{"id": "C1", "kind": "CHANGE"}],
                       wonder_results=[{
                           "hypothesis_id": "H1", "tests_hypothesis": True,
                           "reason": "explicit requested behavior", "explained_by_change": explanation,
                       }])
+    if claim == "C1":
+        replies.replies.pop(0)
     replies.replies.insert(0, {"claims": [{
         "kind": "CHANGE", "statement": "new field", "source_quote": intent,
     }]})
@@ -610,4 +613,59 @@ def test_explained_change_reaches_verdict_proof_and_report(tmp_path, explanation
     assert (annotation in (evidence / "report.html").read_text()) == (explanation == "C1")
     if explanation == "C1":
         assert "H1 may be the intended change C1." in proof.verdict.reasons
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("failure", ["api", "schema"])
+def test_change_citation_keeps_review_when_wonder_probe_check_fails(tmp_path, failure):
+    replies = Replies(
+        fail=5 if failure == "api" else None,
+        wonder_claims=[{"id": "C1", "kind": "CHANGE"}],
+        wonder_results=[{"hypothesis_id": "H1", "tests_hypothesis": "false", "reason": "bad"}],
+    )
+    replies.replies[0]["claims"][0]["kind"] = "CHANGE"
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.findings[0].verified
+    assert proof.contested_claim_ids == []
+    assert proof.verdict.decision == "REVIEW"
+    assert "H1 needs review because C1 is a CHANGE claim." in proof.verdict.reasons
+    error = "scripted API unavailable" if failure == "api" else "model reply did not match"
+    assert any(error in reason for reason in proof.verdict.reasons)
+    assert_bundle(proof, evidence)
+
+
+def test_change_citation_cannot_use_a_different_change_explanation(tmp_path):
+    replies = Replies(
+        wonder_claims=[{"id": id, "kind": "CHANGE"} for id in ("C1", "C2")],
+        wonder_results=[{
+            "hypothesis_id": "H1", "tests_hypothesis": True,
+            "reason": "another change", "explained_by_change": "C2",
+        }],
+    )
+    change = replies.replies[0]["claims"][0]
+    change["kind"] = "CHANGE"
+    replies.replies[0]["claims"].append(change.copy())
+    proof, evidence, _, _ = execute(tmp_path, replies=replies)
+    assert proof.findings[0].verified
+    assert proof.contested_claim_ids == []
+    assert proof.explained_probe_claim_ids == {"H1": "C2"}
+    assert proof.verdict.decision == "BLOCK"
+    assert "PRESERVE claim C0" in proof.verdict.reasons[0]
+    assert_bundle(proof, evidence)
+
+
+@pytest.mark.parametrize("failure", ["api", "schema"])
+def test_change_citation_uses_successful_probe_check_after_claim_check_error(tmp_path, failure):
+    replies = Replies(
+        fail=4 if failure == "api" else None,
+        wonder_claims=[{"id": "C1", "kind": "invalid"}],
+    )
+    replies.replies[0]["claims"][0]["kind"] = "CHANGE"
+    proof, evidence, client, _ = execute(tmp_path, replies=replies)
+    assert client.calls == 5
+    assert proof.findings[0].verified
+    assert proof.verdict.decision == "BLOCK"
+    assert "PRESERVE claim C0" in proof.verdict.reasons[0]
+    error = "scripted API unavailable" if failure == "api" else "model reply did not match"
+    assert any(error in reason for reason in proof.verdict.reasons)
     assert_bundle(proof, evidence)

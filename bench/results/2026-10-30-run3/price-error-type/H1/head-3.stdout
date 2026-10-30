@@ -1,0 +1,40 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_unknown_sku_raises_value_error ______________________
+
+    def test_unknown_sku_raises_value_error():
+        try:
+>           price_for("tenant-a", "no-such-sku-123")
+
+../probes/test_h1.py:5: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tenant_id = 'tenant-a', sku = 'no-such-sku-123'
+
+    def price_for(tenant_id: str, sku: str) -> float:
+        """Return the unit price for a tenant/sku pair."""
+        if tenant_id not in _PRICES:
+            raise ValueError(f"Unknown tenant: {tenant_id}")
+        table = _PRICES[tenant_id]
+        if sku not in table:
+>           raise LookupError(f"Unknown SKU for tenant {tenant_id}: {sku}")
+E           LookupError: Unknown SKU for tenant tenant-a: no-such-sku-123
+
+src/demo_shop/pricing.py:16: LookupError
+
+During handling of the above exception, another exception occurred:
+
+    def test_unknown_sku_raises_value_error():
+        try:
+            price_for("tenant-a", "no-such-sku-123")
+        except ValueError as exc:
+            assert "Unknown SKU" in str(exc)
+        except Exception as exc:
+>           assert False, "expected ValueError but got " + str(type(exc)) + " " + str(exc)
+E           AssertionError: expected ValueError but got <class 'LookupError'> Unknown SKU for tenant tenant-a: no-such-sku-123
+E           assert False
+
+../probes/test_h1.py:9: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_unknown_sku_raises_value_error - AssertionE...
+1 failed in 0.01s

@@ -1,0 +1,14 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_tenant_isolation_shared_sku _______________________
+
+    def test_tenant_isolation_shared_sku():
+        from demo_shop.pricing import price_for
+>       assert price_for("tenant-b", "widget") == 35.0
+E       AssertionError: assert 25.0 == 35.0
+E        +  where 25.0 = <function price_for at 0x75b82c2d8860>('tenant-b', 'widget')
+
+../probes/test_h1.py:3: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_tenant_isolation_shared_sku - AssertionErro...
+1 failed in 0.01s

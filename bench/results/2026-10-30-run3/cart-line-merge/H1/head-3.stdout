@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_merge_lines_sums_duplicates _______________________
+
+    def test_merge_lines_sums_duplicates():
+>       assert merge_lines([('A', 2), ('A', 3)]) == [('A', 5)]
+E       AssertionError: assert [('A', 3)] == [('A', 5)]
+E         
+E         At index 0 diff: ('A', 3) != ('A', 5)
+E         Use -v to get more diff
+
+../probes/test_h1.py:4: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h1.py::test_merge_lines_sums_duplicates - AssertionErro...
+1 failed in 0.01s

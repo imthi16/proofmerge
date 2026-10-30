@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_empty_line_totals_is_falsy ________________________
+
+    def test_empty_line_totals_is_falsy():
+        result = line_totals([])
+>       assert not result
+E       assert not <generator object line_totals.<locals>.<genexpr> at 0x7efac7be8860>
+
+../probes/test_h3.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h3.py::test_empty_line_totals_is_falsy - assert not <ge...
+1 failed in 0.01s

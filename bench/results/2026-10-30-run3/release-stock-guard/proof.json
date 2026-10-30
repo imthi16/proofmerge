@@ -1,0 +1,57 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "release-stock-guard",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "370cf45d9d625d04326c4cedad4bd4769b79e705",
+  "diff_sha256": "fc367273fb301c1fd8f1aa404e4b80f61b7532603ba9733ef79934df134da994",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "release_stock rejects negative quantities.",
+        "source_quote": "Guard release_stock against negative quantities"
+      },
+      {
+        "id": "C2",
+        "kind": "CHANGE",
+        "statement": "Invalid restock calls fail fast with an error.",
+        "source_quote": "bad restocks fail fast"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "PASS",
+    "reasons": [
+      "No regression was found within the tested scope."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 1912,
+    "completion_tokens": 2911
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

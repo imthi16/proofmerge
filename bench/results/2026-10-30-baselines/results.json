@@ -1,0 +1,1085 @@
+{
+  "metadata": {
+    "git_sha": "5df3735d1de66590e00859b21af858eb5baaa3eb",
+    "prompt_sha256": "a64d9f9688a0f6a0bf49c8a34bd8ca639f581f0fe72018b344f97421e1c7d272",
+    "spark_model": "muse-spark-1.3",
+    "date": "2026-10-30T10:04:28.133533+00:00",
+    "skip_model": false
+  },
+  "candidates": {
+    "boundary-qty-inclusive": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "9095a3baf9b98da52f9743edff73ec793f4b1ba2",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "boundary-qty-inclusive/baseline_a/head.stdout",
+          "stderr_path": "boundary-qty-inclusive/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Validation boundary change from `qty > available` to `qty >= available` blocks reserving exactly the available stock (qty == available), which previously succeeded. Intent states only refactor for consistency, not a behavior change to forbid depleting stock."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 422,
+        "completion": 317
+      },
+      "evidence_dir": "boundary-qty-inclusive"
+    },
+    "drop-tenant-validation": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "96ff781e3a391a09e334663b5baa7022163a9f4c",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "drop-tenant-validation/baseline_a/head.stdout",
+          "stderr_path": "drop-tenant-validation/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "price_for ignores tenant_id and returns first matching SKU from any tenant, breaking tenant isolation and removing Unknown-tenant validation, while intent states prices should stay the same."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 515,
+        "completion": 305
+      },
+      "evidence_dir": "drop-tenant-validation"
+    },
+    "round-discount": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "174fbc4c361b6cac77dd2a532f909911bc38c43c",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "round-discount/baseline_a/head.stdout",
+          "stderr_path": "round-discount/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Adds round() with no precision: e.g. total=105 returns 94 instead of 94.5, changing discounted amounts and return type from float to int, contradicting stated intent of 'Same results as before'."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 416,
+        "completion": 343
+      },
+      "evidence_dir": "round-discount"
+    },
+    "mutate-stock": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "315971fdda20af9e2050ba9f5dda2caa31dddc89",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 602,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "mutate-stock/baseline_a/head.stdout",
+          "stderr_path": "mutate-stock/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "reserve() changed from pure copy ({**stock, ...}) to in-place mutation (stock[sku]=...; return stock). Callers holding the input dict will now see it modified and returned object is aliased to input, a behavioral/compatibility change not requested by 'Speed up stock reservation.'"
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 403,
+        "completion": 797
+      },
+      "evidence_dir": "mutate-stock"
+    },
+    "skip-boundary-test": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "BLOCK",
+        "execution": {
+          "commit_sha": "681e3af49ec4455a8d3f79310f357e5f2befe65a",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "skip-boundary-test/baseline_a/head.stdout",
+          "stderr_path": "skip-boundary-test/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "bulk_discount boundary changed from >=100 to >100, so bulk_discount(100) now returns 100 instead of 90, contradicting stated intent of no output change; the covering test was simultaneously skipped rather than updated for an intended change."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 609,
+        "completion": 236
+      },
+      "evidence_dir": "skip-boundary-test"
+    },
+    "price-error-type": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "e3d856f2a69ecdbd992474686ce62a1b1ff31a52",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "price-error-type/baseline_a/head.stdout",
+          "stderr_path": "price-error-type/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Changes unknown-SKU error from ValueError to LookupError (unrelated siblings, not subclasses), so existing `except ValueError` handling will no longer catch it. Refactor-for-consistency intent does not explicitly request an exception-type change."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 436,
+        "completion": 1152
+      },
+      "evidence_dir": "price-error-type"
+    },
+    "ledger-mutation-order": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "cf7f15db98a042aa4890bcd1a5f80ff98f866886",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "ledger-mutation-order/baseline_a/head.stdout",
+          "stderr_path": "ledger-mutation-order/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Patch moves the negative-amount validation after the ledger mutation, so record_purchase now applies the negative amount to ledger[customer] before raising ValueError, whereas previously it raised with no side-effect. This corrupts ledger state on invalid input, contradicting the documented Raises contract."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 479,
+        "completion": 374
+      },
+      "evidence_dir": "ledger-mutation-order"
+    },
+    "order-total-off-by-one": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "def9fdfef5ea9d3dd4b16ea6adc403ce8247093d",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "order-total-off-by-one/baseline_a/head.stdout",
+          "stderr_path": "order-total-off-by-one/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Positional loop uses range(len(items)-1), skipping the last item so order_total undercharges by last line-item; intent was refactor to positional iteration with same totals, not to drop an item."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 459,
+        "completion": 216
+      },
+      "evidence_dir": "order-total-off-by-one"
+    },
+    "line-totals-generator": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "39f71597c271ba41efde1d95c4dcda8e7476038e",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "line-totals-generator/baseline_a/head.stdout",
+          "stderr_path": "line-totals-generator/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "line_totals changed from returning list[float] to returning a generator expression, breaking the declared list contract (len, indexing, re-iteration) while intent only asked to simplify computation."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 465,
+        "completion": 550
+      },
+      "evidence_dir": "line-totals-generator"
+    },
+    "promo-rule-order": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "d4b3e72eea360a241c77d97d776fe812d2c5a603",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "promo-rule-order/baseline_a/head.stdout",
+          "stderr_path": "promo-rule-order/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Reverses promo precedence: original checks vip before subscribed, new _PROMO_RULES checks news-5 before vip-10, so a customer with both flags now gets news-5 instead of vip-10. Intent only asks to refactor to a table, not change priority."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 570,
+        "completion": 343
+      },
+      "evidence_dir": "promo-rule-order"
+    },
+    "zero-price-unknown": {
+      "label": "BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "2a4c679e1919be7bf92aa9f6fe6db540bb9623d8",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "zero-price-unknown/baseline_a/head.stdout",
+          "stderr_path": "zero-price-unknown/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "price_for changed from raising ValueError on unknown tenant/SKU to returning 0.0 on KeyError. This silently converts invalid lookups into zero pricing instead of failing validation, a behavioral regression not requested by 'simplify lookup paths'."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 498,
+        "completion": 534
+      },
+      "evidence_dir": "zero-price-unknown"
+    },
+    "default-shipping-express": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "1651b6fb96e034b7462d2f473b3fb08ba2aedbdd",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 603,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "default-shipping-express/baseline_a/head.stdout",
+          "stderr_path": "default-shipping-express/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Changes default shipping from \"standard\" ($5) to \"express\" ($12), so order_total(items) with no explicit shipping now returns $7 more. Vague \"new checkout rollout\" intent does not explicitly request this pricing default change, breaking existing callers relying on default."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 433,
+        "completion": 1082
+      },
+      "evidence_dir": "default-shipping-express"
+    },
+    "pure-refactor-constants": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "ba57661caaa35df4d869c024a5ccc168b05df3a2",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "pure-refactor-constants/baseline_a/head.stdout",
+          "stderr_path": "pure-refactor-constants/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Patch only extracts literal 100 and 0.9 into named constants with identical values; comparison and multiplication logic unchanged, so no boundary or behavioral regression."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 557,
+        "completion": 316
+      },
+      "evidence_dir": "pure-refactor-constants"
+    },
+    "intended-discount-rate": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "BLOCK",
+        "execution": {
+          "commit_sha": "f63ec8749fa6f8eaba5a31fdf5ebce69aff8b1f8",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "intended-discount-rate/baseline_a/head.stdout",
+          "stderr_path": "intended-discount-rate/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Patch implements exactly the requested 10%->15% bulk discount (0.9 to 0.85) with threshold >=100 unchanged, and updates existing tests to expect 85.0/102.0. No other behavior, validation, or callers affected."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 626,
+        "completion": 276
+      },
+      "evidence_dir": "intended-discount-rate"
+    },
+    "cache-with-tenant-key": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "cf9aee875c9563629c9c097fe8f0111ccf7b5781",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "cache-with-tenant-key/baseline_a/head.stdout",
+          "stderr_path": "cache-with-tenant-key/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Cache key is (tenant_id, sku) preserving tenant isolation, and only successful lookups are cached; validation and error behavior for unknown tenant/SKU is unchanged on miss, with no visible mutation or caller incompatibility in patch."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 555,
+        "completion": 415
+      },
+      "evidence_dir": "cache-with-tenant-key"
+    },
+    "extract-inventory-validation": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "4a29a92d56361792f8c5151502e19d9bb86be6e4",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "extract-inventory-validation/baseline_a/head.stdout",
+          "stderr_path": "extract-inventory-validation/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Pure extraction refactor: validation checks (unknown SKU, exceeds stock, negative qty) moved unchanged into _validate_request, and reserve() still calls it then returns new dict {**stock, sku: available-qty} without mutation. No caller-visible behavior change."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 643,
+        "completion": 615
+      },
+      "evidence_dir": "extract-inventory-validation"
+    },
+    "comprehension-line-totals": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "86c292b744e3dd26a643dc83a239815cfa83e73a",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "comprehension-line-totals/baseline_a/head.stdout",
+          "stderr_path": "comprehension-line-totals/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "List comprehension is behaviorally identical to the loop-append version: same order, same values, same error propagation, no input mutation or caller-visible change."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 471,
+        "completion": 250
+      },
+      "evidence_dir": "comprehension-line-totals"
+    },
+    "intended-express-fee": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "BLOCK",
+        "execution": {
+          "commit_sha": "ffbec834a606cb2970193cce85c078b37f66e5f7",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "intended-express-fee/baseline_a/head.stdout",
+          "stderr_path": "intended-express-fee/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Express fee increase 12.0->15.0 and test expectation 20.0->23.0 directly implements the stated intent; no other behavioral change visible."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 602,
+        "completion": 174
+      },
+      "evidence_dir": "intended-express-fee"
+    },
+    "single-lookup-pricing": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "13ad40a43dffc6ad5ee140f77933b24db341c144",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "single-lookup-pricing/baseline_a/head.stdout",
+          "stderr_path": "single-lookup-pricing/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Optimizes two lookups to .get() with `is None` checks. Preserves behavior: unknown tenant/SKU still raise ValueError, and falsy-but-valid price 0.0 still returns correctly since check is `is None` not truthiness. None is not a valid table/price per `-> float` typing, so sentinel collision is not apparent."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 512,
+        "completion": 606
+      },
+      "evidence_dir": "single-lookup-pricing"
+    },
+    "newsletter-promo-fix": {
+      "label": "NOT_BLOCK",
+      "held_out": false,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "c0fa208d1a2ee9647ec26846c4e8f15ebb0699e2",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "newsletter-promo-fix/baseline_a/head.stdout",
+          "stderr_path": "newsletter-promo-fix/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Patch directly implements stated intent: promo check now uses new `newsletter` field instead of old `subscribed` field, with new test coverage. No visible callers or tests in patch rely on old field, and vip/none paths unchanged."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 559,
+        "completion": 953
+      },
+      "evidence_dir": "newsletter-promo-fix"
+    },
+    "coupon-lookup-exact": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "2d73257fd4408d36e0bb80ffe88d3b0aa4e188c4",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "coupon-lookup-exact/baseline_a/head.stdout",
+          "stderr_path": "coupon-lookup-exact/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "Removes code.strip().casefold() normalization, making lookup case-sensitive and whitespace-sensitive. Previously accepted variants like ' SAVE10 ' would succeed (when coupon keys are normalized); now they raise ValueError. The stated intent only asks for a single dictionary lookup, not stricter matching."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 451,
+        "completion": 962
+      },
+      "evidence_dir": "coupon-lookup-exact"
+    },
+    "sku-list-order": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "60b5a0774bbed4b5b79f4003b7a36e47d1643963",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "sku-list-order/baseline_a/head.stdout",
+          "stderr_path": "sku-list-order/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "list_skus changes from sorted(catalog) to list(catalog), changing output from sorted order to insertion order. The intent 'Streamline list_skus for large catalogs' asks for performance, not for dropping the sorted-order contract, so dependent callers/tests expecting deterministic sorted SKUs will regress."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 428,
+        "completion": 908
+      },
+      "evidence_dir": "sku-list-order"
+    },
+    "cart-line-merge": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "d846fddcd2d4d872c804633d9cc4f90c95e6d82c",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "cart-line-merge/baseline_a/head.stdout",
+          "stderr_path": "cart-line-merge/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "merge_lines no longer sums duplicate SKUs: dict comprehension keeps only last qty per sku instead of accumulating, breaking documented 'Combine quantities' behavior. e.g. [('a',1),('a',2)] returns [('a',2)] instead of [('a',3)]."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 484,
+        "completion": 250
+      },
+      "evidence_dir": "cart-line-merge"
+    },
+    "item-filter-stop": {
+      "label": "BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "c57b17ea74d8d7e6cb66a6f99f1999b553cfbd63",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "item-filter-stop/baseline_a/head.stdout",
+          "stderr_path": "item-filter-stop/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "BLOCK",
+        "reason": "continue->break changes skip-invalid to stop-at-first-invalid, discarding all later valid items. The stated intent to 'shorten the loop that skips' does not explicitly request dropping subsequent valid items."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 392,
+        "completion": 687
+      },
+      "evidence_dir": "item-filter-stop"
+    },
+    "extract-line-total": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "d892db1f057c781781df4a25ceb11f5ff48a377c",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "extract-line-total/baseline_a/head.stdout",
+          "stderr_path": "extract-line-total/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Pure refactor: _line_total(qty*price) preserves exact calculation, order_total and line_totals produce same totals and types with no change to validation, mutation, or error handling."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 631,
+        "completion": 252
+      },
+      "evidence_dir": "extract-line-total"
+    },
+    "precompute-tenant-skus": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "6b86fa329b937c6a4a355f3d7da83007f9bcd09c",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 503,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "precompute-tenant-skus/baseline_a/head.stdout",
+          "stderr_path": "precompute-tenant-skus/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Patch preserves observable behavior for static _PRICES: same sorted SKU list per tenant, returns a fresh list copy so callers cannot mutate the precomputed cache. Staleness vs live lookup is the explicitly requested precompute tradeoff, with no visible mutation, caller, or test in the patch showing dynamic _PRICES updates."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 544,
+        "completion": 988
+      },
+      "evidence_dir": "precompute-tenant-skus"
+    },
+    "intended-free-shipping-threshold": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "BLOCK",
+        "execution": {
+          "commit_sha": "d8699995a0b823349ef27a1bcbea04459b2c8c91",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "intended-free-shipping-threshold/baseline_a/head.stdout",
+          "stderr_path": "intended-free-shipping-threshold/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Threshold change from >=100 to >=150 and test updates directly implement the stated intent to raise free-shipping threshold to 150; no other behavior, callers, or validation changed."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 561,
+        "completion": 222
+      },
+      "evidence_dir": "intended-free-shipping-threshold"
+    },
+    "release-stock-guard": {
+      "label": "NOT_BLOCK",
+      "held_out": true,
+      "baseline_a": {
+        "decision": "NOT_BLOCK",
+        "execution": {
+          "commit_sha": "370cf45d9d625d04326c4cedad4bd4769b79e705",
+          "tests_commit_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/tests"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 502,
+          "timeout_seconds": 60,
+          "runner_image_digest": "sha256:53a763c437ecfebb59267ba1eabb169b1da3300abfb717b07b884b5f80d2ea5b",
+          "stdout_path": "release-stock-guard/baseline_a/head.stdout",
+          "stderr_path": "release-stock-guard/baseline_a/head.stderr"
+        }
+      },
+      "baseline_b": {
+        "decision": "NOT_BLOCK",
+        "reason": "Patch adds qty<0 ValueError check in release_stock exactly matching stated intent to fail fast on negative restocks; no other logic changed and no visible caller/test relies on negative qty, so no unintended regression."
+      },
+      "model_calls": 1,
+      "tokens": {
+        "prompt": 438,
+        "completion": 375
+      },
+      "evidence_dir": "release-stock-guard"
+    }
+  },
+  "summary": {
+    "baseline_a": {
+      "non_held_out": {
+        "faulty_BLOCK": 1,
+        "faulty_NOT_BLOCK": 7,
+        "faulty_ERROR": 0,
+        "safe_BLOCK": 2,
+        "safe_NOT_BLOCK": 3,
+        "safe_ERROR": 0
+      },
+      "held_out": {
+        "faulty_BLOCK": 0,
+        "faulty_NOT_BLOCK": 8,
+        "faulty_ERROR": 0,
+        "safe_BLOCK": 1,
+        "safe_NOT_BLOCK": 6,
+        "safe_ERROR": 0
+      }
+    },
+    "baseline_b": {
+      "non_held_out": {
+        "faulty_BLOCK": 8,
+        "faulty_NOT_BLOCK": 0,
+        "faulty_ERROR": 0,
+        "safe_BLOCK": 0,
+        "safe_NOT_BLOCK": 5,
+        "safe_ERROR": 0
+      },
+      "held_out": {
+        "faulty_BLOCK": 8,
+        "faulty_NOT_BLOCK": 0,
+        "faulty_ERROR": 0,
+        "safe_BLOCK": 0,
+        "safe_NOT_BLOCK": 7,
+        "safe_ERROR": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "single-lookup-pricing",
+  "base_sha": "aa1dd259ed64775f6f67fc7a8459db6f1e1cdeda",
+  "head_sha": "13ad40a43dffc6ad5ee140f77933b24db341c144",
+  "diff_sha256": "0deba0fb3f286e40f2efbfd23eaba13d5f649ab6455171335dad04c4e07aca88",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "The price lookup performs fewer redundant dictionary lookups and runs faster.",
+        "source_quote": "Cut redundant dictionary lookups in the price lookup for speed."
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C0",
+        "title": "None-valued price treated as unknown SKU",
+        "changed_locations": [
+          "src/demo_shop/pricing.py::price_for"
+        ],
+        "suspected_behavior": "If a tenant table maps a sku to None (e.g., _PRICES={'t': {'s': None}}), base passes the `sku not in table` check and returns None, while head treats the None return from `table.get(sku)` as missing and raises ValueError.",
+        "expected_base": "returns None",
+        "expected_head": "raises ValueError('Unknown SKU for tenant t: s')",
+        "test_intent": "Monkeypatch pricing._PRICES to {'t': {'s': None}} then call price_for('t', 's') on base and head; compare return vs exception.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "Hypothesis is wrong if base also raises ValueError (or otherwise does not return None) for a sku explicitly mapped to None, i.e., base and head behave identically.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [],
+  "findings": [],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "H1 was not tested: None-valued price treated as unknown SKU."
+    ],
+    "unresolved_risks": [
+      "H1 was not tested: None-valued price treated as unknown SKU"
+    ],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 4,
+    "prompt_tokens": 3271,
+    "completion_tokens": 5894
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

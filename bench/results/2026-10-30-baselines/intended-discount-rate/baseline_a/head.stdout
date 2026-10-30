@@ -1,0 +1,22 @@
+....................FF.                                                  [100%]
+=================================== FAILURES ===================================
+_______________________ test_bulk_discount_at_threshold ________________________
+
+    def test_bulk_discount_at_threshold():
+>       assert bulk_discount(100) == 90.0
+E       assert 85.0 == 90.0
+E        +  where 85.0 = bulk_discount(100)
+
+../probes/tests/test_pricing.py:9: AssertionError
+______________________ test_bulk_discount_above_threshold ______________________
+
+    def test_bulk_discount_above_threshold():
+>       assert bulk_discount(120) == 108.0
+E       assert 102.0 == 108.0
+E        +  where 102.0 = bulk_discount(120)
+
+../probes/tests/test_pricing.py:13: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/tests/test_pricing.py::test_bulk_discount_at_threshold - ass...
+FAILED ../probes/tests/test_pricing.py::test_bulk_discount_above_threshold - ...
+2 failed, 21 passed in 0.03s

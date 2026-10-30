@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_unknown_customer_negative_amount_prefers_amount_error __________
+
+    def test_unknown_customer_negative_amount_prefers_amount_error():
+>       with pytest.raises(ValueError, match="Negative purchase amount"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Negative purchase amount'
+E         Actual message: 'Unknown customer: bob'
+
+../probes/test_h2.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED ../probes/test_h2.py::test_unknown_customer_negative_amount_prefers_amount_error
+1 failed in 0.01s

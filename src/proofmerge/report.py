@@ -110,6 +110,9 @@ background: var(--code-bg); color: var(--muted); }
 .kind.change { background: var(--change-bg); color: var(--change-fg); }
 .kind.contested { background: var(--review-bg); color: var(--review-fg); }
 
+.receipt h2 { border-top: 0; margin-top: 1.5rem; padding-top: 0; }
+.receipt ul { margin: 0; padding-left: 1.2rem; }
+.receipt li + li { margin-top: .2rem; }
 .provenance { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.25rem; margin: 0; }
 .provenance dt { color: var(--muted); font-size: .92rem; }
 .provenance dd { margin: 0; overflow-wrap: anywhere; }
@@ -130,6 +133,40 @@ background: var(--code-bg); color: var(--muted); }
   .provenance { grid-template-columns: 1fr; gap: 0; }
   .provenance dd { margin-bottom: .5rem; }
 }"""
+
+
+def _plural(n: int, word: str, plural: str = "") -> str:
+    return f"{n} {word if n == 1 else plural or word + 's'}"
+
+
+def scope_receipt(proof: Proof) -> list[str]:
+    """What this run actually checked, in plain sentences: the limits of its verdict."""
+    ids = [h.id for h in proof.hypotheses.hypotheses]
+    probes = {e.hypothesis_id: e for e in proof.experiments if e.hypothesis_id in ids and e.executions}
+    attempts = max((r.attempt for e in probes.values() for r in e.executions), default=0)
+    # A probe counts as evidence only if it passed on base every time (probe-validity rule).
+    valid = [i for i, e in probes.items()
+             if all(r.outcome == "PASS" for r in e.executions if r.revision == "base")]
+    lines = [f"Spark proposed {_plural(len(ids), 'hypothesis', 'hypotheses')}."]
+    if probes:
+        lines.append(f"{_plural(len(probes), 'probe')} ran on base and head, "
+                     f"{_plural(attempts, 'attempt')} each; {len(valid)} passed on base every time.")
+    else:
+        lines.append("No probe ran, so nothing in this run tested the change directly.")
+    unprobed = [i for i in ids if i not in probes]
+    if unprobed:
+        lines.append(f"No probe ran for {', '.join(unprobed)}.")
+    changed = len(proof.tamper_findings)
+    lines.append(f"{_plural(changed, 'test')} changed by the pull request "
+                 f"{'was' if changed == 1 else 'were'} run from base on head.")
+    if proof.verdict.decision == "PASS":
+        lines.append("PASS covers only these checks.")
+    return lines
+
+
+def _receipt(proof: Proof) -> str:
+    items = "".join(f"<li>{html.escape(line)}</li>" for line in scope_receipt(proof))
+    return f'<section class="receipt" aria-label="What this run checked"><h2>What this run checked</h2><ul>{items}</ul></section>'
 
 
 def _banner(proof: Proof) -> str:
@@ -367,6 +404,7 @@ def render_html(proof: Proof, evidence_dir: Path) -> str:
     e = html.escape
     body = (
         _banner(proof)
+        + _receipt(proof)
         + _cards(proof, evidence_dir)
         + _tamper(proof)
         + _claims(proof)

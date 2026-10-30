@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from proofmerge.cli import app
 from proofmerge.evidence import Proof
-from proofmerge.report import render_html
+from proofmerge.report import render_html, scope_receipt
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLES = ["sample_proof_block.json", "sample_proof_review.json"]
@@ -176,3 +176,27 @@ def test_explained_change_annotation_is_scoped_and_escaped():
     assert page.count("Muse Wonder: may be the intended change") == 1
     assert "Muse Wonder: may be the intended change &lt;script&gt;C1&lt;/script&gt;" in page
     assert "<script>" not in page
+
+
+def test_receipt_says_what_was_and_was_not_probed() -> None:
+    proof = load("sample_proof_block.json")
+    lines = scope_receipt(proof)
+    assert lines[0] == "Spark proposed 3 hypotheses."
+    assert "1 probe ran on base and head, 3 attempts each; 1 passed on base every time." in lines
+    assert "No probe ran for H2, H3." in lines
+    page = render_html(proof, FIXTURES)
+    assert page.index("What this run checked") < page.index("Hypotheses and probes")
+
+
+def test_receipt_flags_a_pass_with_no_probe() -> None:
+    proof = load("sample_proof_block.json").model_copy(deep=True)
+    proof.hypotheses.hypotheses = []
+    proof.experiments, proof.findings, proof.tamper_findings = [], [], []
+    proof.verdict.decision = "PASS"
+    assert scope_receipt(proof) == [
+        "Spark proposed 0 hypotheses.",
+        "No probe ran, so nothing in this run tested the change directly.",
+        "0 tests changed by the pull request were run from base on head.",
+        "PASS covers only these checks.",
+    ]
+

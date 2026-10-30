@@ -341,7 +341,8 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | GitHub Action | Built and tested offline; not yet run on GitHub |
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
-| PASS strength (how hard ProofMerge looked) | Planned |
+| Scope receipt: what a run checked (hypotheses, probes, attempts, changed tests), in `report.html` and `verify` output | Built and tested |
+| PASS strength beyond the receipt (for example mutation checks) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |

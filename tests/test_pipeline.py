@@ -376,6 +376,7 @@ def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, statu
     result = CliRunner().invoke(cli.app, arguments(repo, evidence) + ["--intent-file", str(intent_file)])
     assert result.exit_code == status, result.output
     assert f"verdict: {decision}" in result.output
+    assert "checked: Spark proposed " in result.output
     assert str(evidence / "report.html") in result.output
     assert all(reason in result.output for reason in proof.verdict.reasons)
     assert "calls=0 tokens: prompt=0 completion=0" in result.output

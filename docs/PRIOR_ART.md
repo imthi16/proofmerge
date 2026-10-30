@@ -79,8 +79,8 @@ marked **unverified**.
      benchmark runs. It does not describe re-running each test to detect flakiness, or a
      hashed, replayable evidence bundle. *Built: 3 attempts per revision
      (`src/proofmerge/sandbox.py`) and a hashed manifest checked by `proofmerge replay`
-     (`src/proofmerge/manifest.py`). Planned: replay re-running the experiments in Docker;
-     today it checks hashes only.*
+     (`src/proofmerge/manifest.py`); `proofmerge replay --rerun` re-runs the recorded
+     experiments in Docker and reports whether each outcome reproduces.*
   5. **Test tampering.** The paper does not discuss a PR that edits or deletes its own
      tests. *Built: a static check and the base version of each changed test run on head
      (`src/proofmerge/tamper.py`).*

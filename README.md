@@ -57,7 +57,9 @@ REVIEW. [Whole report](docs/assets/report-full-real-light.png).
 
 The report is one static HTML file, with no server, no JavaScript and nothing
 loaded from the network. Every probe, log and command in the run is hashed, and
-`proofmerge replay <proof.json>` checks that nothing changed after the run.
+`proofmerge replay <proof.json>` checks that nothing changed after the run;
+with `--rerun --repo <repo>` it runs every probe again in Docker and reports
+whether each recorded outcome reproduces.
 
 ## The problem
 
@@ -251,11 +253,11 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Docker runs: no network, no host secrets, read-only code, 3 runs per version | Built and tested |
 | Test-tamper guard: original tests run on the patch | Built and tested |
 | Muse Wonder cross-check of claims and probes | Built and tested |
-| Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested; `replay` checks hashes only |
+| Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested offline; not yet run on GitHub |
 | Benchmark runner and two recorded runs | Built; results above |
-| `replay` re-running the experiments in Docker | Planned |
+| `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | PASS strength (how hard ProofMerge looked) | Planned |
 
 Each row has a dated entry with its real check results in

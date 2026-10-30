@@ -1,5 +1,6 @@
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
-from proofmerge.evidence import Proof
+from proofmerge.evidence import Experiment, Proof
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.manifest import (
@@ -21,7 +22,16 @@ from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.report import render_html
-from proofmerge.sandbox import RUNNER_IMAGE, SandboxError, image_digest, runner_dockerfile_path
+from proofmerge.sandbox import (
+    HYPOTHESIS_ID,
+    RUNNER_IMAGE,
+    SHA,
+    SandboxError,
+    image_digest,
+    is_runner_failure,
+    run_experiment,
+    runner_dockerfile_path,
+)
 
 app = typer.Typer()
 
@@ -111,8 +121,10 @@ def report(
 @app.command()
 def replay(
     proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    rerun: Annotated[bool, typer.Option(help="Re-run recorded experiments in Docker")] = False,
+    repo: Annotated[Path | None, typer.Option(help="Git repository for --rerun")] = None,
 ) -> None:
-    """Check recorded evidence and probe hashes without re-running experiments."""
+    """Check evidence hashes and optionally re-run recorded experiments in Docker."""
     evidence_dir = proof_json.parent
     problems = verify_manifest(evidence_dir)
     try:
@@ -133,6 +145,89 @@ def replay(
         raise typer.Exit(1)
     manifest = json.loads((evidence_dir / "manifest.json").read_text())
     typer.echo(f"evidence intact: {len(manifest['files'])} files")
+    if rerun:
+        try:
+            reproduced = _replay_experiments(proof, evidence_dir, repo)
+        except (OSError, ValueError, SandboxError) as error:
+            typer.echo(f"replay failed: {error}", err=True)
+            raise typer.Exit(1) from None
+        if not reproduced:
+            raise typer.Exit(1)
+
+
+def _outcomes(experiment: Experiment, revision: str) -> str:
+    return "".join(
+        execution.outcome[0]
+        for execution in sorted(experiment.executions, key=lambda execution: execution.attempt)
+        if execution.revision == revision
+    )
+
+
+def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> bool:
+    if repo is None:
+        raise ValueError("--repo is required with --rerun")
+    # Validate both before either reaches git; a ref or an option must never be executed.
+    for sha in (proof.base_sha, proof.head_sha):
+        if not SHA.fullmatch(sha):
+            raise ValueError(f"not a full commit SHA: {sha!r}")
+    for sha in (proof.base_sha, proof.head_sha):
+        result = subprocess.run(
+            ["git", "-C", str(repo), "cat-file", "-e", f"{sha}^{{commit}}"],
+            capture_output=True, check=False,
+        )
+        if result.returncode:
+            raise ValueError(f"repository {repo} lacks recorded commit {sha} (or is not readable)")
+    if not proof.experiments:
+        raise ValueError("no recorded experiments to re-run")
+    seen = set()
+    for experiment in proof.experiments:
+        identifier = experiment.hypothesis_id
+        if not HYPOTHESIS_ID.fullmatch(identifier) or identifier in seen:
+            raise ValueError(f"invalid or duplicate experiment id: {identifier!r}")
+        seen.add(identifier)
+        counts = []
+        for revision, sha in (("base", proof.base_sha), ("head", proof.head_sha)):
+            executions = [e for e in experiment.executions if e.revision == revision]
+            count = len(executions)
+            if (
+                not count
+                or sorted(e.attempt for e in executions) != list(range(1, count + 1))
+                or any(e.commit_sha != sha for e in executions)
+            ):
+                raise ValueError(f"{identifier}: invalid recorded {revision} executions")
+            counts.append(count)
+        if counts[0] != counts[1] or experiment.timeout_seconds <= 0:
+            raise ValueError(f"{identifier}: unequal attempt counts or invalid timeout")
+
+    # Keep the directory for inspection after exit, including on a runner failure.
+    destination = Path(tempfile.mkdtemp(prefix="proofmerge-replay-"))
+    typer.echo(f"re-run evidence: {destination}")
+    reproduced = True
+    for experiment in proof.experiments:
+        identifier = experiment.hypothesis_id
+        recorded = f"base {_outcomes(experiment, 'base')} head {_outcomes(experiment, 'head')}"
+        try:
+            current = run_experiment(
+                repo, proof.base_sha, proof.head_sha, identifier,
+                (evidence_dir / experiment.test_source_path).read_bytes().decode("utf-8"),
+                destination, attempts=len(experiment.executions) // 2,
+                timeout=experiment.timeout_seconds,
+            )
+        except (OSError, ValueError, SandboxError) as error:
+            typer.echo(f"{identifier} recorded {recorded}: NOT reproduced ({error})")
+            reproduced = False
+            continue
+        if any(is_runner_failure(execution.exit_code) for execution in current.executions):
+            typer.echo(f"{identifier} recorded {recorded}: NOT reproduced (runner failure)")
+            reproduced = False
+            continue
+        now = f"base {_outcomes(current, 'base')} head {_outcomes(current, 'head')}"
+        if recorded == now:
+            typer.echo(f"{identifier} {recorded}: reproduced")
+        else:
+            typer.echo(f"{identifier} recorded {recorded}, now {now}: NOT reproduced")
+            reproduced = False
+    return reproduced
 
 
 @app.command()

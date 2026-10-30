@@ -9,7 +9,7 @@ from proofmerge.findings import findings_for
 from proofmerge.hypotheses import HypothesisSet, check_diff, generate_hypotheses
 from proofmerge.intent import C0, IntentContract, extract_intent
 from proofmerge.manifest import write_manifest
-from proofmerge.meta import MetaClient, MetaError
+from proofmerge.meta import SPARK_MODEL, WONDER_MODEL, MetaClient, MetaError
 from proofmerge.probes import probe_hypotheses
 from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
@@ -119,6 +119,9 @@ def run_verify(
             calls=client.calls,
             prompt_tokens=sum(u.prompt_tokens for u in usage),
             completion_tokens=sum(u.completion_tokens for u in usage),
+            endpoint=client.endpoint,
+            models={"spark": client.models[SPARK_MODEL], "wonder": client.models[WONDER_MODEL]},
+            contributor_allowed=client.allow_contributor,
         ),
     )
     (evidence_dir / "proof.json").write_text(proof.model_dump_json(indent=2), encoding="utf-8")

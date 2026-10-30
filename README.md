@@ -264,6 +264,13 @@ cp -r skills/proofmerge ~/.claude/skills/
 Other agents that read the Agent Skills format take the same folder in their
 own skills directory.
 
+### Without a Meta API key
+
+ProofMerge can use another OpenAI-compatible endpoint, or a plan you are already
+signed in to through Claude Code (`PROOFMERGE_BACKEND=claude-cli`). See
+[docs/model-backends.md](docs/model-backends.md) for the settings, the
+training-data warning for contributor models and which agent CLIs were checked.
+
 ### Working on ProofMerge itself
 
 ```bash
@@ -290,6 +297,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | PASS strength (how hard ProofMerge looked) | Planned |
+| Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in
@@ -307,10 +315,12 @@ Each row has a dated entry with its real check results in
 - A model can still guess wrong. Spark may cite a different claim from one run
   to the next, which can change a verdict between BLOCK and REVIEW. The recorded
   runs in `bench/results/` show this.
-- ProofMerge calls Meta's Muse Spark 1.3 and Muse Wonder 1.0 only, through the
-  Meta API. Other model providers are not supported, and the benchmark numbers
-  hold for these two models only. The coding agent that runs the skill can use
-  any model.
+- By default ProofMerge calls Meta's Muse Spark 1.3 and Muse Wonder 1.0 through
+  the Meta API, and the benchmark numbers hold for these two models only. Other
+  OpenAI-compatible endpoints and the Claude Code CLI can be used instead
+  ([docs/model-backends.md](docs/model-backends.md)); with them the verdict rules
+  are the same, but probe quality is untested. Models that may train on prompts
+  are refused unless you opt in.
 
 > [!WARNING]
 > ProofMerge makes no safety promise for running untrusted external code.
@@ -324,7 +334,8 @@ src/proofmerge/
   cli.py         command-line entry point
   pipeline.py    runs every stage of verify and writes the evidence
   context.py     reads base/head commits and the diff from Git
-  meta.py        the only code that talks to the Meta API
+  meta.py        the model client: Meta API by default, or another backend
+  cli_backend.py model calls through a signed-in CLI (Claude Code only)
   intent.py      intent claims, kept only if their quote is in the PR text
   hypotheses.py  Spark's failure hypotheses, checked against the diff
   probes.py      Spark probe drafts, base validation and repeated runs
@@ -342,7 +353,7 @@ docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth
 bench/           28 benchmark PRs, ground truth, runner and results
 action.yml       the GitHub Action
-docs/            spec, plan, Meta API notes, prior art, Action guide
+docs/            spec, plan, Meta API notes, model backends, prior art, Action guide
 BUILDLOG.md      what was actually built, and when
 ORIGINALITY.md   what counts as new work for this hackathon
 ```

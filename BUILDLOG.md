@@ -510,3 +510,10 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `tests/test_skill.py` checks the frontmatter, that every `proofmerge` command and option the skill names exists in the CLI, and that its call budget (19) matches `verify`.
 - README: install line for Claude Code and a "What works today" row. Not yet used by an agent on a real task.
 - `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `530 passed`. `ruff check src tests`: all checks passed.
+
+### 2026-10-30 — T49 Model backends: other endpoints and plans
+- `meta.py` now maps the Spark and Wonder roles to models chosen with `PROOFMERGE_SPARK_MODEL` / `PROOFMERGE_WONDER_MODEL`, and `PROOFMERGE_BASE_URL` selects any OpenAI-compatible endpoint. Defaults are unchanged: Meta API, Muse Spark 1.3, Muse Wonder 1.0. `*-contributor` models stay refused unless `PROOFMERGE_ALLOW_CONTRIBUTOR=1`.
+- `cli_backend.py` adds `PROOFMERGE_BACKEND=claude-cli`: each call runs `claude -p` with no tools, no MCP servers and no settings files, in a fresh empty directory with a minimal environment, so a Claude plan can be used without an API key.
+- `proof.json` records the endpoint, the model per role and whether contributor models were allowed (`model_usage`); the report shows them under Provenance. Older proofs still load.
+- Canary check, 2026-10-30, an empty directory holding `canary.txt` and a prompt asking the CLI to read it with any tool: Claude Code 2.1.314 with `--tools ""` replied that it had no file tool; Grok CLI read the file with `--tools ""` under both `--permission-mode default` and `dontAsk`, so it is refused. Codex has no option that removes its shell tool. Other CLIs were not checked. Details: `docs/model-backends.md`.
+- Real call: `PROOFMERGE_BACKEND=claude-cli PROOFMERGE_SPARK_MODEL=haiku proofmerge smoke` returned `ok=True`, 1128 prompt and 81 completion tokens. No full `verify` has run on a non-default backend, and the OpenCode Go endpoint has not been called.

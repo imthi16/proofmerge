@@ -9,7 +9,7 @@ import html
 import shlex
 from pathlib import Path
 
-from proofmerge.evidence import Experiment, Finding, Proof
+from proofmerge.evidence import Experiment, Finding, ModelUsage, Proof
 from proofmerge.intent import IntentClaim
 
 MAX_FAILURE_LINES = 20
@@ -319,6 +319,19 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
     return f"<section><h2>Hypotheses and probes</h2>{body}</section>"
 
 
+def _models(usage: ModelUsage) -> str:
+    e = html.escape
+    if usage.endpoint is None:
+        return ""
+    names = ", ".join(f"{e(role)} {e(model or 'CLI default')}" for role, model in usage.models.items())
+    warning = (
+        '<dt>training</dt><dd class="note">contributor models were allowed:'
+        " prompts, including repository code, may be used for training</dd>"
+        if usage.contributor_allowed else ""
+    )
+    return f'<dt>models</dt><dd>{names} via <code>{e(usage.endpoint)}</code></dd>{warning}'
+
+
 def _provenance(proof: Proof) -> str:
     e = html.escape
     probes = "".join(
@@ -335,6 +348,7 @@ def _provenance(proof: Proof) -> str:
 {probes}
 <dt>model usage</dt><dd>{usage.calls} calls, {usage.prompt_tokens} prompt tokens,\
  {usage.completion_tokens} completion tokens</dd>
+{_models(usage)}
 </dl>
 <p class="muted">Hashes detect that a file changed after capture; they are not signatures.</p>
 </section>"""

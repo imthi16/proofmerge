@@ -271,6 +271,30 @@ signed in to through Claude Code (`PROOFMERGE_BACKEND=claude-cli`). See
 [docs/model-backends.md](docs/model-backends.md) for the settings, the
 training-data warning for contributor models and which agent CLIs were checked.
 
+### Dashboard
+
+```bash
+proofmerge dashboard bench/results       # or any folder of evidence runs
+```
+
+It opens a page on `http://127.0.0.1:8765/` listing every run under the folder:
+verdict, base and head, regressions, model calls and whether each run's evidence
+still matches its manifest. Click a verdict in the bar to filter, search the
+reasons, and open a run to see its probes on base and head, why head failed, the
+replay command and the full report. Click any base or head result to read that
+attempt's log, and export the filtered runs as CSV. A Benchmarks tab compares each
+`results.json` with its labels, the held-out slice and the baselines.
+
+Add `--repo path/to/repo` (a clone with a GitHub remote and `gh` signed in) for a
+Pull requests tab: each PR shows the ProofMerge verdict for its current head
+commit, if a run exists, and an open PR can be verified from the page. That
+fetches it into `refs/proofmerge/` without touching your branches and runs
+`proofmerge verify` with the PR description as the intent, after a confirmation
+that names the cost (up to 19 model calls) and the trust requirement.
+
+The server answers on 127.0.0.1 only. Apart from that one verify request, which
+needs a per-session token and a same-origin request, it only reads files.
+
 ### Working on ProofMerge itself
 
 ```bash
@@ -298,6 +322,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | PASS strength (how hard ProofMerge looked) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
+| `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in
@@ -347,6 +372,8 @@ src/proofmerge/
   evidence.py    the proof.json format
   manifest.py    evidence hashes and replay checks
   report.py      renders proof.json as report.html
+  dashboard.py   the local dashboard server; dashboard_static/ holds the React page
+  dashboard_prs.py  pull requests for the dashboard: list with gh, verify on request
   prompts/       the instructions given to Muse Spark and Muse Wonder
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)

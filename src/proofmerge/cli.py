@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
+from proofmerge.dashboard import make_server
 from proofmerge.evidence import Experiment, Proof
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
@@ -117,6 +118,34 @@ def report(
         typer.echo(f"report failed: {error}", err=True)
         raise typer.Exit(1) from None
     typer.echo(f"wrote {out}")
+
+
+@app.command()
+def dashboard(
+    folder: Annotated[Path, typer.Argument(help="Folder holding evidence runs (searched recursively)")],
+    port: Annotated[int, typer.Option(help="Local port")] = 8765,
+    repo: Annotated[
+        Path | None, typer.Option(help="Git repo with a GitHub remote: list and verify its PRs")
+    ] = None,
+) -> None:
+    """Serve a dashboard of every run under FOLDER on 127.0.0.1 (and, with --repo, its PRs)."""
+    if not folder.is_dir():
+        typer.echo(f"dashboard failed: {folder} is not a folder", err=True)
+        raise typer.Exit(1)
+    try:
+        if repo is not None and not (repo / ".git").exists():
+            raise OSError(f"{repo} is not a Git repository")
+        server = make_server(folder, port, repo)
+    except OSError as error:
+        typer.echo(f"dashboard failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"dashboard: http://127.0.0.1:{server.server_port}/  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 @app.command()
@@ -372,3 +401,7 @@ def probe(
         elif not p.passed_on_base:
             typer.echo(f"{p.hypothesis_id}: no probe passed on base after {p.drafts} drafts")
     _echo_usage(client)
+
+
+if __name__ == "__main__":
+    app()

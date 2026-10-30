@@ -22,5 +22,9 @@ Each item counts as built only when a dated `BUILDLOG.md` entry records its comm
 - Do not copy pre-event implementation from earlier projects.
 - Respect licenses and attribute any reused third-party components.
 - Keep incremental commits and a dated `BUILDLOG.md`.
+
+## Third-party components
+- The dashboard vendors React 18.3.1 and React DOM 18.3.1 (MIT) and htm 3.1.1 (Apache-2.0) unchanged in `src/proofmerge/dashboard_static/vendor/`, with their license files. The tarballs' SHA-512 matched the npm registry's published integrity values.
+- Python dependencies are pinned in `pyproject.toml`.
 - No invented benchmark scores, model calls, test passes, progress or demo screenshots.
 - AI coding assistants are development tools; the project is evaluated on the resulting verifiable implementation.

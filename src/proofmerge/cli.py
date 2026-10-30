@@ -22,7 +22,7 @@ from proofmerge.manifest import (
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
-from proofmerge.report import render_html
+from proofmerge.report import render_html, scope_receipt
 from proofmerge.sandbox import (
     HYPOTHESIS_ID,
     RUNNER_IMAGE,
@@ -341,6 +341,7 @@ def verify(
     typer.echo(f"verdict: {proof.verdict.decision}")
     for reason in proof.verdict.reasons:
         typer.echo(reason)
+    typer.echo("checked: " + " ".join(scope_receipt(proof)))
     typer.echo(f"report: {evidence_dir / 'report.html'}")
     _echo_usage(client)
     if proof.verdict.decision == "BLOCK":

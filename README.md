@@ -156,6 +156,27 @@ How results map to a decision:
 > PASS. Exit codes, commands and commit hashes are the evidence; a model's
 > confidence is not.
 
+<details>
+<summary>The one rule that looks like an exception: a regression that cites a CHANGE claim</summary>
+
+When a verified regression (base pass 3/3, patch fail 3/3) is tied to a claim
+the PR marks as a change, three things can happen:
+
+| Muse Wonder | Verdict for that finding |
+|---|---|
+| did not run (API error, budget, schema failure) | REVIEW: ProofMerge cannot tell whether the change is intended |
+| ran and confirmed that a CHANGE claim in the PR explains the failure | REVIEW: possibly the intended change |
+| ran and found no CHANGE claim that explains it | judged against "everything else stays the same" (C0), so it can be BLOCK |
+
+The BLOCK still rests on the base and patch runs, decided in code. Wonder's
+output can only grant the "intended change" exemption, which moves a result to
+REVIEW. REVIEW when Wonder is missing is a fail-safe, not a model decision.
+Without this rule, one vague sentence such as "simplify the pricing code" would
+excuse any regression in that area. See `src/proofmerge/verdict.py` and
+`tests/test_verdict.py`.
+
+</details>
+
 ## Results
 
 Twenty-eight synthetic pull requests on one small fixture, 16 faulty and 12

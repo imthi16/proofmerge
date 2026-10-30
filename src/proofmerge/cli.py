@@ -22,6 +22,7 @@ from proofmerge.manifest import (
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
+from proofmerge.project_config import load_config
 from proofmerge.report import render_html, scope_receipt
 from proofmerge.sandbox import (
     HYPOTHESIS_ID,
@@ -30,6 +31,7 @@ from proofmerge.sandbox import (
     SandboxError,
     image_digest,
     is_runner_failure,
+    run_config_experiment,
     run_experiment,
     runner_dockerfile_path,
 )
@@ -209,6 +211,12 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
             raise ValueError(f"repository {repo} lacks recorded commit {sha} (or is not readable)")
     if not proof.experiments:
         raise ValueError("no recorded experiments to re-run")
+    config = None
+    if proof.language != "python":
+        # Same rule as verify: the test setup comes from the recorded base commit.
+        config = load_config(repo, proof.base_sha)
+        if config is None or config.language != proof.language:
+            raise ValueError(f"{repo} has no .proofmerge.toml for {proof.language} at the base commit")
     seen = set()
     for experiment in proof.experiments:
         identifier = experiment.hypothesis_id
@@ -236,13 +244,19 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
     for experiment in proof.experiments:
         identifier = experiment.hypothesis_id
         recorded = f"base {_outcomes(experiment, 'base')} head {_outcomes(experiment, 'head')}"
+        source = (evidence_dir / experiment.test_source_path).read_bytes().decode("utf-8")
+        attempts = len(experiment.executions) // 2
         try:
-            current = run_experiment(
-                repo, proof.base_sha, proof.head_sha, identifier,
-                (evidence_dir / experiment.test_source_path).read_bytes().decode("utf-8"),
-                destination, attempts=len(experiment.executions) // 2,
-                timeout=experiment.timeout_seconds,
-            )
+            if config is None:
+                current = run_experiment(
+                    repo, proof.base_sha, proof.head_sha, identifier, source, destination,
+                    attempts=attempts, timeout=experiment.timeout_seconds,
+                )
+            else:
+                current = run_config_experiment(
+                    repo, proof.base_sha, proof.head_sha, identifier, source, config,
+                    destination, attempts=attempts, timeout=experiment.timeout_seconds,
+                )
         except (OSError, ValueError, SandboxError) as error:
             typer.echo(f"{identifier} recorded {recorded}: NOT reproduced ({error})")
             reproduced = False
@@ -279,7 +293,8 @@ def hypotheses(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2)
         contract = extract_intent(intent, client)
-        found = generate_hypotheses(context, contract, client)
+        config = load_config(repo, context.base_sha)
+        found = generate_hypotheses(context, contract, client, config=config)
     except (ContextError, MetaError, ValueError, OSError) as error:
         typer.echo(f"hypotheses failed: {error}", err=True)
         raise typer.Exit(1) from None
@@ -369,9 +384,10 @@ def probe(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
         contract = extract_intent(intent, client)
-        found = generate_hypotheses(context, contract, client)
+        config = load_config(repo, context.base_sha)
+        found = generate_hypotheses(context, contract, client, config=config)
         probes, experiments = probe_hypotheses(
-            repo, context, contract, found.hypotheses, client, evidence_dir
+            repo, context, contract, found.hypotheses, client, evidence_dir, config=config
         )
     except (ContextError, MetaError, SandboxError, ValueError, OSError) as error:
         typer.echo(f"probe failed: {error}", err=True)

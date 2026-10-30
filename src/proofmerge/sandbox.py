@@ -21,6 +21,7 @@ from importlib import resources
 from pathlib import Path
 
 from proofmerge.evidence import Execution, Experiment, Outcome
+from proofmerge.project_config import ProjectConfig
 
 RUNNER_IMAGE = "proofmerge-runner:0.1"
 ATTEMPTS = 3  # a regression must reproduce on every attempt
@@ -30,6 +31,8 @@ OUTPUT_LIMIT_EXIT = -1  # exit code recorded for a run stopped by the output lim
 # What runs inside the container; recorded in every Execution.
 PYTEST_ARGV = ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 INVALID_PROBE_EXIT = 6  # set by OUTCOME_PLUGIN; not a pytest exit code, so it reads ERROR
+# Runner used for repository-defined languages in `.proofmerge.toml`.
+ConfigRunner = Callable[[ProjectConfig, Path, str, int], tuple[int | None, bytes, bytes]]
 # Written as conftest.py next to every probe. A test that fails with anything but an
 # assertion (NameError, ImportError, a setup error) is a broken probe, not evidence. So
 # is a skipped or xfail test: pytest exits 0 for it although its assertion never ran.
@@ -162,6 +165,32 @@ def docker_argv(
     ]  # fmt: skip
 
 
+def config_docker_argv(name: str, config: ProjectConfig, code_dir: Path) -> list[str]:
+    """Docker argv for a repository-defined test command."""
+    job = os.environ.get("PROOFMERGE_JOB_ID", "")
+    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+    env: list[str] = []
+    for key, value in config.env.items():
+        env.extend(["--env", f"{key}={value}"])
+    return [
+        "docker", "run", "--rm", "--name", name, *label,
+        "--network", "none",
+        "--read-only",
+        "--tmpfs", f"/tmp:rw,exec,size={config.tmpfs_mb}m",
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        "--user", "65534:65534",
+        "--pids-limit", "64",
+        "--memory", "512m", "--memory-swap", "512m",
+        "--cpus", "1",
+        *env,
+        "--volume", f"{code_dir}:/work:ro",
+        "--workdir", "/work",
+        config.image,
+        *config.test_command,
+    ]  # fmt: skip
+
+
 def _read_capped(stream, chunks: list[bytes], over: threading.Event) -> None:
     size = 0
     while chunk := stream.read(65536):
@@ -207,6 +236,66 @@ def docker_runner(
         note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
         return OUTPUT_LIMIT_EXIT, stdout, stderr + note
     return (None if timed_out else proc.returncode), stdout, stderr
+
+
+def config_docker_runner(
+    config: ProjectConfig, code_dir: Path, probe_source: str, timeout: int
+) -> tuple[int | None, bytes, bytes]:
+    """Run one config-defined probe; the probe is written into the read-only export first."""
+    name = f"proofmerge-{uuid.uuid4().hex[:12]}"
+    probe_path = code_dir / config.probe_path
+    probe_path.parent.mkdir(parents=True, exist_ok=True)
+    probe_path.write_text(probe_source, encoding="utf-8")
+    open_to_runner(code_dir)
+    argv = config_docker_argv(name, config, code_dir)
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out: list[bytes] = []
+    err: list[bytes] = []
+    over = threading.Event()
+    readers = [
+        threading.Thread(target=_read_capped, args=(proc.stdout, out, over)),
+        threading.Thread(target=_read_capped, args=(proc.stderr, err, over)),
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
+    while proc.poll() is None and not over.is_set() and time.monotonic() < deadline:
+        over.wait(0.1)
+    timed_out = proc.poll() is None and not over.is_set()
+    if proc.poll() is None:
+        subprocess.run(["docker", "kill", name], capture_output=True, check=False)
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    for reader in readers:
+        reader.join()
+    stdout, stderr = b"".join(out), b"".join(err)
+    if over.is_set():
+        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
+        return OUTPUT_LIMIT_EXIT, stdout, stderr + note
+    return (None if timed_out else proc.returncode), stdout, stderr
+
+
+def outcome_for_config(
+    exit_code: int | None, config: ProjectConfig, stdout: bytes, stderr: bytes
+) -> Outcome:
+    """Map a config-defined test result to PASS/FAIL/ERROR/TIMEOUT.
+
+    A non-zero exit is FAIL only when `assertion_failure` matches the output;
+    otherwise it is ERROR. Runner failures stay ERROR, never evidence.
+    """
+    if exit_code is None:
+        return "TIMEOUT"
+    if exit_code in config.pass_exit_codes:
+        return "PASS"
+    if is_runner_failure(exit_code):
+        return "ERROR"
+    combined = (stdout + stderr).decode(errors="replace")
+    if re.search(config.assertion_failure, combined):
+        return "FAIL"
+    return "ERROR"
 
 
 def run_experiment(
@@ -263,6 +352,73 @@ def run_experiment(
                         command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"],
                         exit_code=exit_code,
                         outcome=outcome_for(exit_code),
+                        duration_ms=duration_ms,
+                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
+                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
+                        runner_image_digest=digest,
+                    )
+                )
+    return Experiment(
+        hypothesis_id=hypothesis_id,
+        test_source_path=f"probes/{probe_name}",
+        test_source_sha256=hashlib.sha256(probe_source.encode()).hexdigest(),
+        timeout_seconds=timeout,
+        executions=executions,
+    )
+
+
+def run_config_experiment(
+    repo: Path,
+    base_sha: str,
+    head_sha: str | None,
+    hypothesis_id: str,
+    probe_source: str,
+    config: ProjectConfig,
+    evidence_dir: Path,
+    *,
+    runner: ConfigRunner = config_docker_runner,
+    digest: str | None = None,
+    attempts: int = ATTEMPTS,
+    timeout: int = TIMEOUT_SECONDS,
+) -> Experiment:
+    """Run a config-defined probe `attempts` times on each revision."""
+    if not HYPOTHESIS_ID.fullmatch(hypothesis_id):
+        raise SandboxError(f"bad hypothesis id: {hypothesis_id!r}")
+    if digest is None:
+        digest = image_digest(config.image)
+    evidence_dir = evidence_dir.resolve()
+    suffix = Path(config.probe_path).suffix or ""
+    probe_name = f"test_{hypothesis_id.lower()}{suffix}"
+    probe_dir = evidence_dir / "probes"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
+    open_to_runner(probe_dir)
+    log_dir = evidence_dir / hypothesis_id
+    log_dir.mkdir(exist_ok=True)
+
+    executions: list[Execution] = []
+    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
+        Path(tmp).chmod(0o755)
+        revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
+        for revision, sha in revisions:
+            code_dir = Path(tmp) / revision
+            export_tree(repo, sha, code_dir)
+            open_to_runner(code_dir)
+            for attempt in range(1, attempts + 1):
+                start = time.monotonic()
+                exit_code, stdout, stderr = runner(config, code_dir, probe_source, timeout)
+                duration_ms = round((time.monotonic() - start) * 1000)
+                stem = f"{revision}-{attempt}"
+                (log_dir / f"{stem}.stdout").write_bytes(stdout)
+                (log_dir / f"{stem}.stderr").write_bytes(stderr)
+                executions.append(
+                    Execution(
+                        revision=revision,
+                        commit_sha=sha,
+                        attempt=attempt,
+                        command_argv=list(config.test_command),
+                        exit_code=exit_code,
+                        outcome=outcome_for_config(exit_code, config, stdout, stderr),
                         duration_ms=duration_ms,
                         stdout_path=f"{hypothesis_id}/{stem}.stdout",
                         stderr_path=f"{hypothesis_id}/{stem}.stderr",

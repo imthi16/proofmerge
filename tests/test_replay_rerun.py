@@ -339,3 +339,46 @@ def test_docker_demo_proof_reproduces(demo_repo, tmp_path, monkeypatch):
     destination = Path(result.stdout.split("re-run evidence: ")[1].splitlines()[0])
     assert (destination / "H1/head-3.stdout").is_file()
     assert snapshot(evidence) == before
+
+
+def test_config_language_reruns_with_base_config(bundle, monkeypatch):
+    path, repo, proof = bundle
+    git(repo, "checkout", "-q", proof.base_sha)
+    (repo / ".proofmerge.toml").write_text(
+        'language = "go"\nimage = "golang:1.23-alpine"\nprobe_path = "p_test.go"\n'
+        'test_command = ["go", "test"]\nassertion_failure = "--- FAIL"\n'
+    )
+    git(repo, "add", ".proofmerge.toml")
+    git(repo, "commit", "-q", "-m", "config")
+    base = git(repo, "rev-parse", "HEAD").strip()
+    seen = []
+
+    def run_config(repo_arg, base_sha, head_sha, identifier, source, config, *args, **kwargs):
+        seen.append((base_sha, config.language))
+        experiment = next(e for e in Proof.model_validate_json(path.read_text()).experiments
+                          if e.hypothesis_id == identifier)
+        return experiment
+
+    monkeypatch.setattr(cli, "run_config_experiment", run_config)
+    monkeypatch.setattr(cli, "run_experiment", lambda *a, **k: pytest.fail("pytest runner used"))
+
+    def to_config_base(data):
+        data.update(language="go", base_sha=base)
+        for experiment in data["experiments"]:
+            for execution in experiment["executions"]:
+                if execution["revision"] == "base":
+                    execution["commit_sha"] = base
+
+    rewrite(path, to_config_base)
+    result = invoke(path, repo)
+    assert result.exit_code == 0, result.output
+    assert seen and all(entry == (base, "go") for entry in seen)
+
+
+def test_config_language_without_base_config_fails(bundle, monkeypatch):
+    path, repo, _ = bundle
+    monkeypatch.setattr(cli, "run_config_experiment", lambda *a, **k: pytest.fail("ran"))
+    rewrite(path, lambda data: data.update(language="go"))
+    result = invoke(path, repo)
+    assert result.exit_code == 1
+    assert "no .proofmerge.toml for go" in result.output

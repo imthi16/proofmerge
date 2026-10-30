@@ -381,11 +381,16 @@ def _provenance(proof: Proof) -> str:
         for exp in proof.experiments
     )
     usage = proof.model_usage
+    language = (
+        f'<dt>language</dt><dd>{e(proof.language)}</dd>'
+        if proof.language != "python" else ""
+    )
     return f"""<section><h2>Provenance</h2>
 <dl class="provenance">
 <dt>base</dt><dd class="sha">{e(proof.base_sha)}</dd>
 <dt>head</dt><dd class="sha">{e(proof.head_sha)}</dd>
 <dt>diff</dt><dd class="sha">sha256 {e(proof.diff_sha256)}</dd>
+{language}
 {probes}
 <dt>model usage</dt><dd>{usage.calls} calls, {usage.prompt_tokens} prompt tokens,\
  {usage.completion_tokens} completion tokens</dd>

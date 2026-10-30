@@ -1,0 +1,224 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "proofmerge-go-verify",
+  "base_sha": "8aae692ea13db94a127b7221b64aed01e7377741",
+  "head_sha": "672f3f5677afaef3378823bc3b5ef38133f67d26",
+  "diff_sha256": "fa75d3da3ad573368788898714417b03141fc1a7304d15cce9f152cb58cc0a90",
+  "language": "go",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "Price lookup caches results.",
+        "source_quote": "Add caching to price lookup"
+      },
+      {
+        "id": "C2",
+        "kind": "PRESERVE",
+        "statement": "Returned prices remain unchanged.",
+        "source_quote": "Returned prices and errors must not change"
+      },
+      {
+        "id": "C3",
+        "kind": "PRESERVE",
+        "statement": "Price lookup errors remain unchanged.",
+        "source_quote": "errors must not change"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C3",
+        "title": "Cached SKU bypasses unknown-tenant error",
+        "changed_locations": [
+          "pricing/pricing.go::PriceFor"
+        ],
+        "suspected_behavior": "After PriceFor(\"tenant-a\", \"widget\") populates cache[\"widget\"], a later PriceFor(\"no-such-tenant\", \"widget\") with unknown tenant hits `if price, ok := cache[sku]` and returns cached price without running tenant validation.",
+        "expected_base": "Second call PriceFor(\"no-such-tenant\", \"widget\") returns (0, error \"unknown tenant: no-such-tenant\")",
+        "expected_head": "Second call PriceFor(\"no-such-tenant\", \"widget\") returns (20.0, nil) via cache hit, no tenant check",
+        "test_intent": "Call PriceFor(\"tenant-a\",\"widget\") and check success, then call PriceFor(\"no-such-tenant\",\"widget\") and record value/error; base errors on second call while head returns cached price with nil error.",
+        "risk_category": "security",
+        "falsification_criteria": "If head's second call with unknown tenant returns an unknown-tenant error like base instead of a cached price, this hypothesis is wrong.",
+        "possibly_intended": false,
+        "id": "H1"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.go",
+      "test_source_sha256": "b70a1c46f93511709cae8173c3d1fc8f2414570d3b1e47c9f5fd3e86384e711e",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "8aae692ea13db94a127b7221b64aed01e7377741",
+          "attempt": 1,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 41819,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "8aae692ea13db94a127b7221b64aed01e7377741",
+          "attempt": 2,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 41604,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "8aae692ea13db94a127b7221b64aed01e7377741",
+          "attempt": 3,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 41308,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "672f3f5677afaef3378823bc3b5ef38133f67d26",
+          "attempt": 1,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 41009,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "672f3f5677afaef3378823bc3b5ef38133f67d26",
+          "attempt": 2,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 42515,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "672f3f5677afaef3378823bc3b5ef38133f67d26",
+          "attempt": 3,
+          "command_argv": [
+            "go",
+            "test",
+            "-count=1",
+            "-p=1",
+            "-run",
+            "TestProofMergeProbe",
+            "./pricing"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 41818,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C3",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-go-verify/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H1 is a verified regression against uncontested PRESERVE claim C3 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested.",
+      "Test-tamper guard is not available for go; changed tests were not re-run."
+    ]
+  },
+  "model_usage": {
+    "calls": 5,
+    "prompt_tokens": 4438,
+    "completion_tokens": 7449,
+    "endpoint": "https://api.meta.ai/v1",
+    "models": {
+      "spark": "muse-spark-1.3",
+      "wonder": "muse-wonder-1.0"
+    },
+    "contributor_allowed": false
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

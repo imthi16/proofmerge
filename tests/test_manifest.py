@@ -160,8 +160,8 @@ def test_probe_writes_manifest_after_run_json(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "check_diff", lambda *args: None)
     monkeypatch.setattr(cli, "MetaClient", lambda **kwargs: client)
     monkeypatch.setattr(cli, "extract_intent", lambda *args: contract)
-    monkeypatch.setattr(cli, "generate_hypotheses", lambda *args: hypotheses)
-    monkeypatch.setattr(cli, "probe_hypotheses", lambda *args: ([], []))
+    monkeypatch.setattr(cli, "generate_hypotheses", lambda *args, **kwargs: hypotheses)
+    monkeypatch.setattr(cli, "probe_hypotheses", lambda *args, **kwargs: ([], []))
     evidence = tmp_path / "evidence"
     result = CliRunner().invoke(cli.app, [
         "probe", str(tmp_path), "--base", "base", "--head", "head",

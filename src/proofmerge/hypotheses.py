@@ -2,9 +2,13 @@
 
 Spark proposes; deterministic code drops any hypothesis that cites an unknown
 claim or points at code the patch did not change.
+
+For repositories with `.proofmerge.toml`, the generic prompt is used and the
+language-specific runner is described.
 """
 
 import json
+import shlex
 from importlib import resources
 
 from pydantic import BaseModel
@@ -12,10 +16,14 @@ from pydantic import BaseModel
 from proofmerge.context import GitContext
 from proofmerge.intent import IntentContract
 from proofmerge.meta import SPARK_MODEL, MetaClient
+from proofmerge.project_config import ProjectConfig
 
 MAX_HYPOTHESES = 5
 MAX_DIFF_CHARS = 60_000
 PROMPT = (resources.files("proofmerge") / "prompts" / "hypotheses.md").read_text()
+GENERIC_PROMPT = (
+    resources.files("proofmerge") / "prompts" / "hypotheses_generic.md"
+).read_text()
 
 
 class ProposedHypothesis(BaseModel):
@@ -76,8 +84,23 @@ def check_diff(context: GitContext) -> None:
         raise ValueError(f"diff is over {MAX_DIFF_CHARS} characters")
 
 
+def _hypotheses_prompt(config: ProjectConfig | None) -> str:
+    """Return the developer prompt for hypothesis generation."""
+    if config is None:
+        return PROMPT
+    return (
+        GENERIC_PROMPT.replace("{language}", config.language)
+        .replace("{probe_path}", config.probe_path)
+        .replace("{test_command}", shlex.join(config.test_command))
+        .replace("{assertion_failure}", config.assertion_failure)
+    )
+
+
 def generate_hypotheses(
-    context: GitContext, contract: IntentContract, client: MetaClient
+    context: GitContext,
+    contract: IntentContract,
+    client: MetaClient,
+    config: ProjectConfig | None = None,
 ) -> HypothesisSet:
     """Ask Spark for hypotheses about base..head and keep the ones that pass validation."""
     if not context.changed_files:
@@ -94,7 +117,7 @@ def generate_hypotheses(
     )
     proposed = client.structured(
         SPARK_MODEL,
-        developer=PROMPT,
+        developer=_hypotheses_prompt(config),
         user=user,
         schema=ProposedHypotheses,
         reasoning_effort="medium",

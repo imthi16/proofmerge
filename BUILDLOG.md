@@ -417,6 +417,12 @@ All checks passed!
 - `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `462 passed, 9 skipped in 32.05s`. Docker availability guards account for the nine skips, including the new integration test. `../proofmerge-T3/.venv/bin/ruff check src tests`: `All checks passed!`. `git diff --check` passed.
 - Real Docker check: `replay --rerun` on the tenant-cache demo bundle (base `9dcc104`, head `32dff53`) printed `H1 base PPP head FFF: reproduced` and `H2 base PPP head FFF: reproduced`, exit 0; the bundle's file hashes were the same before and after. README and PRIOR_ART status lines updated.
 
+### 2026-10-30 — T39 CHANGE citation confirmation
+- After a successful Wonder probe check, a verified CHANGE-cited regression qualifies for REVIEW only when Wonder confirms that a verified CHANGE claim explains it, the same test a C0-cited finding gets; otherwise it uses the implicit C0 PRESERVE rule. Missing or failed probe checks retain the previous CHANGE review behavior. Contested claims, mismatched probes and tamper rules remain unchanged.
+- Added offline coverage for matching, null, non-CHANGE and other-CHANGE explanations, API/schema failures, independent claim-check failures, intent/evidence qualifications, other BLOCK precedence and the intended-change tamper path. No real model calls or new dependencies.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `507 passed in 42.50s`.
+- `../proofmerge-T3/.venv/bin/ruff check src tests`: failed with one existing `I001` import-formatting error at `tests/test_sandbox.py:1:1`, reproduced from its unchanged committed source. That file was left outside this change. Ruff on the four changed Python files: `All checks passed!`. `git diff --check` passed.
+
 ### 2026-10-30 — T43 Benchmark batch 3: fresh held-out set
 - Added 4 faulty + 4 safe candidates, all marked `"held_out": true`, growing the bench to 16 faulty + 12 safe. New behavior lives in a base module `demo/demo-shop/src/demo_shop/cart.py` (coupon lookup, SKU listing, cart line merging, item filtering, stock release, free-shipping threshold, tenant SKU lookup) with passing base tests in `demo/demo-shop/tests/test_cart.py`.
 - Faulty (BLOCK):

@@ -6,6 +6,8 @@ Docker sandbox. Commands are argument lists, never a shell. One job runs at a ti
 """
 
 import json
+import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -20,6 +22,7 @@ PR_LIMIT = 50
 CACHE_SECONDS = 60
 VERIFY_TIMEOUT = 1800
 MAX_BODY = 20_000
+REPO_NAME = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 Runner = Callable[..., Any]
 
 
@@ -41,15 +44,40 @@ class PullRequests:
         self.root = evidence_root.resolve()
         self._run = runner
         self._cache: tuple[float, list[dict[str, Any]]] | None = None
+        self._remote: tuple[str, str] | None = None  # (nameWithOwner, clone url) of what gh lists
         self._lock = threading.Lock()
         self.job: dict[str, Any] | None = None
+
+    def _repository(self) -> tuple[str, str]:
+        """The repository gh lists PRs from; fetching from it keeps list and fetch in step."""
+        if self._remote:
+            return self._remote
+        try:
+            result = self._run(["gh", "repo", "view", "--json", "nameWithOwner,url"],
+                               cwd=self.repo, capture_output=True, text=True, timeout=30)
+        except FileNotFoundError:
+            raise PrError("The GitHub CLI (gh) is not installed.") from None
+        except subprocess.TimeoutExpired:
+            raise PrError("gh repo view timed out.") from None
+        try:
+            if result.returncode != 0:
+                raise ValueError
+            info = json.loads(result.stdout)
+            name, url = str(info["nameWithOwner"]), str(info["url"])
+            if not REPO_NAME.fullmatch(name) or not url.startswith("https://"):
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            raise PrError("gh repo view failed. Check `gh auth status` and that the repo has a GitHub remote.") from None
+        self._remote = (name, url)
+        return self._remote
 
     def pulls(self, refresh: bool = False) -> list[dict[str, Any]]:
         if self._cache and not refresh and time.monotonic() - self._cache[0] < CACHE_SECONDS:
             return self._cache[1]
+        name, _ = self._repository()
         try:
             result = self._run(
-                ["gh", "pr", "list", "--state", "all", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
+                ["gh", "pr", "list", "--repo", name, "--state", "all", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
                 cwd=self.repo, capture_output=True, text=True, timeout=30,
             )
         except FileNotFoundError:
@@ -94,15 +122,23 @@ class PullRequests:
         threading.Thread(target=self._verify, args=(pr, run_id), daemon=True).start()
         return self.job
 
-    def _step(self, argv: list[str], timeout: int) -> Any:
-        return self._run(argv, capture_output=True, text=True, timeout=timeout)
+    def _step(self, argv: list[str], timeout: int, env: dict[str, str] | None = None) -> Any:
+        extra = {} if env is None else {"env": env}
+        return self._run(argv, capture_output=True, text=True, timeout=timeout, **extra)
+
+    def _kill_containers(self, run_id: str) -> None:
+        """Killing `proofmerge verify` leaves its sandbox containers running; stop them by label."""
+        listed = self._run(["docker", "ps", "-q", "--filter", f"label=proofmerge.job={run_id}"],
+                           capture_output=True, text=True, timeout=30, check=False)
+        for container in (listed.stdout or "").split():
+            self._run(["docker", "kill", container], capture_output=True, timeout=30, check=False)
 
     def _verify(self, pr: dict[str, Any], run_id: str) -> None:
         n = pr["number"]
         head, base = f"refs/proofmerge/pr-{n}", f"refs/proofmerge/base-{n}"
         job = self.job
         try:
-            fetched = self._step(["git", "-C", str(self.repo), "fetch", "--no-tags", "origin",
+            fetched = self._step(["git", "-C", str(self.repo), "fetch", "--no-tags", f"{self._repository()[1]}.git",
                                   f"+refs/pull/{n}/head:{head}", f"+refs/heads/{pr['base']}:{base}"], 300)
             if fetched.returncode != 0:
                 job.update(status="failed", step="git fetch failed", exit_code=fetched.returncode)
@@ -115,7 +151,7 @@ class PullRequests:
                     sys.executable, "-m", "proofmerge.cli", "verify", str(self.repo),
                     "--base", base, "--head", head, "--intent-file", str(intent),
                     "--evidence-dir", str(self.root / run_id),
-                ], VERIFY_TIMEOUT)
+                ], VERIFY_TIMEOUT, {**os.environ, "PROOFMERGE_JOB_ID": run_id})
             # verify exits 0 for PASS/REVIEW and 2 for BLOCK; 1 means it could not run.
             # Exit 0 without a proof means there was nothing to check.
             ok = done.returncode in (0, 2) and (self.root / run_id / "proof.json").is_file()
@@ -124,6 +160,11 @@ class PullRequests:
                        exit_code=done.returncode,
                        output=((done.stdout or "") + (done.stderr or ""))[-4000:])
         except subprocess.TimeoutExpired:
-            job.update(status="failed", step="Timed out")
+            try:
+                self._kill_containers(run_id)
+                step = "Timed out; its containers were stopped"
+            except (OSError, subprocess.SubprocessError):
+                step = "Timed out; its containers may still be running (check `docker ps`)"
+            job.update(status="failed", step=step)
         except OSError as error:
             job.update(status="failed", step=f"Could not start: {type(error).__name__}")

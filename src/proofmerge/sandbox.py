@@ -8,6 +8,7 @@ resource limits. Every attempt becomes an `Execution` record with its logs.
 
 import hashlib
 import io
+import os
 import re
 import subprocess
 import tarfile
@@ -56,6 +57,7 @@ def pytest_sessionfinish(session, exitstatus):
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 HYPOTHESIS_ID = re.compile(r"[HT][0-9]+")
+JOB_ID = re.compile(r"[A-Za-z0-9._-]{1,80}")
 
 # (image, code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
 Runner = Callable[[str, Path, Path, str, int], tuple[int | None, bytes, bytes]]
@@ -134,8 +136,11 @@ def runner_dockerfile_path() -> Path:
 def docker_argv(
     name: str, image: str, code_dir: Path, probe_dir: Path, probe_name: str
 ) -> list[str]:
+    # The dashboard sets this so it can find and kill the containers of a verify it timed out.
+    job = os.environ.get("PROOFMERGE_JOB_ID", "")
+    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
     return [
-        "docker", "run", "--rm", "--name", name,
+        "docker", "run", "--rm", "--name", name, *label,
         "--network", "none",
         "--read-only",
         "--tmpfs", "/tmp:rw,size=64m",

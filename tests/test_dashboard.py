@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 import threading
 import time
 import urllib.error
@@ -10,6 +11,8 @@ from types import SimpleNamespace
 import pytest
 
 from proofmerge.dashboard import _benchmarks, _detail, _summary, make_server, scan
+from proofmerge.dashboard_prs import PrError, PullRequests
+from proofmerge.sandbox import docker_argv
 
 DEMO = Path(__file__).parent.parent / "demo" / "runs" / "2026-10-29"
 
@@ -40,6 +43,11 @@ def test_summary_reports_verdict_and_integrity(runs: Path) -> None:
     probe = next((runs / "tenant-cache-take2" / "probes").rglob("*.py"))
     probe.write_text(probe.read_text() + "\n# edited\n")
     assert _summary("tenant-cache-take2", runs / "tenant-cache-take2")["integrity"]["status"] == "changed"
+
+
+def test_summary_gives_an_absolute_proof_path_for_replay(runs: Path) -> None:
+    path = _summary("intended-change", runs / "intended-change")["proof_path"]
+    assert Path(path).is_absolute() and path.endswith("/intended-change/proof.json")
 
 
 def test_unreadable_proof_is_an_error_row_not_a_crash(runs: Path) -> None:
@@ -101,6 +109,9 @@ def test_server_is_local_and_read_only(server) -> None:
     assert status == 200 and "default-src 'self'" in headers["Content-Security-Policy"]
     assert {r["id"] for r in json.loads(body)["runs"]} == {"intended-change", "tenant-cache-take2"}
 
+    csp = fetch(base + "/report?id=tenant-cache-take2")[1]["Content-Security-Policy"]
+    assert "default-src 'none'" in csp and "style-src 'unsafe-inline'" in csp
+    assert "script-src" not in csp
     assert fetch(base + "/api/index", "POST")[0] == 404  # no --repo: nothing accepts a POST
     assert fetch(base + "/api/index", "DELETE")[0] == 405
     assert fetch(base + "/api/run?id=../../etc")[0] == 404
@@ -140,6 +151,9 @@ class FakeRunner:
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
         if argv[:3] == ["gh", "pr", "list"]:
             return SimpleNamespace(returncode=0, stdout=json.dumps(
                 [PRS[0] | {"headRefOid": self.head_sha}]), stderr="")
@@ -216,7 +230,10 @@ def test_verify_fetches_into_proofmerge_refs_and_runs_verify(pr_server, runs: Pa
     assert runner.done.wait(5)
 
     fetch_call = next(c for c in runner.calls if "fetch" in c)
-    assert fetch_call[:5] == ["git", "-C", str(repo.resolve()), "fetch", "--no-tags"]
+    assert fetch_call[:6] == ["git", "-C", str(repo.resolve()), "fetch", "--no-tags",
+                              "https://github.com/o/r.git"]
+    assert "origin" not in fetch_call
+    assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[3:5] == ["--repo", "o/r"]
     assert "+refs/pull/7/head:refs/proofmerge/pr-7" in fetch_call
     assert "+refs/heads/main:refs/proofmerge/base-7" in fetch_call
     verify = next(c for c in runner.calls if "verify" in c)
@@ -249,3 +266,47 @@ def test_closed_prs_cannot_be_verified(pr_server) -> None:
     finally:
         PRS[0]["state"] = "OPEN"
     assert not any("fetch" in call for call in runner.calls)
+
+
+def test_gh_repo_view_with_odd_values_is_refused(tmp_path: Path) -> None:
+    for out in ({"nameWithOwner": "o/r --web", "url": "https://x/o/r"},
+                {"nameWithOwner": "o/r", "url": "ssh://git@x/o/r"}):
+        runner = lambda argv, out=out, **kw: SimpleNamespace(returncode=0, stdout=json.dumps(out), stderr="")
+        with pytest.raises(PrError):
+            PullRequests(tmp_path, tmp_path, runner).pulls()
+
+
+def test_docker_argv_labels_only_a_valid_job_id(monkeypatch) -> None:
+    def argv() -> list[str]:
+        return docker_argv("n", "img", Path("/c"), Path("/p"), "t.py")
+
+    monkeypatch.delenv("PROOFMERGE_JOB_ID", raising=False)
+    assert "--label" not in argv()
+    monkeypatch.setenv("PROOFMERGE_JOB_ID", "pr-7-abc1234-1")
+    assert argv()[argv().index("--label") + 1] == "proofmerge.job=pr-7-abc1234-1"
+    monkeypatch.setenv("PROOFMERGE_JOB_ID", "bad id;rm")
+    assert "--label" not in argv()
+
+
+def test_verify_timeout_kills_the_jobs_containers(tmp_path: Path) -> None:
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        if argv[:3] == ["docker", "ps", "-q"]:
+            return SimpleNamespace(returncode=0, stdout="abc\ndef\n", stderr="")
+        if "verify" in argv:
+            raise subprocess.TimeoutExpired(argv, 1)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(tmp_path, tmp_path, runner)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    prs.job = {"status": "running", "step": "", "exit_code": None, "output": ""}
+    prs._verify({"number": 7, "base": "main", "title": "t", "body": ""}, "pr-7-abc1234-1")
+
+    verify = next(kw for argv, kw in calls if "verify" in argv)
+    assert verify["env"]["PROOFMERGE_JOB_ID"] == "pr-7-abc1234-1"
+    assert ["docker", "ps", "-q", "--filter", "label=proofmerge.job=pr-7-abc1234-1"] in [a for a, _ in calls]
+    assert [a for a, _ in calls if a[:2] == ["docker", "kill"]] == [
+        ["docker", "kill", "abc"], ["docker", "kill", "def"]]
+    assert prs.job["status"] == "failed" and "containers were stopped" in prs.job["step"]

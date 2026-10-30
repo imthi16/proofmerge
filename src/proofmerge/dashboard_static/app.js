@@ -202,7 +202,8 @@
     const decision = proof.verdict.decision;
     const usage = proof.model_usage;
     const models = Object.entries(usage.models || {}).map(([role, model]) => `${role} ${model || "CLI default"}`).join(", ");
-    const replay = `proofmerge replay ${id}/proof.json`;
+    // The id is relative to the dashboard folder, so the command uses the absolute path.
+    const replay = `proofmerge replay '${summary.proof_path.replaceAll("'", "'\\''")}'`;
     return html`<aside class="panel detail" aria-label=${"Run " + id}>
       <div class="detail-head">
         <span class=${"decision " + decision}>${decision}</span>
@@ -426,11 +427,12 @@
     const [error, setError] = useState("");
     const [asking, setAsking] = useState(false);
     const [posting, setPosting] = useState("");
+    const [tick, setTick] = useState(0);
     const [query, setQuery] = useState("");
     const lastStatus = useRef(null);
     const load = useCallback((refresh) => getJSON("/api/prs" + (refresh ? "?refresh=1" : ""))
       .then((d) => { setData(d); setError(""); })
-      .catch((e) => setError(e.message)), []);
+      .catch((e) => { setError(e.message); setTick((t) => t + 1); }), []);
     useEffect(() => { load(false); }, [load]);
     const job = data?.job;
     useEffect(() => {
@@ -439,7 +441,7 @@
       if (job?.status !== "running") return;
       const timer = setTimeout(() => load(false), 2000);
       return () => clearTimeout(timer);
-    }, [data]);
+    }, [data, tick]);
     if (error && !data) {
       return html`<div class="panel empty"><strong>Pull requests are not available</strong>${error}
         <div class="muted" style=${{ marginTop: ".5rem" }}>Start with <code>proofmerge dashboard ${index.root} --repo path/to/repo</code>.</div></div>`;
@@ -465,6 +467,7 @@
         <button class="ghost" type="button" onClick=${() => load(true)}>Reload from GitHub</button>
         <span class="muted" style=${{ fontSize: ".88rem" }}>${prs.length} of ${data.prs.length}</span>
       </div>
+      ${error ? html`<p class="muted" style=${{ fontSize: ".88rem" }}>Could not refresh: ${error}. Showing the last result.</p>` : null}
       <${JobPanel} job=${job} onOpenRun=${onOpenRun} />
       <div class="split">
         <div class="panel runs">

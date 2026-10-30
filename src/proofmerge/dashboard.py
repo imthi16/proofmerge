@@ -34,6 +34,9 @@ _HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
 }
+# report.html is self-contained: an inline <style> and no scripts, so it needs no 'self'.
+_REPORT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+               "frame-ancestors 'none'; base-uri 'none'")
 
 
 def _integrity(run_dir: Path) -> dict[str, Any]:
@@ -74,6 +77,7 @@ def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
     return {
         "id": run_id,
         "run_id": proof.run_id,
+        "proof_path": str(run_dir / "proof.json"),
         "decision": proof.verdict.decision,
         "reasons": proof.verdict.reasons,
         "base_sha": proof.base_sha,
@@ -166,11 +170,11 @@ class _Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         pass
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str, csp: str | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        for name, value in _HEADERS.items():
+        for name, value in (_HEADERS | ({"Content-Security-Policy": csp} if csp else {})).items():
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
@@ -231,7 +235,7 @@ class _Handler(BaseHTTPRequestHandler):
             elif url.path == "/report":
                 report = run_dir / "report.html"
                 if report.is_file() and not report.is_symlink():
-                    self._send(HTTPStatus.OK, report.read_bytes(), "text/html; charset=utf-8")
+                    self._send(HTTPStatus.OK, report.read_bytes(), "text/html; charset=utf-8", _REPORT_CSP)
                 else:
                     self._json({"error": "no report"}, HTTPStatus.NOT_FOUND)
             else:

@@ -423,7 +423,7 @@ All checks passed!
 - Scanned the copied bundles for `/home/`, `/tmp/claude`, `sk-`, `ghp_`, `Bearer` and email addresses; no matches.
 - README token line now cites `demo/runs/2026-10-29/tenant-cache-take2/proof.json`; added `demo/runs/2026-10-29/README.md` with verdicts, SHAs and replay command.
 - `docs/PRIOR_ART.md` status line now says hash-checking replay and `replay --rerun` are built.
-- Replaced absolute `/home/imthiyas/Documents/hackathon/proofmerge-T3/.venv/bin/` paths in BUILDLOG.md with the relative `../proofmerge-T3/.venv/bin/` form used elsewhere; no `/home/imthiyas` remains in tracked files.
+- Two older BUILDLOG.md commands used an absolute path to the shared virtualenv; they now use the relative `../proofmerge-T3/.venv/bin/` form used elsewhere. No author home path remains in tracked files.
 - Verification:
   ```text
   $ PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q

@@ -504,3 +504,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `report.html` now leads with the evidence: verdict banner, then hypothesis cards, then the tamper guard, intent claims, provenance and scope. Each card's grid puts Spark's expected base and head behavior next to the three outcomes per revision, as filled PASS/FAIL cells; on narrow screens each revision stacks its expectation above one row of attempts. Claims are one flat list with CHANGE/PRESERVE tags, provenance is a label/value list, and a run with no hypotheses says so. Copy is unchanged; the page is still static, with no scripts or external resources.
 - Checked by rendering the three committed demo proofs at 1280 px, 390 px and in dark mode. The committed demo and run 3 bundles keep the report they were recorded with, because `manifest.json` hashes `report.html`.
 - `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `527 passed`. `ruff check src tests`: all checks passed.
+
+### 2026-10-30 — T48 Agent Skill
+- Added `skills/proofmerge/SKILL.md`, an Agent Skill that tells a coding agent to commit its change, write the intent before it sees a verdict, run `proofmerge verify`, and report PASS / REVIEW / BLOCK as ProofMerge states it. It forbids editing tests, probes, intent or evidence to change a verdict, and caps fix attempts at two before handing back to the user.
+- `tests/test_skill.py` checks the frontmatter, that every `proofmerge` command and option the skill names exists in the CLI, and that its call budget (19) matches `verify`.
+- README: install line for Claude Code and a "What works today" row. Not yet used by an agent on a real task.
+- `PYTEST_ADDOPTS= PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q`: `530 passed`. `ruff check src tests`: all checks passed.

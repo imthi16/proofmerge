@@ -112,7 +112,10 @@ def test_regression_bundle_and_last_write(tmp_path, monkeypatch):
     assert (proof.base_sha, proof.head_sha, proof.diff_sha256) == (
         context.base_sha, context.head_sha, context.diff_sha256
     )
-    assert proof.model_usage == ModelUsage(calls=5, prompt_tokens=44, completion_tokens=28)
+    assert proof.model_usage == ModelUsage(
+        calls=5, prompt_tokens=44, completion_tokens=28, endpoint="injected",
+        models={"spark": "muse-spark-1.3", "wonder": "muse-wonder-1.0"},
+    )
     assert client.calls == 5
     assert proof.findings[0].verified
     assert [e.outcome for e in proof.experiments[0].executions] == ["PASS"] * 3 + ["FAIL"] * 3

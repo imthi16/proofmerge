@@ -69,6 +69,10 @@ class ModelUsage(BaseModel):
     calls: int
     prompt_tokens: int
     completion_tokens: int
+    # Older proofs predate these fields; they ran on the Meta API with Muse models.
+    endpoint: str | None = None
+    models: dict[str, str] = {}  # role ("spark", "wonder") -> model id, "" = the CLI default
+    contributor_allowed: bool = False
 
 
 class Verdict(BaseModel):

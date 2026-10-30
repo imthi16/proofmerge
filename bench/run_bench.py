@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -29,6 +30,7 @@ def metadata() -> dict:
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
         check=True, capture_output=True, text=True,
     ).stdout.strip()
+    backend = os.environ.get("PROOFMERGE_BACKEND", "api")
     return {
         "git_sha": sha,
         "hypotheses_sha256": hashlib.sha256(
@@ -37,7 +39,10 @@ def metadata() -> dict:
         "intent_sha256": hashlib.sha256(
             (ROOT / "src/proofmerge/intent.py").read_bytes()
         ).hexdigest(),
-        "spark_model": SPARK_MODEL,
+        "spark_model": os.environ.get("PROOFMERGE_SPARK_MODEL") or (
+            SPARK_MODEL if backend == "api" else "CLI default"
+        ),
+        "backend": backend,
         "date": datetime.now(UTC).isoformat(),
     }
 

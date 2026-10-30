@@ -28,6 +28,7 @@ from proofmerge.sandbox import (
     SHA,
     SandboxError,
     image_digest,
+    is_runner_failure,
     run_experiment,
     runner_dockerfile_path,
 )
@@ -214,6 +215,10 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
             )
         except (OSError, ValueError, SandboxError) as error:
             typer.echo(f"{identifier} recorded {recorded}: NOT reproduced ({error})")
+            reproduced = False
+            continue
+        if any(is_runner_failure(execution.exit_code) for execution in current.executions):
+            typer.echo(f"{identifier} recorded {recorded}: NOT reproduced (runner failure)")
             reproduced = False
             continue
         now = f"base {_outcomes(current, 'base')} head {_outcomes(current, 'head')}"

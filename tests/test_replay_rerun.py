@@ -12,6 +12,7 @@ from test_sandbox import ROOT, needs_docker
 from typer.testing import CliRunner
 
 from proofmerge import cli, sandbox
+from proofmerge.evidence import Proof
 from proofmerge.manifest import verify_manifest, write_manifest
 from proofmerge.meta import MetaClient
 from proofmerge.pipeline import run_verify
@@ -266,6 +267,37 @@ def test_malformed_records_fail_before_any_run(bundle, runs, bad):
     assert result.exit_code == 1, result.output
     assert "replay failed:" in result.output
     assert runs[0] == []
+
+
+def test_docker_exit_125_matching_error_outcomes_are_not_reproduced(bundle, monkeypatch, tmp_path):
+    path, repo, _ = bundle
+
+    def all_error(data):
+        for execution in data["experiments"][0]["executions"]:
+            execution["outcome"] = "ERROR"
+            execution["exit_code"] = 2
+
+    rewrite(path, all_error)
+    proof = Proof.model_validate_json(path.read_text())
+    experiment = proof.experiments[0]
+
+    def docker_fail(*args, **kwargs):
+        executions = [
+            execution.model_copy(update={"outcome": "ERROR", "exit_code": 125})
+            for execution in experiment.executions
+        ]
+        return experiment.model_copy(update={"executions": executions})
+
+    def make_temp(*, prefix):
+        destination = tmp_path / "rerun-evidence"
+        destination.mkdir(exist_ok=True)
+        return str(destination)
+
+    monkeypatch.setattr(cli, "run_experiment", docker_fail)
+    monkeypatch.setattr(cli, "tempfile", SimpleNamespace(mkdtemp=make_temp))
+    result = invoke(path, repo)
+    assert result.exit_code == 1, result.output
+    assert "H1 recorded base EEE head EEE: NOT reproduced (runner failure)" in result.stdout
 
 
 @pytest.mark.parametrize("error", [sandbox.SandboxError("image unavailable"),

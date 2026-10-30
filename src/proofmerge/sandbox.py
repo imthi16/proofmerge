@@ -97,6 +97,13 @@ def outcome_for(exit_code: int | None) -> Outcome:
     return {0: "PASS", 1: "FAIL"}.get(exit_code, "ERROR")
 
 
+def is_runner_failure(exit_code: int | None) -> bool:
+    """True when Docker or the container runtime failed, not pytest inside the container."""
+    if exit_code is None:
+        return False
+    return exit_code in (125, 126, 127, 137)
+
+
 def image_digest(image: str = RUNNER_IMAGE) -> str:
     result = subprocess.run(
         ["docker", "image", "inspect", "--format", "{{.Id}}", image],

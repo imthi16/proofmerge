@@ -11,7 +11,7 @@ import pytest
 
 from proofmerge import sandbox
 from proofmerge.context import get_context
-from proofmerge.sandbox import SandboxError, export_tree, outcome_for, run_experiment
+from proofmerge.sandbox import SandboxError, export_tree, is_runner_failure, outcome_for, run_experiment
 from proofmerge.tamper import find_tamper, run_base_tests_on_head
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +69,14 @@ def test_export_tree_refuses_anything_but_a_full_sha(repo, tmp_path, bad):
 )
 def test_outcome_for_counts_only_pytest_exit_1_as_failure(code, outcome):
     assert outcome_for(code) == outcome
+
+
+@pytest.mark.parametrize(
+    ("code", "failed"),
+    [(125, True), (126, True), (127, True), (137, True), (2, False), (None, False)],
+)
+def test_is_runner_failure(code, failed):
+    assert is_runner_failure(code) is failed
 
 
 @pytest.mark.parametrize("probe_id", ["H1", "T1"])

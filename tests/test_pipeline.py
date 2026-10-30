@@ -634,7 +634,7 @@ def test_change_citation_keeps_review_when_wonder_probe_check_fails(tmp_path, fa
     assert_bundle(proof, evidence)
 
 
-def test_change_citation_cannot_use_a_different_change_explanation(tmp_path):
+def test_change_citation_accepts_a_different_change_explanation(tmp_path):
     replies = Replies(
         wonder_claims=[{"id": id, "kind": "CHANGE"} for id in ("C1", "C2")],
         wonder_results=[{
@@ -649,8 +649,8 @@ def test_change_citation_cannot_use_a_different_change_explanation(tmp_path):
     assert proof.findings[0].verified
     assert proof.contested_claim_ids == []
     assert proof.explained_probe_claim_ids == {"H1": "C2"}
-    assert proof.verdict.decision == "BLOCK"
-    assert "PRESERVE claim C0" in proof.verdict.reasons[0]
+    assert proof.verdict.decision == "REVIEW"
+    assert proof.verdict.reasons == ["H1 may be the intended change C2."]
     assert_bundle(proof, evidence)
 
 

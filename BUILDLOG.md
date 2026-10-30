@@ -418,8 +418,8 @@ All checks passed!
 - Real Docker check: `replay --rerun` on the tenant-cache demo bundle (base `9dcc104`, head `32dff53`) printed `H1 base PPP head FFF: reproduced` and `H2 base PPP head FFF: reproduced`, exit 0; the bundle's file hashes were the same before and after. README and PRIOR_ART status lines updated.
 
 ### 2026-10-30 — T39 CHANGE citation confirmation
-- After a successful Wonder probe check, a verified CHANGE-cited regression needs an explanation naming that same claim to qualify for REVIEW; otherwise it uses the implicit C0 PRESERVE rule. Missing or failed probe checks retain the previous CHANGE review behavior. Contested claims, mismatched probes and tamper rules remain unchanged.
-- Added offline coverage for matching, null and different explanations, API/schema failures, independent claim-check failures, intent/evidence qualifications, other BLOCK precedence and the intended-change tamper path. No real model calls or new dependencies.
-- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `507 passed in 43.92s`.
+- After a successful Wonder probe check, a verified CHANGE-cited regression qualifies for REVIEW only when Wonder confirms that a verified CHANGE claim explains it, the same test a C0-cited finding gets; otherwise it uses the implicit C0 PRESERVE rule. Missing or failed probe checks retain the previous CHANGE review behavior. Contested claims, mismatched probes and tamper rules remain unchanged.
+- Added offline coverage for matching, null, non-CHANGE and other-CHANGE explanations, API/schema failures, independent claim-check failures, intent/evidence qualifications, other BLOCK precedence and the intended-change tamper path. No real model calls or new dependencies.
+- `PYTHONPATH=src ../proofmerge-T3/.venv/bin/python -m pytest -q` (inherited extra quiet setting cleared): `507 passed in 42.50s`.
 - `../proofmerge-T3/.venv/bin/ruff check src tests`: failed with one existing `I001` import-formatting error at `tests/test_sandbox.py:1:1`, reproduced from its unchanged committed source. That file was left outside this change. Ruff on the four changed Python files: `All checks passed!`. `git diff --check` passed.
 

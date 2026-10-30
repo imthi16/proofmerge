@@ -42,7 +42,8 @@ def decide(
             change_id = (explained_probe_claim_ids or {}).get(finding.hypothesis_id)
             explained = finding.hypothesis_id in explained_probe_ids
             if claim.kind == "CHANGE" and wonder_checked:
-                explained = change_id == claim.id
+                # Any Wonder-confirmed CHANGE claim explains it, as for a C0-cited finding.
+                explained = change_id in claims and claims[change_id].kind == "CHANGE"
             if explained:
                 change = claims.get(change_id)
                 if change is not None and change.kind == "CHANGE":

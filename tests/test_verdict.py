@@ -328,12 +328,10 @@ def test_explanation_cannot_turn_inconclusive_evidence_into_block_or_pass():
     assert result.decision == "REVIEW"
 
 
-@pytest.mark.parametrize("change_id", [None, "C3", "C0", "C99"])
-def test_checked_change_requires_same_claim_explanation(change_id):
-    intent = contract("CHANGE")
-    intent.claims.append(intent.claims[1].model_copy(update={"id": "C3"}))
+@pytest.mark.parametrize("change_id", [None, "C0", "C99"])
+def test_checked_change_requires_a_change_claim_explanation(change_id):
     result = decide(
-        intent, [], [finding()], [], wonder_checked=True,
+        contract("CHANGE"), [], [finding()], [], wonder_checked=True,
         explained_probe_ids=frozenset({"H1"}) if change_id else frozenset(),
         explained_probe_claim_ids={"H1": change_id} if change_id else {},
     )
@@ -341,6 +339,17 @@ def test_checked_change_requires_same_claim_explanation(change_id):
     assert result.reasons == [
         "H1 is a verified regression against uncontested PRESERVE claim C0 with intent present."
     ]
+
+
+def test_checked_change_explained_by_another_change_claim_is_review():
+    intent = contract("CHANGE")
+    intent.claims.append(intent.claims[1].model_copy(update={"id": "C3"}))
+    result = decide(
+        intent, [], [finding()], [], wonder_checked=True,
+        explained_probe_ids=frozenset({"H1"}), explained_probe_claim_ids={"H1": "C3"},
+    )
+    assert result.decision == "REVIEW"
+    assert result.reasons == ["H1 may be the intended change C3."]
 
 
 @pytest.mark.parametrize("wonder_checked", [False, True])

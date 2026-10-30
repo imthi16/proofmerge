@@ -1,0 +1,214 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "intended-change",
+  "base_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+  "head_sha": "ade6dc57744f92d0d6dd40df08fdb4622da16db2",
+  "diff_sha256": "a6ca8f3a1a2cc4d7d60761a6bf3203aab9288e2f38956bf31ad0a5d6a3049c77",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "The bulk discount threshold is 150 instead of 100.",
+        "source_quote": "Raise the bulk discount threshold from 100 to 150."
+      },
+      {
+        "id": "C2",
+        "kind": "CHANGE",
+        "statement": "The bulk promotion applies only to orders of 150 or more.",
+        "source_quote": "bulk promotion only applies to orders\nof 150 or more"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "T1",
+      "test_source_path": "probes/test_t1.py",
+      "test_source_sha256": "d95686db69ae6c91b60e73d48d3aae7a9b5cbdac4d5f18f40724861148c679dc",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 703,
+          "stdout_path": "T1/base-1.stdout",
+          "stderr_path": "T1/base-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 605,
+          "stdout_path": "T1/base-2.stdout",
+          "stderr_path": "T1/base-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "base",
+          "commit_sha": "9dcc10400d16c23a0db4f508c3678ffabf46b1f4",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 703,
+          "stdout_path": "T1/base-3.stdout",
+          "stderr_path": "T1/base-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "ade6dc57744f92d0d6dd40df08fdb4622da16db2",
+          "attempt": 1,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 803,
+          "stdout_path": "T1/head-1.stdout",
+          "stderr_path": "T1/head-1.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "ade6dc57744f92d0d6dd40df08fdb4622da16db2",
+          "attempt": 2,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "T1/head-2.stdout",
+          "stderr_path": "T1/head-2.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        },
+        {
+          "revision": "head",
+          "commit_sha": "ade6dc57744f92d0d6dd40df08fdb4622da16db2",
+          "attempt": 3,
+          "command_argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "probes/test_t1.py"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 704,
+          "stdout_path": "T1/head-3.stdout",
+          "stderr_path": "T1/head-3.stderr",
+          "runner_image_digest": "sha256:383b994cb1797213fa8db3cd66ed507e180b88ba990f5a0d392fb2053af151aa"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "tamper_findings": [
+    {
+      "test_path": "tests/test_pricing.py",
+      "test_name": null,
+      "kind": "MODIFIED",
+      "base_test_on_head_outcome": "FAIL"
+    },
+    {
+      "test_path": "tests/test_pricing.py",
+      "test_name": "test_bulk_discount_at_threshold",
+      "kind": "DELETED",
+      "base_test_on_head_outcome": "FAIL"
+    },
+    {
+      "test_path": "tests/test_pricing.py",
+      "test_name": "test_bulk_discount_above_threshold",
+      "kind": "MODIFIED",
+      "base_test_on_head_outcome": "FAIL"
+    },
+    {
+      "test_path": "tests/test_pricing.py",
+      "test_name": "test_bulk_discount_below_threshold",
+      "kind": "MODIFIED",
+      "base_test_on_head_outcome": "FAIL"
+    }
+  ],
+  "verdict": {
+    "decision": "REVIEW",
+    "reasons": [
+      "Changed test tests/test_pricing.py fails on head but needs review because the contract has a CHANGE claim.",
+      "Changed test tests/test_pricing.py::test_bulk_discount_at_threshold fails on head but needs review because the contract has a CHANGE claim.",
+      "Changed test tests/test_pricing.py::test_bulk_discount_above_threshold fails on head but needs review because the contract has a CHANGE claim.",
+      "Changed test tests/test_pricing.py::test_bulk_discount_below_threshold fails on head but needs review because the contract has a CHANGE claim."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested."
+    ]
+  },
+  "model_usage": {
+    "calls": 3,
+    "prompt_tokens": 2185,
+    "completion_tokens": 3098
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {}
+}

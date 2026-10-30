@@ -16,7 +16,7 @@ def list_skus(catalog: dict[str, float]) -> list[str]:
 
 def merge_lines(lines: list[tuple[str, int]]) -> list[tuple[str, int]]:
     """Combine quantities for duplicate SKUs."""
-    return lines
+    return list({sku: qty for sku, qty in lines}.items())
 
 
 def process_valid(items: list[dict]) -> list[dict]:

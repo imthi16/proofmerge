@@ -1,1 +1,1 @@
-Streamline cart line handling.
+Rewrite merge_lines as a dict comprehension to shorten the cart code.

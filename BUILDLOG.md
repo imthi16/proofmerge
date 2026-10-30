@@ -422,14 +422,14 @@ All checks passed!
 - Faulty (BLOCK):
   - `coupon-lookup-exact`: removed case/whitespace normalization from `apply_coupon`.
   - `sku-list-order`: `list_skus` returns insertion order instead of sorted SKUs.
-  - `cart-line-merge`: `merge_lines` no longer combines duplicate SKUs.
+  - `cart-line-merge`: `merge_lines` becomes a dict comprehension that keeps the last quantity per SKU instead of summing duplicates.
   - `item-filter-stop`: `process_valid` uses `break` instead of `continue` on an invalid item, dropping all later items.
 - Safe (NOT_BLOCK):
   - `extract-line-total`: rename/extract refactor — extracts `_line_total` helper in `orders.py` and uses it in `order_total` and `line_totals`.
   - `precompute-tenant-skus`: performance change — precomputes tenant SKU lists; results identical to base.
   - `intended-free-shipping-threshold`: intended rule change — raises free-shipping threshold from 100 to 150 with updated tests and an explicit CHANGE intent.
   - `release-stock-guard`: bug fix — `release_stock` now rejects negative quantities; ground truth is base FAIL / head PASS.
-- Leakage rules applied: new base docstrings left unchanged on every patch except where a safe helper is introduced; intents are 1–2 sentences, ticket-free, never use the retired sentence, and none of the faulty intents states the planted behavior. The four faulty kinds are not listed in `src/proofmerge/prompts/hypotheses.md` "Where regressions hide" and were not present in the bench before. No skip/xfail markers were added.
+- Leakage rules applied: new base docstrings left unchanged on every patch except where a safe helper is introduced; intents are 1–2 sentences, ticket-free, never use the retired sentence, and none of the faulty intents states the planted behavior. Every faulty intent names the function it touches, as the safe ones do, so intent specificity does not separate the labels. The four faulty kinds are not listed in `src/proofmerge/prompts/hypotheses.md` "Where regressions hide" and were not present in the bench before. No skip/xfail markers were added.
 
 #### Verification
 - `python demo/build_demo_repo.py bench/.build/bench-shop --candidates bench/candidates --force`

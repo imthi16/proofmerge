@@ -59,6 +59,7 @@ def run_verify(
 
     contested_claim_ids, mismatched_probe_ids = frozenset(), frozenset()
     explained_probe_ids, explained_probe_claim_ids = frozenset(), {}
+    wonder_checked = False
     try:
         contested_claim_ids = cross_check_claims(contract, intent, client)
     except MetaError as error:
@@ -67,6 +68,7 @@ def run_verify(
         mismatched_probe_ids, explained_probe_ids, explained_probe_claim_ids = check_probes(
             found.hypotheses, probes, client, contract=contract, intent=intent,
         )
+        wonder_checked = any(probe.passed_on_base for probe in probes)
     except MetaError as error:
         errors.append(str(error))
 
@@ -94,6 +96,7 @@ def run_verify(
         intent_given=bool(intent and intent.strip()),
         explained_probe_ids=explained_probe_ids,
         explained_probe_claim_ids=explained_probe_claim_ids,
+        wonder_checked=wonder_checked,
     )
     usage = [u for u in client.usage if u is not None]
     proof = Proof(

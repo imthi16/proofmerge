@@ -18,6 +18,7 @@ def decide(
     explained_probe_ids: frozenset[str] = frozenset(),
     explained_probe_claim_ids: dict[str, str] | None = None,
     mismatched_probe_ids: frozenset[str] = frozenset(),
+    wonder_checked: bool = False,
 ) -> Verdict:
     """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
     claims = {claim.id: claim for claim in contract.claims}
@@ -38,16 +39,22 @@ def decide(
             raise ValueError(f"unknown claim id: {finding.claim_id!r}")
         claim = claims[finding.claim_id]
         if finding.classification == "REGRESSION" and finding.verified:
-            if finding.hypothesis_id in explained_probe_ids:
-                change_id = (explained_probe_claim_ids or {}).get(finding.hypothesis_id)
+            change_id = (explained_probe_claim_ids or {}).get(finding.hypothesis_id)
+            explained = finding.hypothesis_id in explained_probe_ids
+            if claim.kind == "CHANGE" and wonder_checked:
+                # Any Wonder-confirmed CHANGE claim explains it, as for a C0-cited finding.
+                explained = change_id in claims and claims[change_id].kind == "CHANGE"
+            if explained:
                 change = claims.get(change_id)
                 if change is not None and change.kind == "CHANGE":
                     reasons.append(f"{finding.hypothesis_id} may be the intended change {change.id}.")
                 else:
                     reasons.append(f"{finding.hypothesis_id} may be the intended change.")
                 continue
+            # Keep the cited claim for contested checks; only its CHANGE exemption expires.
+            effective_claim = C0 if claim.kind == "CHANGE" and wonder_checked else claim
             qualifications = []
-            if claim.kind == "CHANGE":
+            if effective_claim.kind == "CHANGE":
                 qualifications.append(f"{claim.id} is a CHANGE claim")
             if claim.id in contested_claim_ids:
                 qualifications.append(f"{claim.id} is contested")
@@ -63,7 +70,7 @@ def decide(
                 block = True
                 reasons.append(
                     f"{finding.hypothesis_id} is a verified regression against "
-                    f"uncontested PRESERVE claim {claim.id} with intent present."
+                    f"uncontested PRESERVE claim {effective_claim.id} with intent present."
                 )
         elif finding.classification in {"INCONCLUSIVE", "EXISTING_FAILURE", "POSSIBLE_FIX"}:
             reasons.append(

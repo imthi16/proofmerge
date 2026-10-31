@@ -63,6 +63,24 @@ def probe(hypothesis_id: str = "H1", passed: bool = True) -> Probe:
     )
 
 
+def test_setup_failures_on_every_run_are_environment():
+    recorded = experiment(["ERROR"] * 3, ["ERROR"] * 3)
+    for execution in recorded.executions:
+        execution.setup_failure = True
+    assert classify(recorded) == "ENVIRONMENT"
+    finding = findings_for([recorded], [hypothesis()], [probe()], "proof.json")[0]
+    assert finding.classification == "ENVIRONMENT"
+    assert finding.verified is False
+
+
+def test_a_single_setup_failure_stays_inconclusive():
+    recorded = experiment(["ERROR"] * 3, ["ERROR"] * 3)
+    for execution in recorded.executions:
+        execution.setup_failure = True
+    recorded.executions[0].setup_failure = False
+    assert classify(recorded) == "INCONCLUSIVE"
+
+
 @pytest.mark.parametrize(
     ("base", "head", "expected"),
     [

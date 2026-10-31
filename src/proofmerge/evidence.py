@@ -21,6 +21,7 @@ Classification = Literal[
     "EXISTING_FAILURE",  # FAIL on both
     "NO_DIFFERENCE",  # PASS on both
     "INCONCLUSIVE",  # an error, timeout, or runs that disagree
+    "ENVIRONMENT",  # import or dependency install failed; not a behavioral result
 ]
 TamperKind = Literal["DELETED", "SKIPPED", "XFAIL", "ASSERTION_REMOVED", "MODIFIED"]
 
@@ -38,6 +39,9 @@ class Execution(BaseModel):
     stdout_path: str  # relative to the run's evidence directory
     stderr_path: str
     runner_image_digest: str | None = None  # None only in the hand-made sample proofs
+    # True when the run died importing a module or the dependency install failed.
+    # That is an environment result, never PASS and never a regression.
+    setup_failure: bool = False
 
 
 class Experiment(BaseModel):

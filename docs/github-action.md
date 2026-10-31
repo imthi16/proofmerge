@@ -34,9 +34,17 @@ unexpected verify exit codes, invalid policy input, and setup errors fail the jo
 A no-change verification currently produces no evidence and therefore fails.
 
 Fork pull requests receive no secret: an empty key prints
-`skipped: no MODEL_API_KEY (fork PR?)` and succeeds without installing, building,
-verifying, uploading, or commenting. Do not switch to `pull_request_target` to
-expose secrets to fork code.
+`skipped: no MODEL_API_KEY (fork PR?)`, emits a warning, writes
+`proofmerge-evidence/skipped.json` (`status: skipped`, `verdict: null`), and
+succeeds without installing, building, verifying, or commenting. Set
+`fail-on-missing-key: true` to fail the job after that record is written. The
+default `false` matches the previous skip-and-succeed behavior. Do not switch
+to `pull_request_target` to expose secrets to fork code.
+
+The action does not accept a Python import path or an install flag. A
+`pull_request` workflow file can be changed by a same-repository pull request,
+so those settings come only from the base commit's `.proofmerge.toml`. See
+[python-projects.md](python-projects.md).
 
 The action installs its own code and builds its own runner image, independent of
 the checked-out PR. It compares the event's exact base and head SHAs and passes

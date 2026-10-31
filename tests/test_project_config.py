@@ -5,7 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from proofmerge.project_config import ProjectConfig, load_config
+from proofmerge.project_config import (
+    ProjectConfig,
+    PythonProject,
+    assert_operator_config_allowed,
+    load_config,
+    load_operator_config,
+    load_python_project,
+    load_setup,
+)
 
 VALID_TOML = """
 language = "go"
@@ -200,3 +208,86 @@ def test_load_config_raises_on_invalid_config(tmp_path):
     base = git(repo, "rev-parse", "HEAD")
     with pytest.raises(ValueError, match="invalid"):
         load_config(repo, base)
+
+
+PYTHON_BASE = """
+[python]
+root = "apps/api"
+pythonpath = ["libs/shared"]
+"""
+
+PYTHON_HEAD = """
+[python]
+root = "apps/evil"
+"""
+
+
+def test_python_root_rejects_absolute_traversal_and_empty_extra():
+    with pytest.raises(ValueError, match="absolute"):
+        PythonProject(root="/etc")
+    with pytest.raises(ValueError, match="absolute"):
+        PythonProject(pythonpath=["/tmp/lib"])
+    with pytest.raises(ValueError, match=r"\.\."):
+        PythonProject(root="apps/../../etc")
+    with pytest.raises(ValueError, match="empty"):
+        PythonProject(pythonpath=["."])
+    with pytest.raises(ValueError, match="network"):
+        PythonProject(root="apps/api", network="bridge")
+
+
+def test_python_only_file_keeps_generic_config_unset(tmp_path):
+    repo = make_repo(tmp_path, PYTHON_BASE, PYTHON_HEAD)
+    base = git(repo, "rev-parse", "HEAD~1")
+    head = git(repo, "rev-parse", "HEAD")
+    assert load_config(repo, base) is None
+    loaded = load_python_project(repo, base)
+    assert loaded is not None
+    assert loaded.root == "apps/api"
+    assert loaded.pythonpath == ["libs/shared"]
+    assert loaded.install is False
+    assert load_python_project(repo, head).root == "apps/evil"
+    project, python = load_setup(repo, base)
+    assert project is None and python.root == "apps/api"
+
+
+def test_head_python_escape_does_not_affect_base(tmp_path):
+    repo = make_repo(tmp_path, PYTHON_BASE, '[python]\nroot = "../secret"\n')
+    base = git(repo, "rev-parse", "HEAD~1")
+    head = git(repo, "rev-parse", "HEAD")
+    assert load_python_project(repo, base).root == "apps/api"
+    with pytest.raises(ValueError, match="invalid"):
+        load_setup(repo, head)
+
+
+def test_language_and_python_together_are_rejected(tmp_path):
+    repo = make_repo(tmp_path, VALID_TOML + '\n[python]\nroot = "apps/api"\n')
+    base = git(repo, "rev-parse", "HEAD")
+    with pytest.raises(ValueError, match=r"\[python\]"):
+        load_config(repo, base)
+
+
+def test_operator_file_outside_the_checkout_is_trusted(tmp_path):
+    trusted = tmp_path / "trusted.toml"
+    trusted.write_text(PYTHON_BASE, encoding="utf-8")
+    project, python = load_operator_config(trusted)
+    assert project is None
+    assert python.root == "apps/api"
+
+
+def test_operator_config_refuses_a_symlink(tmp_path):
+    target = tmp_path / "real.toml"
+    target.write_text(PYTHON_BASE, encoding="utf-8")
+    link = tmp_path / "link.toml"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        load_operator_config(link)
+
+
+def test_operator_config_refuses_working_tree_file_that_differs_from_base(tmp_path):
+    repo = make_repo(tmp_path, PYTHON_BASE, PYTHON_HEAD)
+    base = git(repo, "rev-parse", "HEAD~1")
+    with pytest.raises(ValueError, match="refusing"):
+        assert_operator_config_allowed(repo, base, repo / ".proofmerge.toml")
+    outside = tmp_path / "trusted.toml"
+    outside.write_text(PYTHON_BASE, encoding="utf-8")
+    assert_operator_config_allowed(repo, base, outside)

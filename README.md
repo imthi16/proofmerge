@@ -343,6 +343,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
 | Scope receipt: what a run checked (hypotheses, probes, attempts, changed tests), in `report.html` and `verify` output | Built and tested |
 | Other languages through `.proofmerge.toml` (Go demo) | Built and tested; one real `verify` on the synthetic Go demo gave BLOCK (Spark-written Go probe, base PASS 3/3, head FAIL 3/3), bundle in `demo/runs/2026-10-30-go`; no tamper guard for other languages; see [docs/languages.md](docs/languages.md) |
+| Python monorepo import paths and optional hashed installs | Built and tested offline. `[python]` in the base commit's `.proofmerge.toml` sets the import root; head config is ignored. Install is opt-in from the base lockfile. Import and install failures are REVIEW, never PASS or BLOCK. See [docs/python-projects.md](docs/python-projects.md) |
 | PASS strength beyond the receipt (for example mutation checks) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |

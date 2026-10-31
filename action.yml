@@ -10,6 +10,14 @@ inputs:
   python-version:
     description: Python version used to install ProofMerge.
     default: '3.13'
+  fail-on-missing-key:
+    description: >
+      When true, a missing MODEL_API_KEY fails the job after writing a skip
+      record. Default false keeps the historical skip-and-succeed behavior.
+      This flag does not set import paths. Those come only from the base
+      commit's .proofmerge.toml, because a pull_request workflow file is not
+      a trusted source for repository paths.
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -18,13 +26,35 @@ runs:
       shell: bash
       env:
         MODEL_API_KEY: ${{ inputs.model-api-key }}
+        FAIL_ON_MISSING_KEY: ${{ inputs.fail-on-missing-key }}
       run: |
+        flag="${FAIL_ON_MISSING_KEY:-false}"
+        case "$flag" in
+          true|false) ;;
+          *)
+            echo 'invalid fail-on-missing-key: expected true or false' >&2
+            exit 1
+            ;;
+        esac
         if [[ -z "$MODEL_API_KEY" ]]; then
           echo 'skipped: no MODEL_API_KEY (fork PR?)'
+          echo '::warning::ProofMerge skipped because MODEL_API_KEY is not set. No verdict was produced.'
+          mkdir -p "$RUNNER_TEMP/proofmerge-evidence"
+          cat > "$RUNNER_TEMP/proofmerge-evidence/skipped.json" <<'EOF'
+        {"status":"skipped","reason":"MODEL_API_KEY is not set","verdict":null}
+        EOF
           echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          echo 'skipped=true' >> "$GITHUB_OUTPUT"
+          if [[ "$flag" == "true" ]]; then
+            echo 'missing_key=fail' >> "$GITHUB_OUTPUT"
+          else
+            echo 'missing_key=warn' >> "$GITHUB_OUTPUT"
+          fi
           exit 0
         fi
         echo 'enabled=true' >> "$GITHUB_OUTPUT"
+        echo 'skipped=false' >> "$GITHUB_OUTPUT"
+        echo 'missing_key=ok' >> "$GITHUB_OUTPUT"
     - uses: actions/setup-python@v5
       if: steps.credentials.outputs.enabled == 'true'
       with:
@@ -70,7 +100,7 @@ runs:
         printf '%s\n' "$result" > "$RUNNER_TEMP/proofmerge-exit-code"
     - uses: actions/upload-artifact@v4
       id: evidence
-      if: ${{ always() && steps.credentials.outputs.enabled == 'true' }}
+      if: ${{ always() && (steps.credentials.outputs.enabled == 'true' || steps.credentials.outputs.skipped == 'true') }}
       with:
         name: proofmerge-evidence
         path: ${{ runner.temp }}/proofmerge-evidence
@@ -162,3 +192,10 @@ runs:
             status = '1'
         raise SystemExit(0 if status == '0' else 1)
         PY
+    - name: Fail when the model key is missing
+      if: steps.credentials.outputs.missing_key == 'fail'
+      shell: bash
+      run: |
+        echo 'ProofMerge did not run: MODEL_API_KEY is not set.'
+        echo 'No verdict was produced. This is a configuration gap, not a code verdict.'
+        exit 1

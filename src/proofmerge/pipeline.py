@@ -11,7 +11,8 @@ from proofmerge.intent import C0, IntentContract, extract_intent
 from proofmerge.manifest import write_manifest
 from proofmerge.meta import SPARK_MODEL, WONDER_MODEL, MetaClient, MetaError
 from proofmerge.probes import probe_hypotheses
-from proofmerge.project_config import ProjectConfig, load_config
+from proofmerge.project_config import ProjectConfig, PythonProject, load_setup
+from proofmerge.python_layout import scope_notes
 from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
 from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
@@ -30,12 +31,23 @@ def run_verify(
     runner: Runner = docker_runner,
     digest: str | None = None,
     config: ProjectConfig | None = None,
+    python_project: PythonProject | None = None,
+    load_repo_config: bool = True,
+    config_source: str = "the base commit's .proofmerge.toml",
 ) -> Proof:
     """Resolve context, collect evidence, adjudicate, then seal the bundle last."""
     context = get_context(repo, base, head)
     check_diff(context)
-    if config is None:
-        config = load_config(repo, context.base_sha)
+    if load_repo_config:
+        loaded_config, loaded_python = load_setup(repo, context.base_sha)
+        if config is None:
+            config = loaded_config
+        if python_project is None:
+            python_project = loaded_python
+    if config is not None and python_project is not None:
+        raise ValueError(
+            ".proofmerge.toml cannot select both the generic language runner and [python]"
+        )
     evidence_dir.mkdir(parents=True)
     errors: list[str] = []
     contract = IntentContract(claims=[C0], rejected=[])
@@ -52,7 +64,7 @@ def run_verify(
             found = generate_hypotheses(context, contract, client, config=config)
             probes, experiments = probe_hypotheses(
                 repo, context, contract, found.hypotheses, client, evidence_dir,
-                config=config, runner=runner, digest=digest,
+                config=config, python_project=python_project, runner=runner, digest=digest,
             )
         except (MetaError, SandboxError, OSError, ValueError) as error:
             done = getattr(error, "completed", None)
@@ -81,7 +93,8 @@ def run_verify(
         try:
             tamper = find_tamper(repo, context)
             tamper, tamper_experiments = run_base_tests_on_head(
-                repo, context, tamper, evidence_dir, runner=runner, digest=digest
+                repo, context, tamper, evidence_dir, runner=runner, digest=digest,
+                python_project=python_project,
             )
         except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
             done = getattr(error, "completed", None)
@@ -107,6 +120,12 @@ def run_verify(
         verdict.scope_limitations.append(
             f"Test-tamper guard is not available for {config.language}; "
             "changed tests were not re-run."
+        )
+    if python_project is not None:
+        verdict.scope_limitations.extend(
+            scope_notes(
+                repo, context.base_sha, context.head_sha, python_project, config_source
+            )
         )
     usage = [u for u in client.usage if u is not None]
     proof = Proof(

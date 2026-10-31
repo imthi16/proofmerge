@@ -11,14 +11,16 @@ import pytest
 
 from proofmerge import sandbox
 from proofmerge.context import get_context
-from proofmerge.project_config import ProjectConfig
+from proofmerge.project_config import ProjectConfig, PythonProject
 from proofmerge.sandbox import (
     SandboxError,
     config_docker_argv,
+    docker_argv,
     export_tree,
     is_runner_failure,
     outcome_for,
     outcome_for_config,
+    pip_install_argv,
     run_experiment,
 )
 from proofmerge.tamper import find_tamper, run_base_tests_on_head
@@ -270,6 +272,51 @@ CONFIG = ProjectConfig(
     env={"GOCACHE": "/tmp/gocache", "HOME": "/tmp"},
     tmpfs_mb=512,
 )
+
+
+def _envs(argv: list[str]) -> list[str]:
+    return [argv[index + 1] for index, item in enumerate(argv) if item == "--env"]
+
+
+def test_default_pythonpath_is_src_and_repo_root(tmp_path):
+    argv = docker_argv("n", "img", tmp_path, tmp_path, "t.py")
+    assert "PYTHONPATH=/work/code/src:/work/code" in _envs(argv)
+    assert argv[argv.index("--network") + 1] == "none"
+
+
+def test_python_project_replaces_pythonpath_and_keeps_probe_isolation(monkeypatch, tmp_path):
+    monkeypatch.setenv("MODEL_API_KEY", "secret-value")
+    deps = tmp_path / "deps"
+    deps.mkdir()
+    argv = docker_argv(
+        "n", "img", tmp_path, tmp_path, "t.py",
+        python_project=PythonProject(root="apps/api", pythonpath=["libs/shared"]),
+        deps_dir=deps,
+    )
+    assert "PYTHONPATH=/deps:/work/code/apps/api:/work/code/libs/shared" in _envs(argv)
+    assert "PYTHONPATH=/work/code/src:/work/code" not in _envs(argv)
+    assert argv[argv.index("--network") + 1] == "none"
+    assert f"{deps.resolve()}:/deps:ro" in argv
+    assert "secret-value" not in argv
+    assert "MODEL_API_KEY" not in argv
+
+
+def test_pip_install_argv_has_network_hashes_and_no_secrets(monkeypatch, tmp_path):
+    monkeypatch.setenv("MODEL_API_KEY", "secret-value")
+    req = tmp_path / "requirements.txt"
+    req.write_text("greetlib==1.0.0 --hash=sha256:" + "a" * 64 + "\n")
+    deps = tmp_path / "deps"
+    deps.mkdir()
+    argv = pip_install_argv("pip", "img", req, deps, "https://pypi.org/simple")
+    assert argv[argv.index("--network") + 1] == "bridge"
+    assert "--require-hashes" in argv
+    assert "--only-binary=:all:" in argv
+    assert "--index-url" in argv
+    assert argv[argv.index("--index-url") + 1] == "https://pypi.org/simple"
+    assert "--env-file" not in argv
+    joined = " ".join(argv)
+    assert "secret-value" not in joined
+    assert "MODEL_API_KEY" not in joined
 
 
 def test_config_docker_argv_has_isolation_and_mount_and_env(monkeypatch, tmp_path):

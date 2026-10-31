@@ -23,7 +23,8 @@ from proofmerge.evidence import Experiment
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import IntentContract
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
-from proofmerge.project_config import ProjectConfig
+from proofmerge.project_config import ProjectConfig, PythonProject
+from proofmerge.python_layout import layout_prompt_note
 from proofmerge.sandbox import (
     Runner,
     SandboxError,
@@ -115,10 +116,13 @@ def _tail(path: Path) -> str:
     return path.read_bytes()[-MAX_FEEDBACK_CHARS:].decode(errors="replace")
 
 
-def _probe_prompt(config: ProjectConfig | None) -> str:
+def _probe_prompt(
+    config: ProjectConfig | None, python_project: PythonProject | None = None
+) -> str:
     """Return the developer prompt for Spark, with generic placeholders filled."""
     if config is None:
-        return PROMPT
+        note = layout_prompt_note(python_project)
+        return PROMPT if not note else PROMPT + "\n" + note
     return (
         GENERIC_PROMPT.replace("{language}", config.language)
         .replace("{probe_path}", config.probe_path)
@@ -137,6 +141,7 @@ def write_probe(
     *,
     sources: str,
     config: ProjectConfig | None = None,
+    python_project: PythonProject | None = None,
     runner: Runner = docker_runner,
     digest: str,
 ) -> Probe:
@@ -151,7 +156,7 @@ def write_probe(
     )
     history: list[dict[str, str]] = []
     source = ""
-    prompt = _probe_prompt(config)
+    prompt = _probe_prompt(config, python_project)
     for run in range(1, MAX_BASE_RUNS + 1):
         reply = client.structured(
             SPARK_MODEL,
@@ -205,6 +210,7 @@ def write_probe(
                 runner=runner,
                 digest=digest,
                 attempts=1,
+                python_project=python_project,
             )
         execution = experiment.executions[0]
         if execution.outcome == "PASS":
@@ -241,6 +247,7 @@ def probe_hypotheses(
     evidence_dir: Path,
     *,
     config: ProjectConfig | None = None,
+    python_project: PythonProject | None = None,
     runner: Runner = docker_runner,
     digest: str | None = None,
 ) -> tuple[list[Probe], list[Experiment]]:
@@ -261,6 +268,7 @@ def probe_hypotheses(
                 evidence_dir,
                 sources=sources,
                 config=config,
+                python_project=python_project,
                 runner=runner,
                 digest=digest,
             )
@@ -291,6 +299,7 @@ def probe_hypotheses(
                             evidence_dir,
                             runner=runner,
                             digest=digest,
+                            python_project=python_project,
                         )
                     )
         except (MetaError, SandboxError, OSError, ValueError) as error:

@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 
 from proofmerge.context import ContextError, GitContext, _git
 from proofmerge.evidence import Experiment, Outcome, TamperFinding, TamperKind
+from proofmerge.project_config import PythonProject
 from proofmerge.sandbox import Runner, SandboxError, docker_runner, run_experiment
 
 
@@ -199,6 +200,7 @@ def run_base_tests_on_head(
     evidence_dir: Path,
     runner: Runner = docker_runner,
     digest: str | None = None,
+    python_project: PythonProject | None = None,
 ) -> tuple[list[TamperFinding], list[Experiment]]:
     """Run each affected file's committed base tests on both revisions, without a verdict."""
     experiments: list[Experiment] = []
@@ -242,6 +244,7 @@ def run_base_tests_on_head(
                 repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
                 "\n".join(lines),
                 evidence_dir, runner=runner, digest=digest, attempts=3,
+                python_project=python_project,
             )
             experiments.append(experiment)
             base = [e.outcome for e in experiment.executions if e.revision == "base"]

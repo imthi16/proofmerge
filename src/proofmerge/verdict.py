@@ -72,6 +72,12 @@ def decide(
                     f"{finding.hypothesis_id} is a verified regression against "
                     f"uncontested PRESERVE claim {effective_claim.id} with intent present."
                 )
+        elif finding.classification == "ENVIRONMENT":
+            reasons.append(
+                f"{finding.hypothesis_id} needs review because the probe failed during "
+                "environment setup (import or dependency install). "
+                "That is not a behavioral pass or failure."
+            )
         elif finding.classification in {"INCONCLUSIVE", "EXISTING_FAILURE", "POSSIBLE_FIX"}:
             reasons.append(
                 f"{finding.hypothesis_id} needs review because its classification "

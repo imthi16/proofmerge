@@ -14,9 +14,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional orchestrator (--orchestrator langgraph); the legacy one needs nothing extra.
+graph = [
+    "langgraph==1.2.15",
+]
 dev = [
     "pytest==9.1.1",
     "ruff==0.17.3",
+    "langgraph==1.2.15",
 ]
 
 [project.scripts]

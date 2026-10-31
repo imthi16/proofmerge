@@ -360,13 +360,14 @@ def arguments(repo, evidence, base="HEAD~1"):
 
 @pytest.mark.parametrize(("decision", "status"), [("PASS", 0), ("REVIEW", 0), ("BLOCK", 2)])
 def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, status):
+    monkeypatch.delenv("PROOFMERGE_ORCHESTRATOR", raising=False)
     repo, _ = make_repo(tmp_path)
     proof = Proof.model_validate_json((Path(__file__).parent / "fixtures/sample_proof_block.json").read_text())
     proof.verdict.decision = decision
     seen = {}
 
-    def run(*args):
-        seen["args"] = args
+    def run(*args, **kwargs):
+        seen["args"], seen["kwargs"] = args, kwargs
         return proof
 
     monkeypatch.setattr(cli, "MetaClient", lambda **kwargs: seen.setdefault("client", MetaClient(Replies(), **kwargs)))
@@ -382,6 +383,7 @@ def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, statu
     assert all(reason in result.output for reason in proof.verdict.reasons)
     assert "calls=0 tokens: prompt=0 completion=0" in result.output
     assert seen["args"][3] == INTENT
+    assert seen["kwargs"] == {"orchestrator": "legacy"}
     assert seen["client"].max_calls == 4 + MAX_HYPOTHESES * MAX_BASE_RUNS
 
 
@@ -390,7 +392,7 @@ def test_cli_could_not_run_exit_one(tmp_path, monkeypatch, error):
     repo, _ = make_repo(tmp_path)
     monkeypatch.setattr(cli, "MetaClient", lambda **k: MetaClient(Replies(), **k))
 
-    def fail(*a):
+    def fail(*a, **k):
         raise error
 
     monkeypatch.setattr(cli, "run_verify", fail)

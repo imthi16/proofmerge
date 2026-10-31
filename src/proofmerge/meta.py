@@ -28,7 +28,15 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class MetaError(Exception):
-    """A Meta API failure. The message is safe to show: it never contains the key."""
+    """A Meta API failure. The message is safe to show: it never contains the key.
+
+    `transient` marks failures a later identical call may not hit (HTTP 429, 5xx, no
+    connection). Only an orchestrator may retry those, within the same call budget.
+    """
+
+    def __init__(self, message: str, *, transient: bool = False) -> None:
+        super().__init__(message)
+        self.transient = transient
 
 
 class Completions(Protocol):
@@ -56,7 +64,8 @@ class MetaClient:
                 raise MetaError("MODEL_API_KEY is not set; export it in your shell first")
             base_url = os.environ.get("PROOFMERGE_BASE_URL") or BASE_URL
             # No SDK retries, so every HTTP attempt counts against the call budget.
-            # shortcut: a 429/5xx fails the call; add budgeted retries if live runs flake.
+            # A 429/5xx/connection failure is marked transient; the LangGraph orchestrator
+            # retries those within this budget, the legacy one records them as REVIEW.
             completions = openai.OpenAI(
                 base_url=base_url, api_key=key, max_retries=0, timeout=180
             ).chat.completions
@@ -108,6 +117,7 @@ class MetaClient:
             raise MetaError(f"model call budget exhausted ({self.max_calls} calls)")
         self.calls += 1
         failure = None
+        transient = False
         try:
             response = self._completions.create(
                 model=model,
@@ -127,12 +137,14 @@ class MetaClient:
             failure = "Meta API rejected MODEL_API_KEY (HTTP 401)"
         except openai.APIStatusError as error:
             failure = f"Meta API request failed (HTTP {error.status_code})"
+            transient = error.status_code == 429 or error.status_code >= 500
         except openai.APIConnectionError:
             failure = "could not reach the Meta API"
+            transient = True
         # Raised outside the except blocks so the SDK exception, whose message may echo
         # the key, is not attached as __context__.
         if failure:
-            raise MetaError(failure)
+            raise MetaError(failure, transient=transient)
         self.usage.append(response.usage)
         content = response.choices[0].message.content or ""
         try:

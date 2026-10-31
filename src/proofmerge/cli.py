@@ -20,7 +20,7 @@ from proofmerge.manifest import (
     write_manifest,
 )
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
-from proofmerge.pipeline import run_verify
+from proofmerge.pipeline import resolve_orchestrator, run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.project_config import load_config
 from proofmerge.report import render_html, scope_receipt
@@ -334,9 +334,17 @@ def verify(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    orchestrator: Annotated[
+        str | None,
+        typer.Option(
+            help="legacy (default) or langgraph; PROOFMERGE_ORCHESTRATOR sets the default. "
+            "Both run the same stages and the same deterministic verdict policy."
+        ),
+    ] = None,
 ) -> None:
     """Verify base..head and write proof.json, report.html and a hashed manifest."""
     try:
+        engine = resolve_orchestrator(orchestrator)
         context = get_context(repo, base, head)
         check_diff(context)
         if not context.changed_files:
@@ -348,7 +356,7 @@ def verify(
             client = MetaClient(max_calls=budget)
         except MetaError as error:
             client = MetaClient(completions=_UnavailableCompletions(error), max_calls=budget)
-        proof = run_verify(repo, base, head, intent, evidence_dir, client)
+        proof = run_verify(repo, base, head, intent, evidence_dir, client, orchestrator=engine)
     except (ContextError, ValueError, OSError) as error:
         typer.echo(f"verify failed: {error}", err=True)
         raise typer.Exit(1) from None

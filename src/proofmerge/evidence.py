@@ -63,6 +63,9 @@ class TamperFinding(BaseModel):
     test_name: str | None  # None when the whole file is affected
     kind: TamperKind
     base_test_on_head_outcome: Outcome | None  # None until the dynamic check runs
+    # The T experiment the outcome came from; None when no base test ran (and in older
+    # proofs). replay recomputes the outcome from that experiment's executions.
+    experiment_id: str | None = None
 
 
 class ModelUsage(BaseModel):

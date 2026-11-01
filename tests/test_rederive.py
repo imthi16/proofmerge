@@ -124,3 +124,72 @@ def test_dashboard_marks_an_edited_verdict_as_changed(tmp_path):
     integrity = _summary("run", evidence)["integrity"]
     assert integrity["status"] == "changed"
     assert any("recorded PASS, recomputed BLOCK" in p for p in integrity["problems"])
+
+
+def tamper_run(tmp_path, monkeypatch, head):
+    """A verify run whose tamper guard ran one base test with the given head outcomes."""
+    import hashlib
+
+    from test_findings import experiment
+
+    from proofmerge import pipeline
+    from proofmerge import tamper as tamper_mod
+    from proofmerge.evidence import TamperFinding
+
+    findings = [TamperFinding(test_path="test_calc.py", test_name=None, kind="MODIFIED",
+                              base_test_on_head_outcome=None)]
+    monkeypatch.setattr(pipeline, "find_tamper", lambda *args: findings)
+    monkeypatch.setattr(tamper_mod, "_git",
+                        lambda repo, *args, error: b"blob\0" if args[0] == "ls-tree" else b"#\n")
+
+    def run_experiment(*args, **kwargs):
+        evidence, rel, data = args[5], f"probes/test_{args[3].lower()}.py", b"assert True\n"
+        (evidence / rel).parent.mkdir(parents=True, exist_ok=True)
+        (evidence / rel).write_bytes(data)
+        saved = experiment(["PASS"] * 3, head, hypothesis_id=args[3])
+        saved.test_source_path, saved.test_source_sha256 = rel, hashlib.sha256(data).hexdigest()
+        return saved
+
+    monkeypatch.setattr(tamper_mod, "run_experiment", run_experiment)
+    return execute(tmp_path, replies=Replies(fail=1))  # no intent: only tamper can BLOCK
+
+
+def test_tamper_outcomes_name_their_experiment_and_recompute(tmp_path, monkeypatch):
+    proof, evidence, _, _ = tamper_run(tmp_path, monkeypatch, ["FAIL"] * 3)
+    finding = proof.tamper_findings[0]
+    assert (finding.base_test_on_head_outcome, finding.experiment_id) == ("FAIL", "T1")
+    assert rederive(proof) == []
+    assert replay(evidence).exit_code == 0
+
+
+def test_an_invented_tamper_fail_is_caught(tmp_path, monkeypatch):
+    # Codex P1 on #48: a PASS rewritten to FAIL (and the verdict to match) must not replay.
+    proof, evidence, _, _ = tamper_run(tmp_path, monkeypatch, ["PASS"] * 3)
+    assert proof.tamper_findings[0].base_test_on_head_outcome == "PASS"
+
+    def invent(data):
+        data["tamper_findings"][0]["base_test_on_head_outcome"] = "FAIL"
+
+    forged = reseal(evidence, invent)
+    assert any("recorded FAIL, but T1's executions give PASS" in p for p in rederive(forged))
+    assert replay(evidence).exit_code == 1
+
+    def unlink(data):
+        data["tamper_findings"][0]["experiment_id"] = None
+
+    assert any("names no recorded experiment" in p for p in rederive(reseal(evidence, unlink)))
+
+
+def test_config_runner_outcomes_are_not_judged_by_pytest_exit_codes(tmp_path):
+    # Codex P2 on #48: a .proofmerge.toml Python runner records ERROR for exit 1 when the
+    # output does not match assertion_failure; that untouched proof must still replay.
+    _, evidence, _, _ = execute(tmp_path)
+
+    def config_error(data):
+        data["verdict_inputs"]["tamper_guard_language"] = "python"  # the config runner ran
+        data["experiments"][0]["executions"][0].update(exit_code=1, outcome="ERROR")
+    odd = reseal(evidence, config_error)
+    assert not any("does not match exit code" in p for p in rederive(odd))
+    pytest_run = odd.model_copy(deep=True)
+    pytest_run.verdict_inputs.tamper_guard_language = None
+    assert any("does not match exit code" in p for p in rederive(pytest_run))

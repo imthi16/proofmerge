@@ -14,6 +14,7 @@ from proofmerge.evidence import Finding, Proof
 from proofmerge.findings import findings_for
 from proofmerge.probes import Probe
 from proofmerge.sandbox import outcome_for
+from proofmerge.tamper import head_outcome
 from proofmerge.verdict import adjudicate
 
 
@@ -48,9 +49,11 @@ def rederive(proof: Proof) -> list[str] | None:
         )
     except ValueError as error:
         return [f"Cannot recompute the verdict: {error}."]
-    problems = []
-    if proof.language == "python":
-        # pytest outcomes are a function of the exit code alone (sandbox.outcome_for).
+    problems = _tamper_problems(proof)
+    if proof.verdict_inputs.tamper_guard_language is None:
+        # The pytest runner: outcomes are a function of the exit code alone
+        # (sandbox.outcome_for). A .proofmerge.toml runner, even for Python, also reads
+        # the output (outcome_for_config), so the exit code alone cannot be checked.
         for experiment in proof.experiments:
             for run in experiment.executions:
                 if run.outcome != outcome_for(run.exit_code):
@@ -75,6 +78,34 @@ def rederive(proof: Proof) -> list[str] | None:
             problems.append(
                 f"Verdict {verdict.decision} matches, but its recorded reasons or limits differ "
                 "from the recomputed ones."
+            )
+    return problems
+
+
+def _tamper_problems(proof: Proof) -> list[str]:
+    """Each tamper finding's outcome must follow from the T experiment it names.
+
+    The verdict BLOCKs on a base test that FAILs on head, so a recorded PASS or FAIL needs
+    the executions behind it. ERROR (no base test, or the run failed) needs none.
+    """
+    experiments = {e.hypothesis_id: e for e in proof.experiments if e.hypothesis_id.startswith("T")}
+    problems = []
+    for finding in proof.tamper_findings:
+        recorded = finding.base_test_on_head_outcome
+        if recorded is None:
+            continue
+        name = f"Tamper finding for {finding.test_path}"
+        if finding.experiment_id is None:
+            if recorded != "ERROR":
+                problems.append(f"{name}: outcome {recorded} names no recorded experiment.")
+            continue
+        experiment = experiments.get(finding.experiment_id)
+        if experiment is None:
+            problems.append(f"{name}: experiment {finding.experiment_id} is not in the proof.")
+        elif head_outcome(experiment) != recorded:
+            problems.append(
+                f"{name}: recorded {recorded}, but {finding.experiment_id}'s executions give "
+                f"{head_outcome(experiment)}."
             )
     return problems
 

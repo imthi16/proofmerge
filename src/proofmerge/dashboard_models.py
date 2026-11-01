@@ -242,3 +242,30 @@ API_MODELS: tuple[type[BaseModel], ...] = (
     Session, OverviewMetrics, RunPage, RunDetail, Benchmarks, PullRequests,
     VerificationRequest, Job, JobEvents, VerificationEvent, Diagnostics, ApiError,
 )
+
+
+def api_schema() -> dict:
+    """One JSON Schema naming every API model, for generating the client's types."""
+    from pydantic.json_schema import models_json_schema
+
+    _, schema = models_json_schema([(m, "serialization") for m in API_MODELS],
+                                   ref_template="#/$defs/{model}")
+    defs = schema["$defs"]
+    for definition in defs.values():
+        # model_dump_json writes every field, defaults included, so all are present.
+        if "properties" in definition:
+            definition["required"] = sorted(definition["properties"])
+    return {
+        "title": "ProofMergeApi",
+        "type": "object",
+        "properties": {m.__name__: {"$ref": f"#/$defs/{m.__name__}"} for m in API_MODELS},
+        "required": [m.__name__ for m in API_MODELS],
+        "additionalProperties": False,
+        "$defs": dict(sorted(defs.items())),
+    }
+
+
+if __name__ == "__main__":
+    import json
+
+    print(json.dumps(api_schema(), indent=2, sort_keys=True))

@@ -6,11 +6,13 @@ network, no capabilities, no host environment, a read-only filesystem and
 resource limits. Every attempt becomes an `Execution` record with its logs.
 """
 
+import contextvars
 import hashlib
 import io
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -21,11 +23,22 @@ from importlib import resources
 from pathlib import Path
 
 from proofmerge.evidence import Execution, Experiment, Outcome
-from proofmerge.project_config import ProjectConfig
+from proofmerge.project_config import ProjectConfig, PythonProject
+from proofmerge.python_layout import (
+    LayoutError,
+    ProbeLayout,
+    container_pythonpath,
+    host_pythonpath,
+    is_environment_failure,
+    parse_requirements,
+    path_problem,
+    requirements_for_base,
+)
 
 RUNNER_IMAGE = "proofmerge-runner:0.1"
 ATTEMPTS = 3  # a regression must reproduce on every attempt
 TIMEOUT_SECONDS = 60
+INSTALL_TIMEOUT_SECONDS = 180
 MAX_OUTPUT_BYTES = 1_000_000  # per stream; a run that prints more is stopped and is ERROR
 OUTPUT_LIMIT_EXIT = -1  # exit code recorded for a run stopped by the output limit
 # What runs inside the container; recorded in every Execution.
@@ -64,6 +77,11 @@ JOB_ID = re.compile(r"[A-Za-z0-9._-]{1,80}")
 
 # (image, code_dir, probe_dir, probe_name, timeout) -> (exit_code or None on timeout, stdout, stderr)
 Runner = Callable[[str, Path, Path, str, int], tuple[int | None, bytes, bytes]]
+# (requirements text, destination directory, index URL) -> None. Raises on failure.
+Installer = Callable[[str, Path, str], None]
+_LAYOUT: contextvars.ContextVar[ProbeLayout | None] = contextvars.ContextVar(
+    "proofmerge_python_layout", default=None
+)
 
 
 class SandboxError(Exception):
@@ -166,19 +184,80 @@ def hardened_run_argv(name: str, *, tmpfs: str) -> list[str]:
 
 
 def docker_argv(
-    name: str, image: str, code_dir: Path, probe_dir: Path, probe_name: str
+    name: str,
+    image: str,
+    code_dir: Path,
+    probe_dir: Path,
+    probe_name: str,
+    *,
+    python_project: PythonProject | None = None,
+    deps_dir: Path | None = None,
 ) -> list[str]:
+    # The trusted [python] layout only changes PYTHONPATH and adds a read-only /deps mount
+    # after the isolation prefix; it cannot touch network, user, capabilities or limits.
+    pythonpath = container_pythonpath(python_project, deps=deps_dir is not None)
+    deps = ["--volume", f"{deps_dir.resolve()}:/deps:ro"] if deps_dir is not None else []
     return [
         *hardened_run_argv(name, tmpfs="/tmp:rw,size=64m"),
         "--env", "HOME=/tmp",
         "--env", "PYTHONDONTWRITEBYTECODE=1",
-        # shortcut: assumes a src/ or flat layout; repos that need installing come later.
-        "--env", "PYTHONPATH=/work/code/src:/work/code",
+        "--env", f"PYTHONPATH={pythonpath}",
         "--volume", f"{code_dir}:/work/code:ro",
         "--volume", f"{probe_dir}:/work/probes:ro",
+        *deps,
         "--workdir", "/work/code",
         image,
         *PYTEST_ARGV, f"/work/probes/{probe_name}",
+    ]  # fmt: skip
+
+
+def installer_user() -> str:
+    """The UID:GID the installer container writes /deps as.
+
+    A non-root host (GitHub's runner user) must own what the installer writes: it then
+    makes the files readable for the probe user (open_to_runner) and deletes them with
+    the temporary directory. Files owned by 65534 allow neither. A root host can do both
+    to any file, so the installer keeps the unprivileged 65534 and never runs as root.
+    """
+    uid, gid = os.getuid(), os.getgid()
+    return f"{uid}:{gid}" if uid != 0 else "65534:65534"
+
+
+def pip_install_argv(
+    name: str, image: str, requirements: Path, deps_dir: Path, index_url: str
+) -> list[str]:
+    """Argv for a hashed wheel install. Network is on; the host environment is not passed.
+
+    Not a probe container, so it does not use hardened_run_argv: it needs the network to
+    fetch base-commit wheels. It runs no repository code (--only-binary, --no-deps,
+    --require-hashes), and probes then see its output read-only, with no network.
+    """
+    return [
+        "docker", "run", "--rm", "--name", name, *_job_label(),
+        "--network", "bridge",
+        "--read-only",
+        "--tmpfs", "/tmp:rw,size=1024m",
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        "--user", installer_user(),
+        "--pids-limit", "256",
+        "--memory", "1536m", "--memory-swap", "1536m",
+        "--cpus", "1",
+        "--env", "HOME=/tmp",
+        "--env", "PIP_DISABLE_PIP_VERSION_CHECK=1",
+        "--env", "PYTHONDONTWRITEBYTECODE=1",
+        "--volume", f"{requirements.resolve()}:/req/requirements.txt:ro",
+        "--volume", f"{deps_dir.resolve()}:/deps:rw",
+        image,
+        "python", "-m", "pip", "install",
+        "--require-hashes",
+        "--only-binary=:all:",
+        "--no-deps",
+        "--no-cache-dir",
+        "--disable-pip-version-check",
+        "--index-url", index_url,
+        "--target", "/deps",
+        "-r", "/req/requirements.txt",
     ]  # fmt: skip
 
 
@@ -243,9 +322,15 @@ def _run_capped(argv: list[str], name: str, timeout: int) -> tuple[int | None, b
 def docker_runner(
     image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
 ) -> tuple[int | None, bytes, bytes]:
-    """Run one pytest probe in the hardened container."""
+    """Run one pytest probe in the hardened container, with run_experiment's trusted layout."""
     name = f"proofmerge-{uuid.uuid4().hex[:12]}"
-    return _run_capped(docker_argv(name, image, code_dir, probe_dir, probe_name), name, timeout)
+    layout = _LAYOUT.get()
+    argv = docker_argv(
+        name, image, code_dir, probe_dir, probe_name,
+        python_project=layout.project if layout else None,
+        deps_dir=layout.deps_dir if layout else None,
+    )  # fmt: skip
+    return _run_capped(argv, name, timeout)
 
 
 def config_docker_runner(
@@ -280,9 +365,100 @@ def outcome_for_config(
     return "ERROR"
 
 
+def docker_pip_install(
+    image: str, requirements: Path, deps_dir: Path, index_url: str, timeout: int
+) -> None:
+    """Install hashed wheels inside a container. Probe runs stay on `--network none`."""
+    name = f"proofmerge-pip-{uuid.uuid4().hex[:12]}"
+    requirements.chmod(0o644)
+    argv = pip_install_argv(name, image, requirements, deps_dir, index_url)
+    exit_code, stdout, stderr = _run_capped(argv, name, timeout)
+    if exit_code != 0:
+        detail = (stderr or stdout).decode(errors="replace")[-2000:]
+        raise SandboxError(f"dependency install failed (exit {exit_code}): {detail}")
+
+
+def host_python_runner(
+    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
+) -> tuple[int | None, bytes, bytes]:
+    """Run pytest on the host with the trusted import layout.
+
+    This is not a sandbox and `verify` does not call it. Tests and an operator
+    smoke check use it when Docker is unavailable. The child environment is
+    minimal: host secrets, including MODEL_API_KEY, are not passed through.
+    """
+    del image
+    layout = _LAYOUT.get()
+    project = layout.project if layout else None
+    deps = layout.deps_dir if layout else None
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/tmp",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "PYTHONPATH": host_pythonpath(code_dir, project, deps),
+    }
+    argv = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--confcutdir",
+        str(probe_dir),
+        "--rootdir",
+        str(probe_dir),
+        str(probe_dir / probe_name),
+    ]
+    try:
+        proc = subprocess.run(
+            argv, cwd=code_dir, env=env, capture_output=True, timeout=timeout, check=False
+        )
+    except subprocess.TimeoutExpired as exc:
+        return None, exc.stdout or b"", exc.stderr or b""
+    stdout, stderr = proc.stdout, proc.stderr
+    if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
+        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
+        return OUTPUT_LIMIT_EXIT, stdout[:MAX_OUTPUT_BYTES], stderr[:MAX_OUTPUT_BYTES] + note
+    return proc.returncode, stdout, stderr
+
+
+def _prepare_dependencies(
+    repo: Path,
+    base_sha: str,
+    project: PythonProject,
+    evidence_dir: Path,
+    deps_dir: Path,
+    image: str,
+    installer: Installer | None,
+) -> str | None:
+    """Return an error string when install fails, else None. Deps land in `deps_dir`."""
+    try:
+        requirements, index_url = requirements_for_base(repo, base_sha, project)
+        requirements_path = evidence_dir / "python-requirements.txt"
+        requirements_path.write_text(requirements, encoding="utf-8")
+        requirements_path.chmod(0o644)
+        if not parse_requirements(requirements):
+            return None
+        if installer is None:
+            docker_pip_install(image, requirements_path, deps_dir, index_url, INSTALL_TIMEOUT_SECONDS)
+        else:
+            installer(requirements, deps_dir, index_url)
+        open_to_runner(deps_dir)
+    except (LayoutError, SandboxError, OSError, ValueError) as exc:
+        message = f"environment setup failed: {exc}"
+        (evidence_dir / "python-install-error.txt").write_text(message + "\n", encoding="utf-8")
+        return message
+    return None
 # One attempt on one exported revision -> (exit code or None on timeout, stdout, stderr).
 RunOnce = Callable[[Path], tuple[int | None, bytes, bytes]]
 OutcomeOf = Callable[[int | None, bytes, bytes], Outcome]
+# A setup problem that stops a revision's attempts before they run (None when there is none).
+Precheck = Callable[[Path], str | None]
+SetupFailed = Callable[[int | None, bytes, bytes], bool]
 
 
 def _write_probe(evidence_dir: Path, hypothesis_id: str, probe_name: str, source: str,
@@ -313,8 +489,15 @@ def _run_revisions(
     digest: str,
     run_once: RunOnce,
     outcome_of: OutcomeOf,
+    precheck: Precheck | None = None,
+    setup_failed: SetupFailed | None = None,
 ) -> list[Execution]:
-    """Export each revision once, run every attempt on it, and record each run with its logs."""
+    """Export each revision once, run every attempt on it, and record each run with its logs.
+
+    A precheck problem (a failed install, a bad import path) is recorded for every attempt
+    as a setup failure without running anything; setup_failed marks import errors seen in
+    a run. Setup failures classify as ENVIRONMENT, never as behavioural evidence.
+    """
     executions: list[Execution] = []
     with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
         Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
@@ -322,9 +505,15 @@ def _run_revisions(
             code_dir = Path(tmp) / revision
             export_tree(repo, sha, code_dir)
             open_to_runner(code_dir)
+            problem = precheck(code_dir) if precheck else None
             for attempt in range(1, attempts + 1):
                 start = time.monotonic()
-                exit_code, stdout, stderr = run_once(code_dir)
+                if problem:
+                    exit_code, stdout, stderr = INVALID_PROBE_EXIT, b"", (problem + "\n").encode()
+                    failed_setup = True
+                else:
+                    exit_code, stdout, stderr = run_once(code_dir)
+                    failed_setup = bool(setup_failed and setup_failed(exit_code, stdout, stderr))
                 duration_ms = round((time.monotonic() - start) * 1000)
                 stem = f"{revision}-{attempt}"
                 (log_dir / f"{stem}.stdout").write_bytes(stdout)
@@ -341,6 +530,7 @@ def _run_revisions(
                         stdout_path=f"{hypothesis_id}/{stem}.stdout",
                         stderr_path=f"{hypothesis_id}/{stem}.stderr",
                         runner_image_digest=digest,
+                        setup_failure=failed_setup,
                     )
                 )
     return executions
@@ -362,6 +552,8 @@ def run_experiment(
     digest: str | None = None,
     attempts: int = ATTEMPTS,
     timeout: int = TIMEOUT_SECONDS,
+    python_project: PythonProject | None = None,
+    installer: Installer | None = None,
 ) -> Experiment:
     """Run `probe_source` `attempts` times on each revision; logs go to `evidence_dir`.
 
@@ -376,12 +568,30 @@ def run_experiment(
     probe_dir, log_dir = _write_probe(
         evidence_dir, hypothesis_id, probe_name, probe_source, conftest=True
     )
-    executions = _run_revisions(
-        repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
-        attempts=attempts, command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"], digest=digest,
-        run_once=lambda code_dir: runner(digest, code_dir, probe_dir, probe_name, timeout),
-        outcome_of=lambda exit_code, stdout, stderr: outcome_for(exit_code),
-    )  # fmt: skip
+    with tempfile.TemporaryDirectory(prefix="proofmerge-deps-") as tmp:
+        Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
+        deps_dir: Path | None = None
+        install_error: str | None = None
+        if python_project is not None and python_project.install:
+            deps_dir = Path(tmp) / "deps"
+            deps_dir.mkdir()
+            deps_dir.chmod(0o777)
+            install_error = _prepare_dependencies(
+                repo, base_sha, python_project, evidence_dir, deps_dir, digest, installer
+            )
+        token = _LAYOUT.set(ProbeLayout(python_project, None if install_error else deps_dir))
+        try:
+            executions = _run_revisions(
+                repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
+                attempts=attempts, command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"],
+                digest=digest,
+                run_once=lambda code_dir: runner(digest, code_dir, probe_dir, probe_name, timeout),
+                outcome_of=lambda exit_code, stdout, stderr: outcome_for(exit_code),
+                precheck=lambda code_dir: install_error or path_problem(code_dir, python_project),
+                setup_failed=is_environment_failure,
+            )  # fmt: skip
+        finally:
+            _LAYOUT.reset(token)
     return Experiment(
         hypothesis_id=hypothesis_id,
         test_source_path=f"probes/{probe_name}",

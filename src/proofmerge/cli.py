@@ -23,7 +23,13 @@ from proofmerge.manifest import (
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import resolve_orchestrator, run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
-from proofmerge.project_config import load_config
+from proofmerge.project_config import (
+    ProjectConfig,
+    PythonProject,
+    assert_operator_config_allowed,
+    load_operator_config,
+    load_setup,
+)
 from proofmerge.rederive import rederive
 from proofmerge.report import render_html, scope_receipt
 from proofmerge.sandbox import (
@@ -40,6 +46,34 @@ from proofmerge.sandbox import (
 from proofmerge.telemetry import fan_out, verify_span
 
 app = typer.Typer()
+
+ConfigOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--config",
+        help=(
+            "Operator-controlled .proofmerge.toml. Replaces the base-commit file for "
+            "this run. Not read from the pull request head. The GitHub Action does not "
+            "pass this flag."
+        ),
+    ),
+]
+
+
+def _load_setup(
+    repo: Path, base_sha: str, config_file: Path | None
+) -> tuple[ProjectConfig | None, PythonProject | None, str]:
+    if config_file is None:
+        project, python = load_setup(repo, base_sha)
+        return project, python, "the base commit's .proofmerge.toml"
+    assert_operator_config_allowed(repo, base_sha, config_file)
+    typer.echo(
+        f"using operator config {config_file} "
+        "(trusted because this process was given the path; not read from the pull request head)",
+        err=True,
+    )
+    project, python = load_operator_config(config_file)
+    return project, python, f"operator config {config_file}"
 
 
 class SmokeReply(BaseModel):
@@ -158,6 +192,7 @@ def replay(
     proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
     rerun: Annotated[bool, typer.Option(help="Re-run recorded experiments in Docker")] = False,
     repo: Annotated[Path | None, typer.Option(help="Git repository for --rerun")] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Check evidence hashes and optionally re-run recorded experiments in Docker."""
     evidence_dir = proof_json.parent
@@ -190,7 +225,7 @@ def replay(
         typer.echo(f"verdict recomputed from the evidence: {proof.verdict.decision}")
     if rerun:
         try:
-            reproduced = _replay_experiments(proof, evidence_dir, repo)
+            reproduced = _replay_experiments(proof, evidence_dir, repo, config_file)
         except (OSError, ValueError, SandboxError) as error:
             typer.echo(f"replay failed: {error}", err=True)
             raise typer.Exit(1) from None
@@ -206,7 +241,9 @@ def _outcomes(experiment: Experiment, revision: str) -> str:
     )
 
 
-def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> bool:
+def _replay_experiments(
+    proof: Proof, evidence_dir: Path, repo: Path | None, config_file: Path | None
+) -> bool:
     if repo is None:
         raise ValueError("--repo is required with --rerun")
     # Validate both before either reaches git; a ref or an option must never be executed.
@@ -224,7 +261,7 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
         raise ValueError("no recorded experiments to re-run")
     # Same rule as verify: the test setup comes from the recorded base commit, and a
     # config there means verify used the config runner, whatever its language.
-    config = load_config(repo, proof.base_sha)
+    config, python_project, _source = _load_setup(repo, proof.base_sha, config_file)
     if (config.language if config else "python") != proof.language:
         raise ValueError(f"{repo} has no .proofmerge.toml for {proof.language} at the base commit")
     seen = set()
@@ -258,9 +295,12 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
         attempts = len(experiment.executions) // 2
         try:
             if config is None:
+                options = {"attempts": attempts, "timeout": experiment.timeout_seconds}
+                if python_project is not None:
+                    options["python_project"] = python_project
                 current = run_experiment(
                     repo, proof.base_sha, proof.head_sha, identifier, source, destination,
-                    attempts=attempts, timeout=experiment.timeout_seconds,
+                    **options,
                 )
             else:
                 current = run_config_experiment(
@@ -292,6 +332,7 @@ def hypotheses(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Print intent claims and Spark hypotheses for base..head (up to 2 real calls)."""
     try:
@@ -303,7 +344,7 @@ def hypotheses(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2)
         contract = extract_intent(intent, client)
-        config = load_config(repo, context.base_sha)
+        config, _python_project, _source = _load_setup(repo, context.base_sha, config_file)
         found = generate_hypotheses(context, contract, client, config=config)
     except (ContextError, MetaError, ValueError, OSError) as error:
         typer.echo(f"hypotheses failed: {error}", err=True)
@@ -345,6 +386,7 @@ def verify(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
     orchestrator: Annotated[
         str | None,
         typer.Option(
@@ -380,10 +422,17 @@ def verify(
             client = MetaClient(max_calls=budget)
         except MetaError as error:
             client = MetaClient(completions=_UnavailableCompletions(error), max_calls=budget)
+        extra: dict = {}
+        if config_file is not None:
+            # An operator-supplied config replaces the base commit's .proofmerge.toml.
+            config, python_project, source = _load_setup(repo, context.base_sha, config_file)
+            extra = {"config": config, "python_project": python_project,
+                     "load_repo_config": False, "config_source": source}
         sink = JsonlEventSink(events_file) if events_file is not None else None
         with verify_span(evidence_dir.name, engine) as telemetry:
             observer = fan_out(sink, telemetry.observer if telemetry else None)
-            extra = {} if observer is None else {"observer": observer}
+            if observer is not None:
+                extra["observer"] = observer
             proof = run_verify(repo, base, head, intent, evidence_dir, client,
                                orchestrator=engine, **extra)
             if telemetry:
@@ -413,6 +462,7 @@ def probe(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Write a Spark probe per hypothesis and run it on base and head in Docker."""
     try:
@@ -425,10 +475,11 @@ def probe(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
         contract = extract_intent(intent, client)
-        config = load_config(repo, context.base_sha)
+        config, python_project, _source = _load_setup(repo, context.base_sha, config_file)
         found = generate_hypotheses(context, contract, client, config=config)
         probes, experiments = probe_hypotheses(
-            repo, context, contract, found.hypotheses, client, evidence_dir, config=config
+            repo, context, contract, found.hypotheses, client, evidence_dir,
+            config=config, python_project=python_project,
         )
     except (ContextError, MetaError, SandboxError, ValueError, OSError) as error:
         typer.echo(f"probe failed: {error}", err=True)

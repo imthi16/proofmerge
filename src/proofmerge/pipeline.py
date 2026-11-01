@@ -34,7 +34,8 @@ from proofmerge.intent import C0, IntentContract, extract_intent
 from proofmerge.manifest import write_manifest
 from proofmerge.meta import SPARK_MODEL, WONDER_MODEL, MetaClient, MetaError
 from proofmerge.probes import Probe, probe_hypotheses
-from proofmerge.project_config import ProjectConfig, load_config
+from proofmerge.project_config import ProjectConfig, PythonProject, load_setup
+from proofmerge.python_layout import scope_notes
 from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
 from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
@@ -53,6 +54,9 @@ class VerifyState(TypedDict, total=False):
     intent: str | None
     evidence_dir: Path
     config: ProjectConfig | None
+    python_project: PythonProject | None  # the trusted [python] layout, if any
+    load_repo_config: bool  # False when an operator supplied the config (verify --config)
+    config_source: str  # where config and python_project came from, for scope notes
     context: GitContext
     contract: IntentContract
     intent_established: bool
@@ -117,10 +121,18 @@ def resolve_context(state: VerifyState, deps: Deps) -> Update:
 
 def load_trusted_config(state: VerifyState, deps: Deps) -> Update:
     # From the base commit only: the PR head must not choose how it is tested.
-    config = state.get("config")
-    if config is None:
-        config = load_config(state["repo"], state["context"].base_sha)
-    return {"config": config}
+    config, python_project = state.get("config"), state.get("python_project")
+    if state.get("load_repo_config", True):
+        loaded_config, loaded_python = load_setup(state["repo"], state["context"].base_sha)
+        if config is None:
+            config = loaded_config
+        if python_project is None:
+            python_project = loaded_python
+    if config is not None and python_project is not None:
+        raise ValueError(
+            ".proofmerge.toml cannot select both the generic language runner and [python]"
+        )
+    return {"config": config, "python_project": python_project}
 
 
 def open_evidence_dir(state: VerifyState, deps: Deps) -> Update:
@@ -163,7 +175,8 @@ def generate_execute_probes(state: VerifyState, deps: Deps) -> Update:
         probes, experiments = probe_hypotheses(
             state["repo"], state["context"], state["contract"], state["found"].hypotheses,
             deps.client, state["evidence_dir"],
-            config=state["config"], runner=deps.runner, digest=deps.digest,
+            config=state["config"], python_project=state.get("python_project"),
+            runner=deps.runner, digest=deps.digest,
         )
     except (MetaError, SandboxError, OSError, ValueError) as error:
         update: Update = {"errors": [str(error)]}
@@ -212,7 +225,8 @@ def run_tamper_guard(state: VerifyState, deps: Deps) -> Update:
     try:
         tamper = find_tamper(repo, context)
         tamper, experiments = run_base_tests_on_head(
-            repo, context, tamper, state["evidence_dir"], runner=deps.runner, digest=deps.digest
+            repo, context, tamper, state["evidence_dir"], runner=deps.runner, digest=deps.digest,
+            python_project=state.get("python_project"),
         )
     except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
         done = getattr(error, "completed", None)
@@ -233,6 +247,13 @@ def normalize_findings(state: VerifyState, deps: Deps) -> Update:
 
 def deterministic_decide(state: VerifyState, deps: Deps) -> Update:
     intent, config = state["intent"], state["config"]
+    python_project, context = state.get("python_project"), state["context"]
+    # What the trusted [python] layout did and did not cover; read from git, so it is
+    # recorded as an input for replay to recompute the same verdict from the proof.
+    layout_notes = [] if python_project is None else scope_notes(
+        state["repo"], context.base_sha, context.head_sha, python_project,
+        state.get("config_source", "the base commit's .proofmerge.toml"),
+    )
     # Recorded in proof.json so replay can recompute this verdict from the proof alone.
     inputs = VerdictInputs(
         errors=list(state["errors"]),
@@ -240,6 +261,7 @@ def deterministic_decide(state: VerifyState, deps: Deps) -> Update:
         intent_given=bool(intent and intent.strip()),
         wonder_checked=state["wonder_checked"],
         tamper_guard_language=config.language if config is not None else None,
+        layout_scope_limitations=layout_notes,
     )
     # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
     verdict = adjudicate(
@@ -357,10 +379,14 @@ def notify(deps: Deps, kind: str, stage: str, data: dict[str, Any] | None = None
 def initial_state(
     repo: Path, base: str, head: str, intent: str | None, evidence_dir: Path,
     config: ProjectConfig | None,
+    python_project: PythonProject | None = None,
+    load_repo_config: bool = True,
+    config_source: str = "the base commit's .proofmerge.toml",
 ) -> VerifyState:
     return VerifyState(
         repo=repo, base=base, head=head, intent=intent, evidence_dir=evidence_dir,
-        config=config,
+        config=config, python_project=python_project, load_repo_config=load_repo_config,
+        config_source=config_source,
         contract=IntentContract(claims=[C0], rejected=[]),
         intent_established=False,
         found=HypothesisSet(hypotheses=[], rejected=[]),
@@ -412,6 +438,9 @@ def run_verify(
     config: ProjectConfig | None = None,
     orchestrator: str | None = None,
     observer: StageObserver | None = None,
+    python_project: PythonProject | None = None,
+    load_repo_config: bool = True,
+    config_source: str = "the base commit's .proofmerge.toml",
 ) -> Proof:
     """Resolve context, collect evidence, adjudicate, then seal the bundle last.
 
@@ -419,7 +448,11 @@ def run_verify(
     effect on the stages, the verdict or the evidence written.
     """
     engine = resolve_orchestrator(orchestrator)
-    state = initial_state(repo, base, head, intent, evidence_dir, config)
+    state = initial_state(
+        repo, base, head, intent, evidence_dir, config,
+        python_project=python_project, load_repo_config=load_repo_config,
+        config_source=config_source,
+    )
     if engine == "langgraph":
         try:
             from proofmerge.graph import run_graph

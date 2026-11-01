@@ -37,6 +37,7 @@ export function runDetail(decision: "PASS" | "REVIEW" | "BLOCK" = "REVIEW"): Run
           revision, commit_sha: (revision === "base" ? "a" : "b").repeat(40), attempt, command_argv: ["pytest"],
           exit_code: revision === "base" ? 0 : 1, outcome: revision === "base" ? ("PASS" as const) : ("FAIL" as const),
           duration_ms: 100, stdout_path: "o", stderr_path: "e", runner_image_digest: null,
+          setup_failure: false,
         }))),
       }],
       findings: [{ hypothesis_id: "H1", claim_id: "C1", classification: "REGRESSION", verified: true, reproducer_command: "proofmerge replay x" }],

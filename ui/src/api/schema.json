@@ -391,6 +391,11 @@
           "default": null,
           "title": "Runner Image Digest"
         },
+        "setup_failure": {
+          "default": false,
+          "title": "Setup Failure",
+          "type": "boolean"
+        },
         "stderr_path": {
           "title": "Stderr Path",
           "type": "string"
@@ -409,6 +414,7 @@
         "outcome",
         "revision",
         "runner_image_digest",
+        "setup_failure",
         "stderr_path",
         "stdout_path"
       ],
@@ -518,7 +524,8 @@
             "POSSIBLE_FIX",
             "EXISTING_FAILURE",
             "NO_DIFFERENCE",
-            "INCONCLUSIVE"
+            "INCONCLUSIVE",
+            "ENVIRONMENT"
           ],
           "title": "Classification",
           "type": "string"
@@ -1871,6 +1878,14 @@
           "title": "Intent Given",
           "type": "boolean"
         },
+        "layout_scope_limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Layout Scope Limitations",
+          "type": "array"
+        },
         "tamper_guard_language": {
           "anyOf": [
             {
@@ -1892,6 +1907,7 @@
         "errors",
         "intent_established",
         "intent_given",
+        "layout_scope_limitations",
         "tamper_guard_language",
         "wonder_checked"
       ],

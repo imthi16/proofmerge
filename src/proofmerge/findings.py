@@ -9,7 +9,13 @@ from proofmerge.sandbox import ATTEMPTS
 
 
 def classify(experiment: Experiment) -> Classification:
-    """Classify only ATTEMPTS agreeing PASS or FAIL runs on each revision."""
+    """Classify only ATTEMPTS agreeing PASS or FAIL runs on each revision.
+
+    Every run marked as a setup failure is ENVIRONMENT: an import or install
+    problem, which is never a behavioral regression.
+    """
+    if experiment.executions and all(run.setup_failure for run in experiment.executions):
+        return "ENVIRONMENT"
     base = [run.outcome for run in experiment.executions if run.revision == "base"]
     head = [run.outcome for run in experiment.executions if run.revision == "head"]
     if len(base) != ATTEMPTS or len(head) != ATTEMPTS:

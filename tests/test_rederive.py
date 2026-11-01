@@ -193,3 +193,31 @@ def test_config_runner_outcomes_are_not_judged_by_pytest_exit_codes(tmp_path):
     pytest_run = odd.model_copy(deep=True)
     pytest_run.verdict_inputs.tamper_guard_language = None
     assert any("does not match exit code" in p for p in rederive(pytest_run))
+
+
+@pytest.mark.parametrize("engine", ["legacy", "langgraph"])
+def test_a_python_layout_run_recomputes_exactly(tmp_path, engine):
+    # #46's layout scope notes come from git, so they are verdict inputs: replay must
+    # reproduce them, and must notice when they are edited.
+    from test_probes import fake_runner, make_repo
+
+    from proofmerge.meta import MetaClient
+    from proofmerge.pipeline import run_verify
+    from proofmerge.project_config import PythonProject
+
+    repo, context = make_repo(tmp_path)
+    evidence = tmp_path / "ev"
+    proof = run_verify(
+        repo, context.base_sha, context.head_sha, "Returned prices must not change.", evidence,
+        MetaClient(Replies()), runner=fake_runner([]), digest="sha256:fake",
+        python_project=PythonProject(root="."), orchestrator=engine,
+    )
+    notes = proof.verdict_inputs.layout_scope_limitations
+    assert notes and all(n in proof.verdict.scope_limitations for n in notes)
+    assert rederive(proof) == []
+    assert replay(evidence).exit_code == 0
+
+    def drop_note(data):
+        data["verdict"]["scope_limitations"].remove(notes[0])
+
+    assert any("reasons or limits differ" in p for p in rederive(reseal(evidence, drop_note)))

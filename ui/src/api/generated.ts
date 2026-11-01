@@ -329,6 +329,7 @@ export interface Execution {
   outcome: "PASS" | "FAIL" | "ERROR" | "TIMEOUT";
   revision: "base" | "head";
   runner_image_digest: string | null;
+  setup_failure: boolean;
   stderr_path: string;
   stdout_path: string;
 }
@@ -339,7 +340,12 @@ export interface Execution {
 export interface Finding {
   claim_id: string;
   classification:
-    "REGRESSION" | "POSSIBLE_FIX" | "EXISTING_FAILURE" | "NO_DIFFERENCE" | "INCONCLUSIVE";
+    | "REGRESSION"
+    | "POSSIBLE_FIX"
+    | "EXISTING_FAILURE"
+    | "NO_DIFFERENCE"
+    | "INCONCLUSIVE"
+    | "ENVIRONMENT";
   hypothesis_id: string;
   reproducer_command: string;
   verified: boolean;
@@ -483,6 +489,7 @@ export interface VerdictInputs {
   errors: string[];
   intent_established: boolean;
   intent_given: boolean;
+  layout_scope_limitations: string[];
   tamper_guard_language: string | null;
   wonder_checked: boolean;
 }

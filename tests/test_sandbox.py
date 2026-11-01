@@ -177,6 +177,9 @@ def docker_ready() -> bool:
     return True
 
 
+# CI's Docker job sets this so a missing daemon or image fails instead of skipping.
+if os.environ.get("PROOFMERGE_REQUIRE_DOCKER") == "1" and not docker_ready():
+    raise RuntimeError("PROOFMERGE_REQUIRE_DOCKER=1 but docker or the runner image is missing")
 needs_docker = pytest.mark.skipif(not docker_ready(), reason="docker or runner image missing")
 
 

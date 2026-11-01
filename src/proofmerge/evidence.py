@@ -75,6 +75,15 @@ class ModelUsage(BaseModel):
     contributor_allowed: bool = False
 
 
+class OrchestrationRecord(BaseModel):
+    """How the stages were scheduled. The verdict policy never reads this."""
+
+    engine: Literal["legacy", "langgraph"]
+    langgraph_version: str | None = None
+    nodes: list[str] = []  # graph nodes in execution order; empty for the legacy engine
+    retries: list[str] = []  # "node: message" for each transient model failure retried
+
+
 class Verdict(BaseModel):
     decision: Decision
     reasons: list[str]  # one plain sentence per rule that fired
@@ -100,3 +109,4 @@ class Proof(BaseModel):
     mismatched_probe_ids: list[str] = []
     explained_probe_ids: list[str] = []
     explained_probe_claim_ids: dict[str, str] = {}
+    orchestration: OrchestrationRecord | None = None  # None in proofs older than T55

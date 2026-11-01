@@ -339,6 +339,34 @@ def test_open_to_runner_keeps_executable_bits(tmp_path):
     assert data.stat().st_mode & 0o777 == 0o644
 
 
+ISOLATION = {
+    "--network": "none", "--tmpfs": None, "--cap-drop": "ALL",
+    "--security-opt": "no-new-privileges", "--user": "65534:65534", "--pids-limit": "64",
+    "--memory": "512m", "--memory-swap": "512m", "--cpus": "1",
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("kind", ["pytest", "config"])
+def test_every_probe_container_starts_with_the_one_isolation_prefix(tmp_path, kind):
+    if kind == "pytest":
+        argv = sandbox.docker_argv("n", "img", tmp_path, tmp_path, "test_h1.py")
+    else:
+        argv = config_docker_argv("n", CONFIG, tmp_path)
+    tmpfs = argv[argv.index("--tmpfs") + 1]
+    prefix = sandbox.hardened_run_argv("n", tmpfs=tmpfs)
+    assert argv[: len(prefix)] == prefix
+    assert "--read-only" in prefix
+    for flag, value in ISOLATION.items():
+        # Each flag appears once, in the shared prefix, so nothing after it can override.
+        assert argv.count(flag) == 1, flag
+        assert value is None or argv[argv.index(flag) + 1] == value
+    for loosening in ("--privileged", "--cap-add", "--pid", "--ipc", "--userns", "--device"):
+        assert not any(a == loosening or a.startswith(loosening + "=") for a in argv), loosening
+    mounts = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--volume"]
+    assert mounts and all(mount.endswith(":ro") for mount in mounts)
+    assert not any("docker.sock" in arg for arg in argv)
+
+
 def test_outcome_for_config_timeout():
     assert outcome_for_config(None, CONFIG, b"", b"") == "TIMEOUT"
 

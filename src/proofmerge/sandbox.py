@@ -138,23 +138,38 @@ def runner_dockerfile_path() -> Path:
     raise SandboxError("runner Dockerfile not found; is the package installed correctly?")
 
 
-def docker_argv(
-    name: str, image: str, code_dir: Path, probe_dir: Path, probe_name: str
-) -> list[str]:
+def _job_label() -> list[str]:
     # The dashboard sets this so it can find and kill the containers of a verify it timed out.
     job = os.environ.get("PROOFMERGE_JOB_ID", "")
-    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+    return ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+
+
+def hardened_run_argv(name: str, *, tmpfs: str) -> list[str]:
+    """The start of every probe container's `docker run`: the one place isolation is set.
+
+    No network, a read-only root filesystem, no capabilities, no privilege gain, a
+    non-root user, and memory, CPU and process limits. Callers append only mounts,
+    environment, the image and the command.
+    """
     return [
-        "docker", "run", "--rm", "--name", name, *label,
+        "docker", "run", "--rm", "--name", name, *_job_label(),
         "--network", "none",
         "--read-only",
-        "--tmpfs", "/tmp:rw,size=64m",
+        "--tmpfs", tmpfs,
         "--cap-drop", "ALL",
         "--security-opt", "no-new-privileges",
         "--user", "65534:65534",
         "--pids-limit", "64",
         "--memory", "512m", "--memory-swap", "512m",
         "--cpus", "1",
+    ]  # fmt: skip
+
+
+def docker_argv(
+    name: str, image: str, code_dir: Path, probe_dir: Path, probe_name: str
+) -> list[str]:
+    return [
+        *hardened_run_argv(name, tmpfs="/tmp:rw,size=64m"),
         "--env", "HOME=/tmp",
         "--env", "PYTHONDONTWRITEBYTECODE=1",
         # shortcut: assumes a src/ or flat layout; repos that need installing come later.
@@ -169,22 +184,11 @@ def docker_argv(
 
 def config_docker_argv(name: str, config: ProjectConfig, code_dir: Path) -> list[str]:
     """Docker argv for a repository-defined test command."""
-    job = os.environ.get("PROOFMERGE_JOB_ID", "")
-    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
     env: list[str] = []
     for key, value in config.env.items():
         env.extend(["--env", f"{key}={value}"])
     return [
-        "docker", "run", "--rm", "--name", name, *label,
-        "--network", "none",
-        "--read-only",
-        "--tmpfs", f"/tmp:rw,exec,size={config.tmpfs_mb}m",
-        "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges",
-        "--user", "65534:65534",
-        "--pids-limit", "64",
-        "--memory", "512m", "--memory-swap", "512m",
-        "--cpus", "1",
+        *hardened_run_argv(name, tmpfs=f"/tmp:rw,exec,size={config.tmpfs_mb}m"),
         *env,
         "--volume", f"{code_dir}:/work:ro",
         "--workdir", "/work",
@@ -203,12 +207,8 @@ def _read_capped(stream, chunks: list[bytes], over: threading.Event) -> None:
             over.set()
 
 
-def docker_runner(
-    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
-) -> tuple[int | None, bytes, bytes]:
-    """Run one probe; output is read in bounded chunks so a noisy probe cannot fill host memory."""
-    name = f"proofmerge-{uuid.uuid4().hex[:12]}"
-    argv = docker_argv(name, image, code_dir, probe_dir, probe_name)
+def _run_capped(argv: list[str], name: str, timeout: int) -> tuple[int | None, bytes, bytes]:
+    """Run one container; output is read in bounded chunks so it cannot fill host memory."""
     proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out: list[bytes] = []
     err: list[bytes] = []
@@ -240,6 +240,14 @@ def docker_runner(
     return (None if timed_out else proc.returncode), stdout, stderr
 
 
+def docker_runner(
+    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
+) -> tuple[int | None, bytes, bytes]:
+    """Run one pytest probe in the hardened container."""
+    name = f"proofmerge-{uuid.uuid4().hex[:12]}"
+    return _run_capped(docker_argv(name, image, code_dir, probe_dir, probe_name), name, timeout)
+
+
 def config_docker_runner(
     config: ProjectConfig, code_dir: Path, probe_source: str, timeout: int
 ) -> tuple[int | None, bytes, bytes]:
@@ -249,35 +257,7 @@ def config_docker_runner(
     probe_path.parent.mkdir(parents=True, exist_ok=True)
     probe_path.write_text(probe_source, encoding="utf-8")
     open_to_runner(code_dir)
-    argv = config_docker_argv(name, config, code_dir)
-    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out: list[bytes] = []
-    err: list[bytes] = []
-    over = threading.Event()
-    readers = [
-        threading.Thread(target=_read_capped, args=(proc.stdout, out, over)),
-        threading.Thread(target=_read_capped, args=(proc.stderr, err, over)),
-    ]
-    for reader in readers:
-        reader.start()
-    deadline = time.monotonic() + timeout
-    while proc.poll() is None and not over.is_set() and time.monotonic() < deadline:
-        over.wait(0.1)
-    timed_out = proc.poll() is None and not over.is_set()
-    if proc.poll() is None:
-        subprocess.run(["docker", "kill", name], capture_output=True, check=False)
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-    for reader in readers:
-        reader.join()
-    stdout, stderr = b"".join(out), b"".join(err)
-    if over.is_set():
-        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
-        return OUTPUT_LIMIT_EXIT, stdout, stderr + note
-    return (None if timed_out else proc.returncode), stdout, stderr
+    return _run_capped(config_docker_argv(name, config, code_dir), name, timeout)
 
 
 def outcome_for_config(
@@ -298,6 +278,76 @@ def outcome_for_config(
     if re.search(config.assertion_failure, combined):
         return "FAIL"
     return "ERROR"
+
+
+# One attempt on one exported revision -> (exit code or None on timeout, stdout, stderr).
+RunOnce = Callable[[Path], tuple[int | None, bytes, bytes]]
+OutcomeOf = Callable[[int | None, bytes, bytes], Outcome]
+
+
+def _write_probe(evidence_dir: Path, hypothesis_id: str, probe_name: str, source: str,
+                 *, conftest: bool) -> tuple[Path, Path]:
+    """Save the probe (and the pytest outcome plugin) and make a log directory.
+
+    Callers validate `hypothesis_id` first: it becomes a file name.
+    """
+    probe_dir = evidence_dir / "probes"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    (probe_dir / probe_name).write_text(source, encoding="utf-8")
+    if conftest:
+        (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
+    open_to_runner(probe_dir)
+    log_dir = evidence_dir / hypothesis_id
+    log_dir.mkdir(exist_ok=True)
+    return probe_dir, log_dir
+
+
+def _run_revisions(
+    repo: Path,
+    revisions: list[tuple[str, str]],
+    hypothesis_id: str,
+    log_dir: Path,
+    *,
+    attempts: int,
+    command_argv: list[str],
+    digest: str,
+    run_once: RunOnce,
+    outcome_of: OutcomeOf,
+) -> list[Execution]:
+    """Export each revision once, run every attempt on it, and record each run with its logs."""
+    executions: list[Execution] = []
+    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
+        Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
+        for revision, sha in revisions:
+            code_dir = Path(tmp) / revision
+            export_tree(repo, sha, code_dir)
+            open_to_runner(code_dir)
+            for attempt in range(1, attempts + 1):
+                start = time.monotonic()
+                exit_code, stdout, stderr = run_once(code_dir)
+                duration_ms = round((time.monotonic() - start) * 1000)
+                stem = f"{revision}-{attempt}"
+                (log_dir / f"{stem}.stdout").write_bytes(stdout)
+                (log_dir / f"{stem}.stderr").write_bytes(stderr)
+                executions.append(
+                    Execution(
+                        revision=revision,
+                        commit_sha=sha,
+                        attempt=attempt,
+                        command_argv=list(command_argv),
+                        exit_code=exit_code,
+                        outcome=outcome_of(exit_code, stdout, stderr),
+                        duration_ms=duration_ms,
+                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
+                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
+                        runner_image_digest=digest,
+                    )
+                )
+    return executions
+
+
+def _revisions(base_sha: str, head_sha: str | None) -> list[tuple[str, str]]:
+    return [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
 
 
 def run_experiment(
@@ -323,43 +373,15 @@ def run_experiment(
         digest = image_digest()  # runs use this ID, not the tag, so a rebuild cannot slip in
     evidence_dir = evidence_dir.resolve()  # docker reads a relative bind source as a volume name
     probe_name = f"test_{hypothesis_id.lower()}.py"
-    probe_dir = evidence_dir / "probes"
-    probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
-    (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
-    open_to_runner(probe_dir)
-    log_dir = evidence_dir / hypothesis_id
-    log_dir.mkdir(exist_ok=True)
-
-    executions: list[Execution] = []
-    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
-        Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
-        revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
-        for revision, sha in revisions:
-            code_dir = Path(tmp) / revision
-            export_tree(repo, sha, code_dir)
-            open_to_runner(code_dir)
-            for attempt in range(1, attempts + 1):
-                start = time.monotonic()
-                exit_code, stdout, stderr = runner(digest, code_dir, probe_dir, probe_name, timeout)
-                duration_ms = round((time.monotonic() - start) * 1000)
-                stem = f"{revision}-{attempt}"
-                (log_dir / f"{stem}.stdout").write_bytes(stdout)
-                (log_dir / f"{stem}.stderr").write_bytes(stderr)
-                executions.append(
-                    Execution(
-                        revision=revision,
-                        commit_sha=sha,
-                        attempt=attempt,
-                        command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"],
-                        exit_code=exit_code,
-                        outcome=outcome_for(exit_code),
-                        duration_ms=duration_ms,
-                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
-                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
-                        runner_image_digest=digest,
-                    )
-                )
+    probe_dir, log_dir = _write_probe(
+        evidence_dir, hypothesis_id, probe_name, probe_source, conftest=True
+    )
+    executions = _run_revisions(
+        repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
+        attempts=attempts, command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"], digest=digest,
+        run_once=lambda code_dir: runner(digest, code_dir, probe_dir, probe_name, timeout),
+        outcome_of=lambda exit_code, stdout, stderr: outcome_for(exit_code),
+    )  # fmt: skip
     return Experiment(
         hypothesis_id=hypothesis_id,
         test_source_path=f"probes/{probe_name}",
@@ -393,42 +415,15 @@ def run_config_experiment(
     evidence_dir = evidence_dir.resolve()
     suffix = Path(config.probe_path).suffix or ""
     probe_name = f"test_{hypothesis_id.lower()}{suffix}"
-    probe_dir = evidence_dir / "probes"
-    probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
-    open_to_runner(probe_dir)
-    log_dir = evidence_dir / hypothesis_id
-    log_dir.mkdir(exist_ok=True)
-
-    executions: list[Execution] = []
-    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
-        Path(tmp).chmod(0o755)
-        revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
-        for revision, sha in revisions:
-            code_dir = Path(tmp) / revision
-            export_tree(repo, sha, code_dir)
-            open_to_runner(code_dir)
-            for attempt in range(1, attempts + 1):
-                start = time.monotonic()
-                exit_code, stdout, stderr = runner(pinned, code_dir, probe_source, timeout)
-                duration_ms = round((time.monotonic() - start) * 1000)
-                stem = f"{revision}-{attempt}"
-                (log_dir / f"{stem}.stdout").write_bytes(stdout)
-                (log_dir / f"{stem}.stderr").write_bytes(stderr)
-                executions.append(
-                    Execution(
-                        revision=revision,
-                        commit_sha=sha,
-                        attempt=attempt,
-                        command_argv=list(config.test_command),
-                        exit_code=exit_code,
-                        outcome=outcome_for_config(exit_code, config, stdout, stderr),
-                        duration_ms=duration_ms,
-                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
-                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
-                        runner_image_digest=digest,
-                    )
-                )
+    _, log_dir = _write_probe(evidence_dir, hypothesis_id, probe_name, probe_source, conftest=False)
+    executions = _run_revisions(
+        repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
+        attempts=attempts, command_argv=list(config.test_command), digest=digest,
+        run_once=lambda code_dir: runner(pinned, code_dir, probe_source, timeout),
+        outcome_of=lambda exit_code, stdout, stderr: outcome_for_config(
+            exit_code, config, stdout, stderr
+        ),
+    )  # fmt: skip
     return Experiment(
         hypothesis_id=hypothesis_id,
         test_source_path=f"probes/{probe_name}",

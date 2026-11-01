@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 
 from proofmerge.context import ContextError, GitContext, _git
 from proofmerge.evidence import Experiment, Outcome, TamperFinding, TamperKind
-from proofmerge.sandbox import Runner, SandboxError, docker_runner, run_experiment
+from proofmerge.sandbox import ATTEMPTS, Runner, SandboxError, docker_runner, run_experiment
 
 
 class TamperError(Exception):
@@ -241,14 +241,14 @@ def run_base_tests_on_head(
             experiment = run_experiment(
                 repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
                 "\n".join(lines),
-                evidence_dir, runner=runner, digest=digest, attempts=3,
+                evidence_dir, runner=runner, digest=digest, attempts=ATTEMPTS,
             )
             experiments.append(experiment)
             base = [e.outcome for e in experiment.executions if e.revision == "base"]
             head = [e.outcome for e in experiment.executions if e.revision == "head"]
-            if head == ["PASS"] * 3:
+            if head == ["PASS"] * ATTEMPTS:
                 outcomes[path] = "PASS"
-            elif base == ["PASS"] * 3 and head == ["FAIL"] * 3:
+            elif base == ["PASS"] * ATTEMPTS and head == ["FAIL"] * ATTEMPTS:
                 outcomes[path] = "FAIL"
         except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
             # ponytail: partials ride on the exception; a result type if more callers need them

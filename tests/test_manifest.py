@@ -119,7 +119,11 @@ def proof_bundle(tmp_path):
 def test_replay_intact(proof_bundle):
     result = CliRunner().invoke(cli.app, ["replay", str(proof_bundle)])
     assert result.exit_code == 0
-    assert result.stdout == "evidence intact: 2 files\n"
+    # The hand-made sample predates recorded verdict inputs, so only hashes are checked.
+    assert result.stdout == (
+        "evidence intact: 2 files\n"
+        "verdict not recomputed: this proof predates recorded verdict inputs\n"
+    )
 
 
 @pytest.mark.parametrize("rewrite_manifest", [False, True])

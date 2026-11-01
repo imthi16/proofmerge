@@ -4,7 +4,8 @@ A run is a fixed sequence of stages over one VerifyState. Each stage reads the s
 and returns only the fields it changed; "errors" accumulates. Two orchestrators run
 the same stage functions: "legacy" calls them in order, "langgraph" (graph.py) runs
 them as graph nodes with explicit routing and bounded retries of transient model
-failures. Only deterministic_decide produces a verdict, and only via verdict.decide().
+failures. Only deterministic_decide produces a verdict, via verdict.adjudicate(), which
+calls verdict.decide(); replay recomputes it the same way.
 """
 
 import operator
@@ -24,6 +25,7 @@ from proofmerge.evidence import (
     Proof,
     TamperFinding,
     Verdict,
+    VerdictInputs,
 )
 from proofmerge.findings import findings_for
 from proofmerge.hypotheses import HypothesisSet, check_diff, generate_hypotheses
@@ -35,7 +37,7 @@ from proofmerge.project_config import ProjectConfig, load_config
 from proofmerge.report import render_html
 from proofmerge.sandbox import Runner, SandboxError, docker_runner
 from proofmerge.tamper import TamperError, find_tamper, run_base_tests_on_head
-from proofmerge.verdict import decide
+from proofmerge.verdict import adjudicate
 from proofmerge.wonder import check_probes, cross_check_claims
 
 ORCHESTRATORS = ("legacy", "langgraph")
@@ -66,6 +68,7 @@ class VerifyState(TypedDict, total=False):
     tamper_experiments: list[Experiment]
     findings: list[Finding]
     verdict: Verdict
+    verdict_inputs: VerdictInputs
     proof: Proof
     errors: Annotated[list[str], operator.add]
 
@@ -216,25 +219,25 @@ def normalize_findings(state: VerifyState, deps: Deps) -> Update:
 
 
 def deterministic_decide(state: VerifyState, deps: Deps) -> Update:
-    intent = state["intent"]
+    intent, config = state["intent"], state["config"]
+    # Recorded in proof.json so replay can recompute this verdict from the proof alone.
+    inputs = VerdictInputs(
+        errors=list(state["errors"]),
+        intent_established=state["intent_established"],
+        intent_given=bool(intent and intent.strip()),
+        wonder_checked=state["wonder_checked"],
+        tamper_guard_language=config.language if config is not None else None,
+    )
     # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
-    verdict = decide(
+    verdict = adjudicate(
         state["contract"], state["found"].hypotheses, state["findings"], state["tamper"],
+        inputs,
         contested_claim_ids=state["contested_claim_ids"],
         mismatched_probe_ids=state["mismatched_probe_ids"],
-        errors=list(state["errors"]), intent_established=state["intent_established"],
-        intent_given=bool(intent and intent.strip()),
         explained_probe_ids=state["explained_probe_ids"],
         explained_probe_claim_ids=state["explained_probe_claim_ids"],
-        wonder_checked=state["wonder_checked"],
     )
-    config = state["config"]
-    if config is not None:
-        verdict.scope_limitations.append(
-            f"Test-tamper guard is not available for {config.language}; "
-            "changed tests were not re-run."
-        )
-    return {"verdict": verdict}
+    return {"verdict": verdict, "verdict_inputs": inputs}
 
 
 def write_evidence(state: VerifyState, deps: Deps) -> Update:
@@ -268,6 +271,7 @@ def write_evidence(state: VerifyState, deps: Deps) -> Update:
             contributor_allowed=client.allow_contributor,
         ),
         orchestration=deps.orchestration.model_copy(deep=True),
+        verdict_inputs=state["verdict_inputs"],
     )
     (evidence_dir / "proof.json").write_text(proof.model_dump_json(indent=2), encoding="utf-8")
     (evidence_dir / "report.html").write_text(render_html(proof, evidence_dir), encoding="utf-8")

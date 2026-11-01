@@ -61,7 +61,8 @@ verdict is evidence, not an opinion, so report it as it is.
 - Edit, skip or delete tests or ProofMerge probes to change a verdict. The
   test-tamper guard checks for exactly this.
 - Edit files in the evidence directory. `manifest.json` hashes them and
-  `proofmerge replay` reports any change.
+  `proofmerge replay` reports any change; it also recomputes the verdict from the
+  recorded executions, so a rewritten verdict fails even with a fresh manifest.
 - Claim a verdict you did not get from a run in this session.
 
 ## Report back

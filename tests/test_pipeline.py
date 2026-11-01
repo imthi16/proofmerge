@@ -20,6 +20,7 @@ from proofmerge.meta import WONDER_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS
 from proofmerge.project_config import ProjectConfig, load_config
+from proofmerge.rederive import rederive
 from proofmerge.sandbox import SandboxError
 from proofmerge.tamper import TamperError
 
@@ -766,6 +767,8 @@ def test_config_language_skips_tamper_and_adds_scope_limitation(tmp_path, monkey
     )
     assert proof.language == "go"
     assert proof.tamper_findings == []
+    assert proof.verdict_inputs.tamper_guard_language == "go"
+    assert rederive(proof) == []
     assert any(
         "Test-tamper guard is not available for go" in item
         for item in proof.verdict.scope_limitations

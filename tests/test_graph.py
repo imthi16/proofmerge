@@ -10,6 +10,7 @@ from proofmerge import graph, pipeline
 from proofmerge.evidence import Proof
 from proofmerge.meta import MetaClient, MetaError
 from proofmerge.pipeline import STAGES, run_verify
+from proofmerge.rederive import rederive
 from proofmerge.sandbox import SandboxError
 
 ALL_NODES = [name for name, _ in STAGES]
@@ -121,6 +122,7 @@ def test_graph_and_legacy_produce_identical_evidence(tmp_path, name):
         )
         assert_bundle(proof, evidence)
         assert proof.orchestration.engine == engine
+        assert rederive(proof) == []  # the recorded verdict follows from its own evidence
         results[engine] = (comparable(proof, evidence), evidence_files(evidence), client.calls)
         decisions = proof.verdict.decision
     assert results["legacy"] == results["langgraph"]
@@ -217,14 +219,16 @@ def test_sandbox_runs_are_not_repeated_by_the_graph(tmp_path):
 
 @pytest.mark.parametrize("engine", ["legacy", "langgraph"])
 def test_verdict_comes_only_from_decide(tmp_path, monkeypatch, engine):
+    from proofmerge import verdict
+
     calls = []
-    real = pipeline.decide
+    real = verdict.decide
 
     def spy(*args, **kwargs):
         calls.append(kwargs["errors"])
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(pipeline, "decide", spy)
+    monkeypatch.setattr(verdict, "decide", spy)
     repo, context = make_repo(tmp_path)
     proof, _ = verify(repo, context, tmp_path / "ev", engine, Replies(fail=4))
     assert len(calls) == 1

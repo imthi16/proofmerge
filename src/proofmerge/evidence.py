@@ -84,6 +84,19 @@ class OrchestrationRecord(BaseModel):
     retries: list[str] = []  # "node: message" for each transient model failure retried
 
 
+class VerdictInputs(BaseModel):
+    """The verdict policy's inputs that are not already evidence elsewhere in the proof.
+
+    With these, `proofmerge replay` recomputes the verdict from the proof alone.
+    """
+
+    errors: list[str]  # stage failures, each a REVIEW reason
+    intent_established: bool  # intent extraction succeeded
+    intent_given: bool  # a non-blank PR description was supplied
+    wonder_checked: bool  # Wonder's probe check succeeded on a base-passing probe
+    tamper_guard_language: str | None = None  # set when the guard could not run (config runner)
+
+
 class Verdict(BaseModel):
     decision: Decision
     reasons: list[str]  # one plain sentence per rule that fired
@@ -110,3 +123,4 @@ class Proof(BaseModel):
     explained_probe_ids: list[str] = []
     explained_probe_claim_ids: dict[str, str] = {}
     orchestration: OrchestrationRecord | None = None  # None in proofs older than T55
+    verdict_inputs: VerdictInputs | None = None  # None in proofs older than T56

@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlsplit
 from proofmerge.dashboard_prs import PrError, PullRequests
 from proofmerge.evidence import Proof
 from proofmerge.manifest import verify_manifest
+from proofmerge.rederive import rederive
 from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
 
 STATIC = Path(__file__).parent / "dashboard_static"
@@ -39,10 +40,13 @@ _REPORT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
                "frame-ancestors 'none'; base-uri 'none'")
 
 
-def _integrity(run_dir: Path) -> dict[str, Any]:
+def _integrity(run_dir: Path, proof: Proof | None = None) -> dict[str, Any]:
     if not (run_dir / "manifest.json").is_file():
         return {"status": "unsealed", "problems": ["No manifest.json in this run."]}
     problems = verify_manifest(run_dir)
+    # A rewritten proof can come with a rewritten manifest; the verdict must still follow.
+    if proof is not None:
+        problems += rederive(proof) or []
     return {"status": "changed" if problems else "intact", "problems": problems}
 
 
@@ -89,7 +93,7 @@ def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
         "tokens": usage.prompt_tokens + usage.completion_tokens,
         "endpoint": getattr(usage, "endpoint", None),
         "models": getattr(usage, "models", {}),
-        "integrity": _integrity(run_dir),
+        "integrity": _integrity(run_dir, proof),
         "benchmark": _label(run_dir),
         "has_report": (run_dir / "report.html").is_file(),
     }

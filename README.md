@@ -301,20 +301,28 @@ training-data warning for contributor models and which agent CLIs were checked.
 proofmerge dashboard bench/results       # or any folder of evidence runs
 ```
 
-It opens a page on `http://127.0.0.1:8765/` listing every run under the folder:
-verdict, base and head, regressions, model calls and whether each run's evidence
-still matches its manifest. Click a verdict in the bar to filter, search the
-reasons, and open a run to see its probes on base and head, why head failed, the
-replay command and the full report. Click any base or head result to read that
-attempt's log, and export the filtered runs as CSV. A Benchmarks tab compares each
-`results.json` with its labels, the held-out slice and the baselines.
+It opens the Control Center on `http://127.0.0.1:8765/`: an overview of recorded
+verdicts and evidence integrity, a filterable and paged list of every run under the
+folder, and an evidence explorer per run (verdict reasons, intent claims, each
+hypothesis with its base/head attempts and logs, why head failed, the probe source,
+tamper findings, model use, orchestration, the replay command and the static
+report). A Benchmarks page compares each `results.json` with its labels, the
+held-out slice and the baselines; a Diagnostics page says whether Docker, the
+runner image, `gh`, the model key (present or not, never its value) and LangGraph
+are ready. Light, dark and system themes; it works at phone width. The previous
+page stays at `/legacy/`. See [docs/control-center.md](docs/control-center.md).
+
+![Control Center evidence explorer](docs/assets/control-center-evidence.png)
 
 Add `--repo path/to/repo` (a clone with a GitHub remote and `gh` signed in) for a
 Pull requests tab: each PR shows the ProofMerge verdict for its current head
 commit, if a run exists, and an open PR can be verified from the page. That
 fetches it into `refs/proofmerge/` without touching your branches and runs
 `proofmerge verify` with the PR description as the intent, after a confirmation
-that names the cost (up to 19 model calls) and the trust requirement.
+that names the cost (up to 19 model calls) and the trust requirement. The page
+then follows the run live: each pipeline stage as it starts, retries, finishes or
+is skipped, streamed over server-sent events. The verdict appears only after the
+deterministic verdict stage has run.
 
 The server answers on 127.0.0.1 only. Apart from that one verify request, which
 needs a per-session token and a same-origin request, it only reads files.
@@ -401,9 +409,14 @@ src/proofmerge/
   manifest.py    evidence hashes and replay checks
   rederive.py    recomputes findings and the verdict from a proof for replay
   report.py      renders proof.json as report.html
-  dashboard.py   the local dashboard server; dashboard_static/ holds the React page
+  dashboard.py   the local dashboard server and its trust checks
+  dashboard_api.py  the typed /api/v1 data; dashboard_models.py its response models
+  dashboard_events.py  verification progress events and the SSE stream
+  dashboard_static/  the built Control Center (app/) and the previous page (legacy/)
+  telemetry.py   opt-in OpenTelemetry spans for verify (PROOFMERGE_OTEL=1)
   dashboard_prs.py  pull requests for the dashboard: list with gh, verify on request
   prompts/       the instructions given to Muse Spark and Muse Wonder
+ui/              Control Center source (React + TypeScript + Vite); see docs/control-center.md
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth

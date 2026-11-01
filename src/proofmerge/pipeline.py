@@ -10,10 +10,11 @@ calls verdict.decide(); replay recomputes it the same way.
 
 import operator
 import os
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Protocol, TypedDict
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, GitContext, get_context
@@ -73,6 +74,17 @@ class VerifyState(TypedDict, total=False):
     errors: Annotated[list[str], operator.add]
 
 
+class StageObserver(Protocol):
+    """Told when a stage starts, finishes, retries or is skipped. It only watches.
+
+    kind is "started", "completed", "retrying" or "skipped"; data holds counts and
+    durations from stage_facts(), never source, logs, prompts or error text. An
+    observer cannot change a stage's result: whatever it raises is ignored.
+    """
+
+    def __call__(self, kind: str, stage: str, data: dict[str, Any]) -> None: ...
+
+
 @dataclass
 class Deps:
     """Per-run dependencies, kept out of the state so the state stays plain data."""
@@ -83,6 +95,7 @@ class Deps:
     orchestration: OrchestrationRecord = field(
         default_factory=lambda: OrchestrationRecord(engine="legacy")
     )
+    observer: StageObserver | None = None
 
 
 Update = dict[str, Any]
@@ -299,6 +312,48 @@ MODEL_STAGES = frozenset(
 )
 
 
+# Stages that do nothing when an earlier stage could not give them their inputs. The
+# graph routes around them (graph.py); the legacy loop still calls them, and they
+# return no update. Either way the observer is told "skipped", so both engines report
+# the same progress.
+SKIP_WHEN: dict[str, Callable[[VerifyState], bool]] = {
+    "generate_hypotheses": lambda state: not state["intent_established"],
+    "generate_execute_probes": lambda state: not state["hypotheses_ready"],
+    "run_tamper_guard": lambda state: state["config"] is not None,
+}
+
+
+def stage_facts(name: str, state: VerifyState) -> dict[str, Any]:
+    """Counts a finished stage may report to an observer. Read-only; never text."""
+    if name == "extract_intent":
+        return {"claims": len(state["contract"].claims)}
+    if name == "generate_hypotheses":
+        return {"hypotheses": len(state["found"].hypotheses)}
+    if name == "generate_execute_probes":
+        experiments = state["experiments"]
+        return {"probes": len(state["probes"]),
+                "executions": sum(len(e.executions) for e in experiments)}
+    if name == "run_tamper_guard":
+        return {"tamper": len(state["tamper"])}
+    if name == "normalize_findings":
+        findings = state["findings"]
+        return {"findings": len(findings), "verified": sum(f.verified for f in findings)}
+    if name == "deterministic_decide":
+        # Reported, not decided: this is the Verdict verdict.decide() just returned.
+        return {"decision": state["verdict"].decision}
+    return {}
+
+
+def notify(deps: Deps, kind: str, stage: str, data: dict[str, Any] | None = None) -> None:
+    """Tell the observer, if any. Observers are side-effect only and cannot fail a run."""
+    if deps.observer is None:
+        return
+    try:
+        deps.observer(kind, stage, data or {})
+    except Exception:  # noqa: BLE001, S110 - progress reporting must never change the evidence
+        pass
+
+
 def initial_state(
     repo: Path, base: str, head: str, intent: str | None, evidence_dir: Path,
     config: ProjectConfig | None,
@@ -329,11 +384,18 @@ def resolve_orchestrator(orchestrator: str | None) -> str:
 
 def run_legacy(state: VerifyState, deps: Deps) -> Proof:
     """Call every stage in order; a stage whose inputs are missing returns no update."""
-    for _, stage in STAGES:
+    for name, stage in STAGES:
+        skipped = name in SKIP_WHEN and SKIP_WHEN[name](state)
+        notify(deps, "skipped" if skipped else "started", name)
+        started = time.monotonic()
         update = stage(state, deps)
         errors = update.pop("errors", [])
         state.update(update)  # type: ignore[typeddict-item]
         state["errors"] = state["errors"] + errors
+        if not skipped:
+            duration = int((time.monotonic() - started) * 1000)
+            notify(deps, "completed", name,
+                   {"duration_ms": duration, "errors": len(errors)} | stage_facts(name, state))
     return state["proof"]
 
 
@@ -349,8 +411,13 @@ def run_verify(
     digest: str | None = None,
     config: ProjectConfig | None = None,
     orchestrator: str | None = None,
+    observer: StageObserver | None = None,
 ) -> Proof:
-    """Resolve context, collect evidence, adjudicate, then seal the bundle last."""
+    """Resolve context, collect evidence, adjudicate, then seal the bundle last.
+
+    observer, if given, is told about stage progress (see StageObserver); it has no
+    effect on the stages, the verdict or the evidence written.
+    """
     engine = resolve_orchestrator(orchestrator)
     state = initial_state(repo, base, head, intent, evidence_dir, config)
     if engine == "langgraph":
@@ -360,5 +427,5 @@ def run_verify(
             raise ValueError(
                 "the langgraph orchestrator needs LangGraph: pip install 'proofmerge[graph]'"
             ) from None
-        return run_graph(state, Deps(client, runner, digest))
-    return run_legacy(state, Deps(client, runner, digest))
+        return run_graph(state, Deps(client, runner, digest, observer=observer))
+    return run_legacy(state, Deps(client, runner, digest, observer=observer))

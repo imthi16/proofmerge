@@ -285,14 +285,40 @@ def test_later_tamper_run_keeps_earlier_fail(tmp_path, monkeypatch):
     assert_bundle(proof, evidence)
 
 
-def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatch):
+def tamper_fail(monkeypatch):
+    """A changed test whose base version passes on base and fails on head, every attempt.
+
+    Runs the real run_base_tests_on_head with git and the sandbox faked, so the FAIL comes
+    with the T1 experiment and probe file that replay recomputes it from.
+    """
+    import hashlib
+
+    from test_findings import experiment
+
+    from proofmerge import tamper as tamper_mod
+
     finding = TamperFinding(
-        test_path="test_calc.py", test_name=None, kind="MODIFIED",
-        base_test_on_head_outcome="FAIL",
+        test_path="test_calc.py", test_name=None, kind="MODIFIED", base_test_on_head_outcome=None,
     )
     monkeypatch.setattr(pipeline, "find_tamper", lambda *args: [finding])
-    monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *args, **kwargs: ([finding], []))
+    monkeypatch.setattr(tamper_mod, "_git",
+                        lambda repo, *args, error: b"blob\0" if args[0] == "ls-tree" else b"#\n")
+
+    def run_experiment(*args, **kwargs):
+        evidence, rel, data = args[5], "probes/test_t1.py", b"assert True\n"
+        (evidence / rel).parent.mkdir(parents=True, exist_ok=True)
+        (evidence / rel).write_bytes(data)
+        saved = experiment(["PASS"] * 3, ["FAIL"] * 3, hypothesis_id=args[3])
+        saved.test_source_path, saved.test_source_sha256 = rel, hashlib.sha256(data).hexdigest()
+        return saved
+
+    monkeypatch.setattr(tamper_mod, "run_experiment", run_experiment)
+
+
+def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatch):
+    tamper_fail(monkeypatch)
     proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=1))
+    assert proof.tamper_findings[0].base_test_on_head_outcome == "FAIL"
     assert proof.verdict.decision == "REVIEW"
     assert any("intent extraction failed" in reason for reason in proof.verdict.reasons)
     assert "scripted API unavailable" in proof.verdict.reasons
@@ -300,15 +326,11 @@ def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatc
 
 
 def test_api_failure_keeps_tamper_fail_block(tmp_path, monkeypatch):
-    finding = TamperFinding(
-        test_path="test_calc.py", test_name=None, kind="MODIFIED",
-        base_test_on_head_outcome="FAIL",
-    )
-    monkeypatch.setattr(pipeline, "find_tamper", lambda *a: [finding])
-    monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *a, **k: ([finding], []))
+    tamper_fail(monkeypatch)
     proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=2))
     assert proof.verdict.decision == "BLOCK"
-    assert proof.tamper_findings == [finding]
+    assert [(t.base_test_on_head_outcome, t.experiment_id) for t in proof.tamper_findings] == [
+        ("FAIL", "T1")]
     assert "scripted API unavailable" in proof.verdict.reasons
     assert_bundle(proof, evidence)
 

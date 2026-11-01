@@ -10,8 +10,12 @@ What the graph adds over the legacy loop:
   four model-only nodes, within the same MetaClient call budget. A failure that
   outlasts the retries, or is not transient, becomes a REVIEW reason as before.
 - no retry of nodes that run the sandbox: a probe's recorded attempts are evidence.
+
+Progress goes to deps.observer exactly as in the legacy loop (pipeline.notify): the
+observer watches; it cannot change routing, retries, the verdict or the evidence.
 """
 
+import time
 from collections.abc import Callable
 from importlib.metadata import version
 
@@ -20,7 +24,16 @@ from langgraph.types import RetryPolicy
 
 from proofmerge.evidence import OrchestrationRecord, Proof
 from proofmerge.meta import MetaError
-from proofmerge.pipeline import MODEL_STAGES, STAGES, Deps, Stage, Update, VerifyState
+from proofmerge.pipeline import (
+    MODEL_STAGES,
+    STAGES,
+    Deps,
+    Stage,
+    Update,
+    VerifyState,
+    notify,
+    stage_facts,
+)
 
 MAX_MODEL_ATTEMPTS = 3  # the first call plus at most two retries
 RETRY_INTERVAL_SECONDS = 1.0
@@ -32,22 +45,46 @@ def _is_transient(error: Exception) -> bool:
 
 def _node(name: str, stage: Stage, deps: Deps) -> Callable[[VerifyState], Update]:
     attempts = 0
+    started = 0.0
 
     def run(state: VerifyState) -> Update:
-        nonlocal attempts
+        nonlocal attempts, started
         attempts += 1
         if attempts == 1:
             deps.orchestration.nodes.append(name)
+            started = time.monotonic()
+            notify(deps, "started", name)
         if name not in MODEL_STAGES:
-            return stage(state, deps)
-        try:
-            # A stage re-raises a transient failure only while attempts remain.
-            return stage(state, deps, final_attempt=attempts >= MAX_MODEL_ATTEMPTS)
-        except MetaError as error:
-            deps.orchestration.retries.append(f"{name}: {error}")
-            raise
+            update = stage(state, deps)
+        else:
+            try:
+                # A stage re-raises a transient failure only while attempts remain.
+                update = stage(state, deps, final_attempt=attempts >= MAX_MODEL_ATTEMPTS)
+            except MetaError as error:
+                deps.orchestration.retries.append(f"{name}: {error}")
+                notify(deps, "retrying", name,
+                       {"attempt": attempts, "max_attempts": MAX_MODEL_ATTEMPTS})
+                raise
+        merged = {**state, **update}
+        notify(deps, "completed", name,
+               {"duration_ms": int((time.monotonic() - started) * 1000),
+                "errors": len(update.get("errors", []))} | stage_facts(name, merged))
+        return update
 
     return run
+
+
+def _routed(source: str, route: Callable[[VerifyState], str], deps: Deps):
+    """Wrap a router so the observer hears about the stages it jumps over."""
+    order = [name for name, _ in STAGES]
+
+    def choose(state: VerifyState) -> str:
+        target = route(state)
+        for skipped in order[order.index(source) + 1:order.index(target)]:
+            notify(deps, "skipped", skipped)
+        return target
+
+    return choose
 
 
 def _after_intent(state: VerifyState) -> str:
@@ -85,16 +122,19 @@ def build_graph(deps: Deps, *, retry_interval: float | None = None):
     builder.add_edge("load_trusted_config", "open_evidence_dir")
     builder.add_edge("open_evidence_dir", "extract_intent")
     builder.add_conditional_edges(
-        "extract_intent", _after_intent, ["generate_hypotheses", "cross_check_claims"]
+        "extract_intent", _routed("extract_intent", _after_intent, deps),
+        ["generate_hypotheses", "cross_check_claims"],
     )
     builder.add_conditional_edges(
-        "generate_hypotheses", _after_hypotheses, ["generate_execute_probes", "cross_check_claims"]
+        "generate_hypotheses", _routed("generate_hypotheses", _after_hypotheses, deps),
+        ["generate_execute_probes", "cross_check_claims"],
     )
     builder.add_edge("generate_execute_probes", "cross_check_claims")
     # Sequential on purpose: MetaClient's call budget and order are not thread-safe.
     builder.add_edge("cross_check_claims", "check_probe_relevance")
     builder.add_conditional_edges(
-        "check_probe_relevance", _after_probe_check, ["run_tamper_guard", "normalize_findings"]
+        "check_probe_relevance", _routed("check_probe_relevance", _after_probe_check, deps),
+        ["run_tamper_guard", "normalize_findings"],
     )
     builder.add_edge("run_tamper_guard", "normalize_findings")
     builder.add_edge("normalize_findings", "deterministic_decide")

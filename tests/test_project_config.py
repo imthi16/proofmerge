@@ -291,3 +291,14 @@ def test_operator_config_refuses_working_tree_file_that_differs_from_base(tmp_pa
     outside = tmp_path / "trusted.toml"
     outside.write_text(PYTHON_BASE, encoding="utf-8")
     assert_operator_config_allowed(repo, base, outside)
+
+
+def test_documented_python_examples_are_valid_config():
+    import re
+    import tomllib
+
+    doc = (Path(__file__).resolve().parents[1] / "docs/python-projects.md").read_text()
+    blocks = re.findall(r"```toml\n(.*?)```", doc, flags=re.DOTALL)
+    assert len(blocks) >= 2
+    for block in blocks:
+        PythonProject(**tomllib.loads(block)["python"])

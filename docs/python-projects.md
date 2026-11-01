@@ -45,53 +45,60 @@ If head's lockfile differs from base, the proof records that head's dependency f
 
 A pytest assertion failure (exit 1) is a behavioral FAIL. `ModuleNotFoundError` or `ImportError` on any other exit, a missing import path, or a failed install is recorded as `setup_failure` and classified `ENVIRONMENT`. The verdict is REVIEW. It is not PASS and it is not BLOCK, including when every attempt on both revisions fails the same way.
 
-## HelpDeck
+## Layouts
 
-HelpDeck's API package lives at `apps/api` and is installed with uv (`apps/api/pyproject.toml`, `apps/api/uv.lock`). `app.agent.prompts` is standard-library only. `retrieval`, `graph`, and `chunker` import third-party packages.
+Pick the table that matches where your importable package lives. All paths are
+repository-relative and read from the base commit.
 
-To adopt this on HelpDeck:
+| Repository layout | `.proofmerge.toml` |
+|---|---|
+| Package at the root (`mypkg/`) or under `src/` (`src/mypkg/`) | none needed: the default `PYTHONPATH` covers both |
+| Monorepo, one service (`services/api/app/`) | `[python]` with `root = "services/api"` |
+| Monorepo with shared code (`apps/web/` does `import shared`, which lives at `libs/shared/`) | `root = "apps/web"`, `pythonpath = ["libs"]` |
+| Third-party imports locked with uv | add `install = true`; `lockfile` defaults to `<root>/uv.lock` |
+| Third-party imports locked with pip-tools or `pip freeze --require-hashes` | `install = true`, `requirements = "requirements.txt"` (every line `name==version --hash=sha256:...`) |
 
-1. Land `.proofmerge.toml` on **main** in its own pull request (not on the regression branch). ProofMerge reads the file from the base SHA, so a pull request does not pick the file up until that SHA contains it. Re-run the workflow after main moves so `pull_request.base.sha` includes the new commit.
-
-   ```toml
-   [python]
-   root = "apps/api"
-   install = false
-   pyproject = "apps/api/pyproject.toml"
-   lockfile = "apps/api/uv.lock"
-   ```
-
-   `install = false` is enough for `from app.agent.prompts import format_context`. Set `install = true` when a probe must import modules that need the lockfile. The install uses the base lockfile, needs network only in the install container, and can take several minutes for HelpDeck's full set.
-
-2. Point the workflow at a ProofMerge revision that contains this layout support. Until that revision is on `main`, use the branch ref instead of `@main`:
-
-   ```yaml
-   - uses: imthi16/proofmerge@cursor/monorepo-python-support-8043
-     with:
-       model-api-key: ${{ secrets.MODEL_API_KEY }}
-       fail-on: block
-       python-version: '3.13'
-       # fail-on-missing-key: true   # optional; default false stays green when the secret is empty
-   ```
-
-   For a same-repository pull request, the workflow file from the pull request head is the one that runs if that pull request edits it. Updating `uses:` on the regression pull request is an owner edit to that workflow; this repository does not change that pull request. Putting the workflow on main does not by itself override a workflow file the pull request already modifies.
-
-3. An API-backed `proofmerge verify` still needs, on the HelpDeck repository:
-
-   - Actions secret `MODEL_API_KEY` (a Meta key). An empty secret skips the action when `fail-on-missing-key` is false.
-   - The default endpoint `https://api.meta.ai/v1`, Spark model `muse-spark-1.3`, Wonder model `muse-wonder-1.0`. Override with `PROOFMERGE_BASE_URL`, `PROOFMERGE_SPARK_MODEL`, and `PROOFMERGE_WONDER_MODEL` only if you intend to.
-   - Docker on the runner (`ubuntu-latest` is enough) and `fetch-depth: 0` so both SHAs are present.
-   - The action ref above, or `imthi16/proofmerge@main` after this change is merged.
-
-   The run that would justify BLOCK is one ProofMerge generates itself: a probe that passes 3/3 on the base commit and fails 3/3 on the head commit, classified as a verified regression against an uncontested PRESERVE claim. A hand-written probe that shows the two commits print different text is a compatibility check of the runner, not that verdict.
-
-For a local check before the config is on main, pass a file that is not the pull request checkout:
-
-```bash
-proofmerge verify /path/to/helpdeck \
-  --base e7b5e7af93a4c410cc6595e13b2a30a8dd2fe81c \
-  --head 479d67227dcccd824624cf6c4984c1e816d9542b \
-  --config /path/to/operator.proofmerge.toml \
-  --intent-file /path/to/intent.txt \
-  --evidence-dir /tmp/helpdeck-evidence
+```toml
+# Example: a service in a monorepo that imports a shared library and needs its locked packages.
+[python]
+root = "services/api"
+pythonpath = ["libs"]
+install = true
+lockfile = "services/api/uv.lock"
+pyproject = "services/api/pyproject.toml"
 ```
+
+Leave `install = false` when the code a probe imports uses only the standard library
+and repository code: nothing is downloaded and the run is faster.
+
+## Adopting on a repository
+
+1. Land `.proofmerge.toml` on the default branch in its own pull request, before the
+   pull requests you want verified. ProofMerge reads the file from the base SHA, so a
+   pull request picks it up only once its base contains that commit. Re-run the
+   workflow on an open pull request after the default branch moves.
+2. Use the action as in [github-action.md](github-action.md) (`imthi16/proofmerge@main`
+   once this layout support is merged).
+3. Check the layout locally first. `--config` lets you try a file that is not yet on
+   the base branch; keep it outside the checkout:
+
+   ```bash
+   proofmerge verify /path/to/repo --base main --head my-branch \
+     --config /path/to/operator.proofmerge.toml \
+     --intent-file /path/to/intent.txt \
+     --evidence-dir /tmp/proofmerge-evidence
+   ```
+
+A BLOCK still needs a probe that ProofMerge generates itself, passing 3/3 on the base
+commit and failing 3/3 on the head commit, against an uncontested PRESERVE claim. A
+hand-written probe that shows two commits behave differently checks the runner; it is
+not that verdict.
+
+## Not supported yet
+
+- `poetry.lock`, `Pipfile.lock` and unhashed `requirements.txt` cannot be installed. Export
+  hashed requirements instead (for example `poetry export --format requirements.txt`
+  from the poetry-plugin-export plugin, which writes hashes by default), or keep
+  `install = false`.
+- Packages without a wheel (sdist only), and path, git or URL dependencies, are refused.
+- Only one `[python]` table: one project root per repository.

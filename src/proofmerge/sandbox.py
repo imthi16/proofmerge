@@ -194,6 +194,18 @@ def docker_argv(
     ]  # fmt: skip
 
 
+def installer_user() -> str:
+    """The UID:GID the installer container writes /deps as.
+
+    A non-root host (GitHub's runner user) must own what the installer writes: it then
+    makes the files readable for the probe user (open_to_runner) and deletes them with
+    the temporary directory. Files owned by 65534 allow neither. A root host can do both
+    to any file, so the installer keeps the unprivileged 65534 and never runs as root.
+    """
+    uid, gid = os.getuid(), os.getgid()
+    return f"{uid}:{gid}" if uid != 0 else "65534:65534"
+
+
 def pip_install_argv(
     name: str, image: str, requirements: Path, deps_dir: Path, index_url: str
 ) -> list[str]:
@@ -207,7 +219,7 @@ def pip_install_argv(
         "--tmpfs", "/tmp:rw,size=1024m",
         "--cap-drop", "ALL",
         "--security-opt", "no-new-privileges",
-        "--user", "65534:65534",
+        "--user", installer_user(),
         "--pids-limit", "256",
         "--memory", "1536m", "--memory-swap", "1536m",
         "--cpus", "1",

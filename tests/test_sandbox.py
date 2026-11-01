@@ -383,6 +383,113 @@ def test_open_to_runner_keeps_executable_bits(tmp_path):
     assert data.stat().st_mode & 0o777 == 0o644
 
 
+def _wheel_index(root: Path) -> str:
+    """A PEP 503 index with one real wheel; returns the wheel's sha256."""
+    import base64
+    import zipfile
+
+    files = {
+        "greetlib/__init__.py": "def hello(name):\n    return f'hello {name}'\n",
+        "greetlib/data/greeting.txt": "hello\n",  # a nested directory, as real wheels have
+        "greetlib-1.0.0.dist-info/METADATA": (
+            "Metadata-Version: 2.1\nName: greetlib\nVersion: 1.0.0\n"
+        ),
+        "greetlib-1.0.0.dist-info/WHEEL": (
+            "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+        ),
+    }
+    record = []
+    for name, text in files.items():
+        data = text.encode()
+        digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+        record.append(f"{name},sha256={digest},{len(data)}")
+    record.append("greetlib-1.0.0.dist-info/RECORD,,")
+    files["greetlib-1.0.0.dist-info/RECORD"] = "\n".join(record) + "\n"
+    package = root / "simple" / "greetlib"
+    package.mkdir(parents=True)
+    wheel = package / "greetlib-1.0.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, text in files.items():
+            archive.writestr(name, text)
+    sha = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    (package / "index.html").write_text(
+        f'<a href="{wheel.name}#sha256={sha}">{wheel.name}</a>\n', encoding="utf-8"
+    )
+    return sha
+
+
+@needs_docker
+def test_docker_install_needs_no_host_chmod_and_cleans_up(tmp_path, monkeypatch):
+    """PR #46 review: the real installer container, then a real probe on its packages.
+
+    On a non-root host (GitHub's runner user) files written by the container as another
+    UID could be neither chmod-ed nor deleted by the host. Run this as non-root to see it.
+    """
+    import functools
+    import http.server
+
+    index = tmp_path / "index"
+    sha = _wheel_index(index)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(index))
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    gateway = subprocess.run(
+        ["docker", "network", "inspect", "bridge", "--format",
+         "{{(index .IPAM.Config 0).Gateway}}"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+    # Only the index URL is faked: the real one must be https, from the base lockfile.
+    requirements = f"greetlib==1.0.0 --hash=sha256:{sha}\n"
+    index_url = f"http://{gateway}:{server.server_address[1]}/simple"
+    monkeypatch.setattr(sandbox, "requirements_for_base", lambda *a: (requirements, index_url))
+    real_argv = sandbox.pip_install_argv
+
+    def trusting_local_index(*args):
+        # pip ignores a plain-http index unless trusted; user, mounts and limits stay real.
+        argv = real_argv(*args)
+        at = argv.index("install") + 1
+        return [*argv[:at], "--trusted-host", gateway, *argv[at:]]
+
+    monkeypatch.setattr(sandbox, "pip_install_argv", trusting_local_index)
+
+    repo = tmp_path / "repo"
+    (repo / "app").mkdir(parents=True)
+    (repo / "app" / "__init__.py").write_text("")
+    (repo / "app" / "wrapped.py").write_text(
+        "import greetlib\n\ndef greet(name):\n    return greetlib.hello(name)\n"
+    )
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@example.com")
+    git(repo, "config", "user.name", "t")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    probe = "from app.wrapped import greet\n\ndef test_greet():\n    assert greet('Ada') == 'hello Ada'\n"
+    try:
+        experiment = run_experiment(
+            repo, git(repo, "rev-parse", "HEAD"), None, "H1", probe, tmp_path / "ev",
+            attempts=1, python_project=PythonProject(install=True, requirements="req.txt"),
+        )  # fmt: skip
+    finally:
+        server.shutdown()
+    assert not (tmp_path / "ev" / "python-install-error.txt").exists()
+    assert [(e.outcome, e.setup_failure) for e in experiment.executions] == [("PASS", False)]
+
+
+def test_installer_container_runs_as_host_user_unless_root(monkeypatch, tmp_path):
+    def user(uid, gid):
+        monkeypatch.setattr(sandbox.os, "getuid", lambda: uid)
+        monkeypatch.setattr(sandbox.os, "getgid", lambda: gid)
+        argv = sandbox.pip_install_argv(
+            "n", "img", tmp_path / "r.txt", tmp_path / "deps", "https://pypi.org/simple"
+        )
+        return argv[argv.index("--user") + 1]
+
+    # A non-root runner owns what the installer writes, so it can chmod and delete it.
+    assert user(1001, 127) == "1001:127"
+    # Never root in the container: a root host can chmod and delete 65534's files anyway.
+    assert user(0, 0) == "65534:65534"
+
+
 def test_outcome_for_config_timeout():
     assert outcome_for_config(None, CONFIG, b"", b"") == "TIMEOUT"
 

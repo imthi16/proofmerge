@@ -18,6 +18,9 @@ inputs:
       commit's .proofmerge.toml, because a pull_request workflow file is not
       a trusted source for repository paths.
     default: 'false'
+  orchestrator:
+    description: legacy (default) or langgraph. Both use the same deterministic verdict policy.
+    default: legacy
 runs:
   using: composite
   steps:
@@ -64,9 +67,13 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
+        ORCHESTRATOR: ${{ inputs.orchestrator }}
       run: |
         cd "$RUNNER_TEMP"
-        python -m pip install "$ACTION_PATH"
+        case "$ORCHESTRATOR" in
+          langgraph) python -m pip install "$ACTION_PATH[graph]" ;;
+          *) python -m pip install "$ACTION_PATH" ;;
+        esac
     - name: Build sandbox runner
       if: steps.credentials.outputs.enabled == 'true'
       shell: bash
@@ -87,6 +94,7 @@ runs:
       shell: bash
       env:
         MODEL_API_KEY: ${{ inputs.model-api-key }}
+        PROOFMERGE_ORCHESTRATOR: ${{ inputs.orchestrator }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |

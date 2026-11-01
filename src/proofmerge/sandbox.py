@@ -156,6 +156,33 @@ def runner_dockerfile_path() -> Path:
     raise SandboxError("runner Dockerfile not found; is the package installed correctly?")
 
 
+def _job_label() -> list[str]:
+    # The dashboard sets this so it can find and kill the containers of a verify it timed out.
+    job = os.environ.get("PROOFMERGE_JOB_ID", "")
+    return ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+
+
+def hardened_run_argv(name: str, *, tmpfs: str) -> list[str]:
+    """The start of every probe container's `docker run`: the one place isolation is set.
+
+    No network, a read-only root filesystem, no capabilities, no privilege gain, a
+    non-root user, and memory, CPU and process limits. Callers append only mounts,
+    environment, the image and the command.
+    """
+    return [
+        "docker", "run", "--rm", "--name", name, *_job_label(),
+        "--network", "none",
+        "--read-only",
+        "--tmpfs", tmpfs,
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        "--user", "65534:65534",
+        "--pids-limit", "64",
+        "--memory", "512m", "--memory-swap", "512m",
+        "--cpus", "1",
+    ]  # fmt: skip
+
+
 def docker_argv(
     name: str,
     image: str,
@@ -166,22 +193,12 @@ def docker_argv(
     python_project: PythonProject | None = None,
     deps_dir: Path | None = None,
 ) -> list[str]:
-    # The dashboard sets this so it can find and kill the containers of a verify it timed out.
-    job = os.environ.get("PROOFMERGE_JOB_ID", "")
-    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+    # The trusted [python] layout only changes PYTHONPATH and adds a read-only /deps mount
+    # after the isolation prefix; it cannot touch network, user, capabilities or limits.
     pythonpath = container_pythonpath(python_project, deps=deps_dir is not None)
     deps = ["--volume", f"{deps_dir.resolve()}:/deps:ro"] if deps_dir is not None else []
     return [
-        "docker", "run", "--rm", "--name", name, *label,
-        "--network", "none",
-        "--read-only",
-        "--tmpfs", "/tmp:rw,size=64m",
-        "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges",
-        "--user", "65534:65534",
-        "--pids-limit", "64",
-        "--memory", "512m", "--memory-swap", "512m",
-        "--cpus", "1",
+        *hardened_run_argv(name, tmpfs="/tmp:rw,size=64m"),
         "--env", "HOME=/tmp",
         "--env", "PYTHONDONTWRITEBYTECODE=1",
         "--env", f"PYTHONPATH={pythonpath}",
@@ -209,11 +226,14 @@ def installer_user() -> str:
 def pip_install_argv(
     name: str, image: str, requirements: Path, deps_dir: Path, index_url: str
 ) -> list[str]:
-    """Argv for a hashed wheel install. Network is on; the host environment is not passed."""
-    job = os.environ.get("PROOFMERGE_JOB_ID", "")
-    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
+    """Argv for a hashed wheel install. Network is on; the host environment is not passed.
+
+    Not a probe container, so it does not use hardened_run_argv: it needs the network to
+    fetch base-commit wheels. It runs no repository code (--only-binary, --no-deps,
+    --require-hashes), and probes then see its output read-only, with no network.
+    """
     return [
-        "docker", "run", "--rm", "--name", name, *label,
+        "docker", "run", "--rm", "--name", name, *_job_label(),
         "--network", "bridge",
         "--read-only",
         "--tmpfs", "/tmp:rw,size=1024m",
@@ -243,22 +263,11 @@ def pip_install_argv(
 
 def config_docker_argv(name: str, config: ProjectConfig, code_dir: Path) -> list[str]:
     """Docker argv for a repository-defined test command."""
-    job = os.environ.get("PROOFMERGE_JOB_ID", "")
-    label = ["--label", f"proofmerge.job={job}"] if JOB_ID.fullmatch(job) else []
     env: list[str] = []
     for key, value in config.env.items():
         env.extend(["--env", f"{key}={value}"])
     return [
-        "docker", "run", "--rm", "--name", name, *label,
-        "--network", "none",
-        "--read-only",
-        "--tmpfs", f"/tmp:rw,exec,size={config.tmpfs_mb}m",
-        "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges",
-        "--user", "65534:65534",
-        "--pids-limit", "64",
-        "--memory", "512m", "--memory-swap", "512m",
-        "--cpus", "1",
+        *hardened_run_argv(name, tmpfs=f"/tmp:rw,exec,size={config.tmpfs_mb}m"),
         *env,
         "--volume", f"{code_dir}:/work:ro",
         "--workdir", "/work",
@@ -277,21 +286,8 @@ def _read_capped(stream, chunks: list[bytes], over: threading.Event) -> None:
             over.set()
 
 
-def docker_runner(
-    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
-) -> tuple[int | None, bytes, bytes]:
-    """Run one probe; output is read in bounded chunks so a noisy probe cannot fill host memory."""
-    name = f"proofmerge-{uuid.uuid4().hex[:12]}"
-    layout = _LAYOUT.get()
-    argv = docker_argv(
-        name,
-        image,
-        code_dir,
-        probe_dir,
-        probe_name,
-        python_project=layout.project if layout else None,
-        deps_dir=layout.deps_dir if layout else None,
-    )
+def _run_capped(argv: list[str], name: str, timeout: int) -> tuple[int | None, bytes, bytes]:
+    """Run one container; output is read in bounded chunks so it cannot fill host memory."""
     proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out: list[bytes] = []
     err: list[bytes] = []
@@ -323,6 +319,20 @@ def docker_runner(
     return (None if timed_out else proc.returncode), stdout, stderr
 
 
+def docker_runner(
+    image: str, code_dir: Path, probe_dir: Path, probe_name: str, timeout: int
+) -> tuple[int | None, bytes, bytes]:
+    """Run one pytest probe in the hardened container, with run_experiment's trusted layout."""
+    name = f"proofmerge-{uuid.uuid4().hex[:12]}"
+    layout = _LAYOUT.get()
+    argv = docker_argv(
+        name, image, code_dir, probe_dir, probe_name,
+        python_project=layout.project if layout else None,
+        deps_dir=layout.deps_dir if layout else None,
+    )  # fmt: skip
+    return _run_capped(argv, name, timeout)
+
+
 def config_docker_runner(
     config: ProjectConfig, code_dir: Path, probe_source: str, timeout: int
 ) -> tuple[int | None, bytes, bytes]:
@@ -332,35 +342,7 @@ def config_docker_runner(
     probe_path.parent.mkdir(parents=True, exist_ok=True)
     probe_path.write_text(probe_source, encoding="utf-8")
     open_to_runner(code_dir)
-    argv = config_docker_argv(name, config, code_dir)
-    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out: list[bytes] = []
-    err: list[bytes] = []
-    over = threading.Event()
-    readers = [
-        threading.Thread(target=_read_capped, args=(proc.stdout, out, over)),
-        threading.Thread(target=_read_capped, args=(proc.stderr, err, over)),
-    ]
-    for reader in readers:
-        reader.start()
-    deadline = time.monotonic() + timeout
-    while proc.poll() is None and not over.is_set() and time.monotonic() < deadline:
-        over.wait(0.1)
-    timed_out = proc.poll() is None and not over.is_set()
-    if proc.poll() is None:
-        subprocess.run(["docker", "kill", name], capture_output=True, check=False)
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-    for reader in readers:
-        reader.join()
-    stdout, stderr = b"".join(out), b"".join(err)
-    if over.is_set():
-        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
-        return OUTPUT_LIMIT_EXIT, stdout, stderr + note
-    return (None if timed_out else proc.returncode), stdout, stderr
+    return _run_capped(config_docker_argv(name, config, code_dir), name, timeout)
 
 
 def outcome_for_config(
@@ -390,41 +372,10 @@ def docker_pip_install(
     name = f"proofmerge-pip-{uuid.uuid4().hex[:12]}"
     requirements.chmod(0o644)
     argv = pip_install_argv(name, image, requirements, deps_dir, index_url)
-    exit_code, stdout, stderr = _capture_docker(argv, name, timeout)
+    exit_code, stdout, stderr = _run_capped(argv, name, timeout)
     if exit_code != 0:
         detail = (stderr or stdout).decode(errors="replace")[-2000:]
         raise SandboxError(f"dependency install failed (exit {exit_code}): {detail}")
-
-
-def _capture_docker(argv: list[str], name: str, timeout: int) -> tuple[int | None, bytes, bytes]:
-    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out: list[bytes] = []
-    err: list[bytes] = []
-    over = threading.Event()
-    readers = [
-        threading.Thread(target=_read_capped, args=(proc.stdout, out, over)),
-        threading.Thread(target=_read_capped, args=(proc.stderr, err, over)),
-    ]
-    for reader in readers:
-        reader.start()
-    deadline = time.monotonic() + timeout
-    while proc.poll() is None and not over.is_set() and time.monotonic() < deadline:
-        over.wait(0.1)
-    timed_out = proc.poll() is None and not over.is_set()
-    if proc.poll() is None:
-        subprocess.run(["docker", "kill", name], capture_output=True, check=False)
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-    for reader in readers:
-        reader.join()
-    stdout, stderr = b"".join(out), b"".join(err)
-    if over.is_set():
-        note = f"\n[proofmerge: stopped, output over {MAX_OUTPUT_BYTES} bytes]\n".encode()
-        return OUTPUT_LIMIT_EXIT, stdout, stderr + note
-    return (None if timed_out else proc.returncode), stdout, stderr
 
 
 def host_python_runner(
@@ -502,6 +453,91 @@ def _prepare_dependencies(
         (evidence_dir / "python-install-error.txt").write_text(message + "\n", encoding="utf-8")
         return message
     return None
+# One attempt on one exported revision -> (exit code or None on timeout, stdout, stderr).
+RunOnce = Callable[[Path], tuple[int | None, bytes, bytes]]
+OutcomeOf = Callable[[int | None, bytes, bytes], Outcome]
+# A setup problem that stops a revision's attempts before they run (None when there is none).
+Precheck = Callable[[Path], str | None]
+SetupFailed = Callable[[int | None, bytes, bytes], bool]
+
+
+def _write_probe(evidence_dir: Path, hypothesis_id: str, probe_name: str, source: str,
+                 *, conftest: bool) -> tuple[Path, Path]:
+    """Save the probe (and the pytest outcome plugin) and make a log directory.
+
+    Callers validate `hypothesis_id` first: it becomes a file name.
+    """
+    probe_dir = evidence_dir / "probes"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    (probe_dir / probe_name).write_text(source, encoding="utf-8")
+    if conftest:
+        (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
+    open_to_runner(probe_dir)
+    log_dir = evidence_dir / hypothesis_id
+    log_dir.mkdir(exist_ok=True)
+    return probe_dir, log_dir
+
+
+def _run_revisions(
+    repo: Path,
+    revisions: list[tuple[str, str]],
+    hypothesis_id: str,
+    log_dir: Path,
+    *,
+    attempts: int,
+    command_argv: list[str],
+    digest: str,
+    run_once: RunOnce,
+    outcome_of: OutcomeOf,
+    precheck: Precheck | None = None,
+    setup_failed: SetupFailed | None = None,
+) -> list[Execution]:
+    """Export each revision once, run every attempt on it, and record each run with its logs.
+
+    A precheck problem (a failed install, a bad import path) is recorded for every attempt
+    as a setup failure without running anything; setup_failed marks import errors seen in
+    a run. Setup failures classify as ENVIRONMENT, never as behavioural evidence.
+    """
+    executions: list[Execution] = []
+    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
+        Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
+        for revision, sha in revisions:
+            code_dir = Path(tmp) / revision
+            export_tree(repo, sha, code_dir)
+            open_to_runner(code_dir)
+            problem = precheck(code_dir) if precheck else None
+            for attempt in range(1, attempts + 1):
+                start = time.monotonic()
+                if problem:
+                    exit_code, stdout, stderr = INVALID_PROBE_EXIT, b"", (problem + "\n").encode()
+                    failed_setup = True
+                else:
+                    exit_code, stdout, stderr = run_once(code_dir)
+                    failed_setup = bool(setup_failed and setup_failed(exit_code, stdout, stderr))
+                duration_ms = round((time.monotonic() - start) * 1000)
+                stem = f"{revision}-{attempt}"
+                (log_dir / f"{stem}.stdout").write_bytes(stdout)
+                (log_dir / f"{stem}.stderr").write_bytes(stderr)
+                executions.append(
+                    Execution(
+                        revision=revision,
+                        commit_sha=sha,
+                        attempt=attempt,
+                        command_argv=list(command_argv),
+                        exit_code=exit_code,
+                        outcome=outcome_of(exit_code, stdout, stderr),
+                        duration_ms=duration_ms,
+                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
+                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
+                        runner_image_digest=digest,
+                        setup_failure=failed_setup,
+                    )
+                )
+    return executions
+
+
+def _revisions(base_sha: str, head_sha: str | None) -> list[tuple[str, str]]:
+    return [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
 
 
 def run_experiment(
@@ -529,16 +565,10 @@ def run_experiment(
         digest = image_digest()  # runs use this ID, not the tag, so a rebuild cannot slip in
     evidence_dir = evidence_dir.resolve()  # docker reads a relative bind source as a volume name
     probe_name = f"test_{hypothesis_id.lower()}.py"
-    probe_dir = evidence_dir / "probes"
-    probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
-    (probe_dir / "conftest.py").write_text(OUTCOME_PLUGIN)
-    open_to_runner(probe_dir)
-    log_dir = evidence_dir / hypothesis_id
-    log_dir.mkdir(exist_ok=True)
-
-    executions: list[Execution] = []
-    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
+    probe_dir, log_dir = _write_probe(
+        evidence_dir, hypothesis_id, probe_name, probe_source, conftest=True
+    )
+    with tempfile.TemporaryDirectory(prefix="proofmerge-deps-") as tmp:
         Path(tmp).chmod(0o755)  # the container user (uid 65534) is not the host user
         deps_dir: Path | None = None
         install_error: str | None = None
@@ -549,45 +579,17 @@ def run_experiment(
             install_error = _prepare_dependencies(
                 repo, base_sha, python_project, evidence_dir, deps_dir, digest, installer
             )
-        token = _LAYOUT.set(
-            ProbeLayout(python_project, None if install_error else deps_dir)
-        )
+        token = _LAYOUT.set(ProbeLayout(python_project, None if install_error else deps_dir))
         try:
-            revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
-            for revision, sha in revisions:
-                code_dir = Path(tmp) / revision
-                export_tree(repo, sha, code_dir)
-                open_to_runner(code_dir)
-                problem = install_error or path_problem(code_dir, python_project)
-                for attempt in range(1, attempts + 1):
-                    start = time.monotonic()
-                    if problem:
-                        exit_code, stdout, stderr = INVALID_PROBE_EXIT, b"", (problem + "\n").encode()
-                        failed_setup = True
-                    else:
-                        exit_code, stdout, stderr = runner(
-                            digest, code_dir, probe_dir, probe_name, timeout
-                        )
-                        failed_setup = is_environment_failure(exit_code, stdout, stderr)
-                    duration_ms = round((time.monotonic() - start) * 1000)
-                    stem = f"{revision}-{attempt}"
-                    (log_dir / f"{stem}.stdout").write_bytes(stdout)
-                    (log_dir / f"{stem}.stderr").write_bytes(stderr)
-                    executions.append(
-                        Execution(
-                            revision=revision,
-                            commit_sha=sha,
-                            attempt=attempt,
-                            command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"],
-                            exit_code=exit_code,
-                            outcome=outcome_for(exit_code),
-                            duration_ms=duration_ms,
-                            stdout_path=f"{hypothesis_id}/{stem}.stdout",
-                            stderr_path=f"{hypothesis_id}/{stem}.stderr",
-                            runner_image_digest=digest,
-                            setup_failure=failed_setup,
-                        )
-                    )
+            executions = _run_revisions(
+                repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
+                attempts=attempts, command_argv=[*PYTEST_ARGV, f"probes/{probe_name}"],
+                digest=digest,
+                run_once=lambda code_dir: runner(digest, code_dir, probe_dir, probe_name, timeout),
+                outcome_of=lambda exit_code, stdout, stderr: outcome_for(exit_code),
+                precheck=lambda code_dir: install_error or path_problem(code_dir, python_project),
+                setup_failed=is_environment_failure,
+            )  # fmt: skip
         finally:
             _LAYOUT.reset(token)
     return Experiment(
@@ -623,42 +625,15 @@ def run_config_experiment(
     evidence_dir = evidence_dir.resolve()
     suffix = Path(config.probe_path).suffix or ""
     probe_name = f"test_{hypothesis_id.lower()}{suffix}"
-    probe_dir = evidence_dir / "probes"
-    probe_dir.mkdir(parents=True, exist_ok=True)
-    (probe_dir / probe_name).write_text(probe_source, encoding="utf-8")
-    open_to_runner(probe_dir)
-    log_dir = evidence_dir / hypothesis_id
-    log_dir.mkdir(exist_ok=True)
-
-    executions: list[Execution] = []
-    with tempfile.TemporaryDirectory(prefix="proofmerge-") as tmp:
-        Path(tmp).chmod(0o755)
-        revisions = [("base", base_sha)] + ([("head", head_sha)] if head_sha else [])
-        for revision, sha in revisions:
-            code_dir = Path(tmp) / revision
-            export_tree(repo, sha, code_dir)
-            open_to_runner(code_dir)
-            for attempt in range(1, attempts + 1):
-                start = time.monotonic()
-                exit_code, stdout, stderr = runner(pinned, code_dir, probe_source, timeout)
-                duration_ms = round((time.monotonic() - start) * 1000)
-                stem = f"{revision}-{attempt}"
-                (log_dir / f"{stem}.stdout").write_bytes(stdout)
-                (log_dir / f"{stem}.stderr").write_bytes(stderr)
-                executions.append(
-                    Execution(
-                        revision=revision,
-                        commit_sha=sha,
-                        attempt=attempt,
-                        command_argv=list(config.test_command),
-                        exit_code=exit_code,
-                        outcome=outcome_for_config(exit_code, config, stdout, stderr),
-                        duration_ms=duration_ms,
-                        stdout_path=f"{hypothesis_id}/{stem}.stdout",
-                        stderr_path=f"{hypothesis_id}/{stem}.stderr",
-                        runner_image_digest=digest,
-                    )
-                )
+    _, log_dir = _write_probe(evidence_dir, hypothesis_id, probe_name, probe_source, conftest=False)
+    executions = _run_revisions(
+        repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
+        attempts=attempts, command_argv=list(config.test_command), digest=digest,
+        run_once=lambda code_dir: runner(pinned, code_dir, probe_source, timeout),
+        outcome_of=lambda exit_code, stdout, stderr: outcome_for_config(
+            exit_code, config, stdout, stderr
+        ),
+    )  # fmt: skip
     return Experiment(
         hypothesis_id=hypothesis_id,
         test_source_path=f"probes/{probe_name}",

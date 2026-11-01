@@ -1,6 +1,6 @@
 """Deterministic verdict policy over normalized evidence and intent claims."""
 
-from proofmerge.evidence import Finding, TamperFinding, Verdict
+from proofmerge.evidence import Finding, TamperFinding, Verdict, VerdictInputs
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import C0, IntentContract
 
@@ -136,3 +136,36 @@ def decide(
         unresolved_risks=unresolved,
         scope_limitations=limitations,
     )
+
+
+def adjudicate(
+    contract: IntentContract,
+    hypotheses: list[Hypothesis],
+    findings: list[Finding],
+    tamper: list[TamperFinding],
+    inputs: VerdictInputs,
+    *,
+    contested_claim_ids: frozenset[str] = frozenset(),
+    mismatched_probe_ids: frozenset[str] = frozenset(),
+    explained_probe_ids: frozenset[str] = frozenset(),
+    explained_probe_claim_ids: dict[str, str] | None = None,
+) -> Verdict:
+    """The verdict a run records: decide() plus the scope note its inputs require.
+
+    verify and replay both call this, so a recorded verdict can be recomputed exactly.
+    """
+    verdict = decide(
+        contract, hypotheses, findings, tamper,
+        contested_claim_ids=contested_claim_ids, mismatched_probe_ids=mismatched_probe_ids,
+        errors=list(inputs.errors), intent_established=inputs.intent_established,
+        intent_given=inputs.intent_given, explained_probe_ids=explained_probe_ids,
+        explained_probe_claim_ids=explained_probe_claim_ids,
+        wonder_checked=inputs.wonder_checked,
+    )  # fmt: skip
+    if inputs.tamper_guard_language is not None:
+        verdict.scope_limitations.append(
+            f"Test-tamper guard is not available for {inputs.tamper_guard_language}; "
+            "changed tests were not re-run."
+        )
+    verdict.scope_limitations.extend(inputs.layout_scope_limitations)
+    return verdict

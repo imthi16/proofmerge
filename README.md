@@ -59,9 +59,12 @@ REVIEW. [Whole report](docs/assets/report-full-real-light.png).
 
 The report is one static HTML file, with no server, no JavaScript and nothing
 loaded from the network. Every probe, log and command in the run is hashed, and
-`proofmerge replay <proof.json>` checks that nothing changed after the run;
+`proofmerge replay <proof.json>` checks that nothing changed after the run and
+recomputes the findings and the verdict from the recorded executions with the same
+plain-code policy, so an edited verdict fails even if the manifest was rewritten too;
 with `--rerun --repo <repo>` it runs every probe again in Docker and reports
-whether each recorded outcome reproduces.
+whether each recorded outcome reproduces. Recomputation shows the verdict follows
+from the records; only `--rerun` checks the records themselves.
 
 ## The problem
 
@@ -298,20 +301,28 @@ training-data warning for contributor models and which agent CLIs were checked.
 proofmerge dashboard bench/results       # or any folder of evidence runs
 ```
 
-It opens a page on `http://127.0.0.1:8765/` listing every run under the folder:
-verdict, base and head, regressions, model calls and whether each run's evidence
-still matches its manifest. Click a verdict in the bar to filter, search the
-reasons, and open a run to see its probes on base and head, why head failed, the
-replay command and the full report. Click any base or head result to read that
-attempt's log, and export the filtered runs as CSV. A Benchmarks tab compares each
-`results.json` with its labels, the held-out slice and the baselines.
+It opens the Control Center on `http://127.0.0.1:8765/`: an overview of recorded
+verdicts and evidence integrity, a filterable and paged list of every run under the
+folder, and an evidence explorer per run (verdict reasons, intent claims, each
+hypothesis with its base/head attempts and logs, why head failed, the probe source,
+tamper findings, model use, orchestration, the replay command and the static
+report). A Benchmarks page compares each `results.json` with its labels, the
+held-out slice and the baselines; a Diagnostics page says whether Docker, the
+runner image, `gh`, the model key (present or not, never its value) and LangGraph
+are ready. Light, dark and system themes; it works at phone width. The previous
+page stays at `/legacy/`. See [docs/control-center.md](docs/control-center.md).
+
+![Control Center evidence explorer](docs/assets/control-center-evidence.png)
 
 Add `--repo path/to/repo` (a clone with a GitHub remote and `gh` signed in) for a
 Pull requests tab: each PR shows the ProofMerge verdict for its current head
 commit, if a run exists, and an open PR can be verified from the page. That
 fetches it into `refs/proofmerge/` without touching your branches and runs
 `proofmerge verify` with the PR description as the intent, after a confirmation
-that names the cost (up to 19 model calls) and the trust requirement.
+that names the cost (up to 19 model calls) and the trust requirement. The page
+then follows the run live: each pipeline stage as it starts, retries, finishes or
+is skipped, streamed over server-sent events. The verdict appears only after the
+deterministic verdict stage has run.
 
 The server answers on 127.0.0.1 only. Apart from that one verify request, which
 needs a per-session token and a same-origin request, it only reads files.
@@ -337,6 +348,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Test-tamper guard: original tests run on the patch | Built and tested |
 | Muse Wonder cross-check of claims and probes | Built and tested |
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
+| `replay` recomputes findings and the verdict from the recorded evidence (proofs from T56 on) | Built and tested; an edited and resealed verdict or outcome fails; older proofs get a notice |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested offline; not yet run on GitHub |
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
@@ -347,6 +359,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | PASS strength beyond the receipt (for example mutation checks) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
+| LangGraph orchestrator (`--orchestrator langgraph`): same stages, same plain-code verdict, retries of transient model failures only | Built and tested offline and with real Docker; parity with the default loop checked on nine scenarios; no real Meta API run on it yet; see [docs/orchestration.md](docs/orchestration.md) |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in
@@ -395,10 +408,16 @@ src/proofmerge/
   verdict.py     the plain-code verdict rules
   evidence.py    the proof.json format
   manifest.py    evidence hashes and replay checks
+  rederive.py    recomputes findings and the verdict from a proof for replay
   report.py      renders proof.json as report.html
-  dashboard.py   the local dashboard server; dashboard_static/ holds the React page
+  dashboard.py   the local dashboard server and its trust checks
+  dashboard_api.py  the typed /api/v1 data; dashboard_models.py its response models
+  dashboard_events.py  verification progress events and the SSE stream
+  dashboard_static/  the built Control Center (app/) and the previous page (legacy/)
+  telemetry.py   opt-in OpenTelemetry spans for verify (PROOFMERGE_OTEL=1)
   dashboard_prs.py  pull requests for the dashboard: list with gh, verify on request
   prompts/       the instructions given to Muse Spark and Muse Wonder
+ui/              Control Center source (React + TypeScript + Vite); see docs/control-center.md
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth

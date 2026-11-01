@@ -179,6 +179,9 @@ def docker_ready() -> bool:
     return True
 
 
+# CI's Docker job sets this so a missing daemon or image fails instead of skipping.
+if os.environ.get("PROOFMERGE_REQUIRE_DOCKER") == "1" and not docker_ready():
+    raise RuntimeError("PROOFMERGE_REQUIRE_DOCKER=1 but docker or the runner image is missing")
 needs_docker = pytest.mark.skipif(not docker_ready(), reason="docker or runner image missing")
 
 
@@ -488,6 +491,34 @@ def test_installer_container_runs_as_host_user_unless_root(monkeypatch, tmp_path
     assert user(1001, 127) == "1001:127"
     # Never root in the container: a root host can chmod and delete 65534's files anyway.
     assert user(0, 0) == "65534:65534"
+
+
+ISOLATION = {
+    "--network": "none", "--tmpfs": None, "--cap-drop": "ALL",
+    "--security-opt": "no-new-privileges", "--user": "65534:65534", "--pids-limit": "64",
+    "--memory": "512m", "--memory-swap": "512m", "--cpus": "1",
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("kind", ["pytest", "config"])
+def test_every_probe_container_starts_with_the_one_isolation_prefix(tmp_path, kind):
+    if kind == "pytest":
+        argv = sandbox.docker_argv("n", "img", tmp_path, tmp_path, "test_h1.py")
+    else:
+        argv = config_docker_argv("n", CONFIG, tmp_path)
+    tmpfs = argv[argv.index("--tmpfs") + 1]
+    prefix = sandbox.hardened_run_argv("n", tmpfs=tmpfs)
+    assert argv[: len(prefix)] == prefix
+    assert "--read-only" in prefix
+    for flag, value in ISOLATION.items():
+        # Each flag appears once, in the shared prefix, so nothing after it can override.
+        assert argv.count(flag) == 1, flag
+        assert value is None or argv[argv.index(flag) + 1] == value
+    for loosening in ("--privileged", "--cap-add", "--pid", "--ipc", "--userns", "--device"):
+        assert not any(a == loosening or a.startswith(loosening + "=") for a in argv), loosening
+    mounts = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--volume"]
+    assert mounts and all(mount.endswith(":ro") for mount in mounts)
+    assert not any("docker.sock" in arg for arg in argv)
 
 
 def test_outcome_for_config_timeout():

@@ -1,0 +1,2025 @@
+{
+  "$defs": {
+    "ApiError": {
+      "properties": {
+        "error": {
+          "title": "Error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ApiError",
+      "type": "object"
+    },
+    "BenchmarkCandidate": {
+      "properties": {
+        "a": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "A"
+        },
+        "b": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "B"
+        },
+        "b_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "B Reason"
+        },
+        "calls": {
+          "default": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision"
+        },
+        "held_out": {
+          "title": "Held Out",
+          "type": "boolean"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "a",
+        "b",
+        "b_reason",
+        "calls",
+        "decision",
+        "held_out",
+        "label",
+        "name",
+        "reasons"
+      ],
+      "title": "BenchmarkCandidate",
+      "type": "object"
+    },
+    "BenchmarkLabel": {
+      "properties": {
+        "held_out": {
+          "title": "Held Out",
+          "type": "boolean"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "held_out",
+        "label"
+      ],
+      "title": "BenchmarkLabel",
+      "type": "object"
+    },
+    "BenchmarkSet": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/BenchmarkCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "git_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Sha"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "run",
+            "baselines"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "run_prefix": {
+          "default": "",
+          "title": "Run Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidates",
+        "date",
+        "git_sha",
+        "id",
+        "kind",
+        "model",
+        "run_prefix"
+      ],
+      "title": "BenchmarkSet",
+      "type": "object"
+    },
+    "Benchmarks": {
+      "properties": {
+        "benchmarks": {
+          "items": {
+            "$ref": "#/$defs/BenchmarkSet"
+          },
+          "title": "Benchmarks",
+          "type": "array"
+        },
+        "known_runs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Known Runs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "benchmarks",
+        "known_runs"
+      ],
+      "title": "Benchmarks",
+      "type": "object"
+    },
+    "Check": {
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ok"
+        }
+      },
+      "required": [
+        "detail",
+        "name",
+        "ok"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "DecisionCounts": {
+      "properties": {
+        "BLOCK": {
+          "default": 0,
+          "title": "Block",
+          "type": "integer"
+        },
+        "PASS": {
+          "default": 0,
+          "title": "Pass",
+          "type": "integer"
+        },
+        "REVIEW": {
+          "default": 0,
+          "title": "Review",
+          "type": "integer"
+        },
+        "unreadable": {
+          "default": 0,
+          "title": "Unreadable",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "BLOCK",
+        "PASS",
+        "REVIEW",
+        "unreadable"
+      ],
+      "title": "DecisionCounts",
+      "type": "object"
+    },
+    "Diagnostics": {
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "default_orchestrator": {
+          "title": "Default Orchestrator",
+          "type": "string"
+        },
+        "evidence_root": {
+          "title": "Evidence Root",
+          "type": "string"
+        },
+        "python": {
+          "title": "Python",
+          "type": "string"
+        },
+        "repo_configured": {
+          "title": "Repo Configured",
+          "type": "boolean"
+        },
+        "runner_image": {
+          "title": "Runner Image",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checks",
+        "default_orchestrator",
+        "evidence_root",
+        "python",
+        "repo_configured",
+        "runner_image",
+        "version"
+      ],
+      "title": "Diagnostics",
+      "type": "object"
+    },
+    "Execution": {
+      "description": "One run of one probe on one revision.",
+      "properties": {
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "command_argv": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Command Argv",
+          "type": "array"
+        },
+        "commit_sha": {
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "outcome": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "ERROR",
+            "TIMEOUT"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "revision": {
+          "enum": [
+            "base",
+            "head"
+          ],
+          "title": "Revision",
+          "type": "string"
+        },
+        "runner_image_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runner Image Digest"
+        },
+        "stderr_path": {
+          "title": "Stderr Path",
+          "type": "string"
+        },
+        "stdout_path": {
+          "title": "Stdout Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt",
+        "command_argv",
+        "commit_sha",
+        "duration_ms",
+        "exit_code",
+        "outcome",
+        "revision",
+        "runner_image_digest",
+        "stderr_path",
+        "stdout_path"
+      ],
+      "title": "Execution",
+      "type": "object"
+    },
+    "ExecutionLog": {
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "outcome": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "ERROR",
+            "TIMEOUT"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "stderr": {
+          "title": "Stderr",
+          "type": "string"
+        },
+        "stdout": {
+          "title": "Stdout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "duration_ms",
+        "exit_code",
+        "outcome",
+        "stderr",
+        "stdout"
+      ],
+      "title": "ExecutionLog",
+      "type": "object"
+    },
+    "Experiment": {
+      "description": "A Spark-written probe for one hypothesis, and every run of it.",
+      "properties": {
+        "executions": {
+          "items": {
+            "$ref": "#/$defs/Execution"
+          },
+          "title": "Executions",
+          "type": "array"
+        },
+        "hypothesis_id": {
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "test_source_path": {
+          "title": "Test Source Path",
+          "type": "string"
+        },
+        "test_source_sha256": {
+          "title": "Test Source Sha256",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "executions",
+        "hypothesis_id",
+        "test_source_path",
+        "test_source_sha256",
+        "timeout_seconds"
+      ],
+      "title": "Experiment",
+      "type": "object"
+    },
+    "Finding": {
+      "properties": {
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "classification": {
+          "enum": [
+            "REGRESSION",
+            "POSSIBLE_FIX",
+            "EXISTING_FAILURE",
+            "NO_DIFFERENCE",
+            "INCONCLUSIVE"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "hypothesis_id": {
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "reproducer_command": {
+          "title": "Reproducer Command",
+          "type": "string"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "claim_id",
+        "classification",
+        "hypothesis_id",
+        "reproducer_command",
+        "verified"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "Hypothesis": {
+      "properties": {
+        "changed_locations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed Locations",
+          "type": "array"
+        },
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "expected_base": {
+          "title": "Expected Base",
+          "type": "string"
+        },
+        "expected_head": {
+          "title": "Expected Head",
+          "type": "string"
+        },
+        "falsification_criteria": {
+          "title": "Falsification Criteria",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "possibly_intended": {
+          "title": "Possibly Intended",
+          "type": "boolean"
+        },
+        "risk_category": {
+          "title": "Risk Category",
+          "type": "string"
+        },
+        "suspected_behavior": {
+          "title": "Suspected Behavior",
+          "type": "string"
+        },
+        "test_intent": {
+          "title": "Test Intent",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed_locations",
+        "claim_id",
+        "expected_base",
+        "expected_head",
+        "falsification_criteria",
+        "id",
+        "possibly_intended",
+        "risk_category",
+        "suspected_behavior",
+        "test_intent",
+        "title"
+      ],
+      "title": "Hypothesis",
+      "type": "object"
+    },
+    "HypothesisSet": {
+      "properties": {
+        "hypotheses": {
+          "items": {
+            "$ref": "#/$defs/Hypothesis"
+          },
+          "title": "Hypotheses",
+          "type": "array"
+        },
+        "rejected": {
+          "items": {
+            "$ref": "#/$defs/RejectedHypothesis"
+          },
+          "title": "Rejected",
+          "type": "array"
+        }
+      },
+      "required": [
+        "hypotheses",
+        "rejected"
+      ],
+      "title": "HypothesisSet",
+      "type": "object"
+    },
+    "Integrity": {
+      "properties": {
+        "problems": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "intact",
+            "changed",
+            "unsealed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "problems",
+        "status"
+      ],
+      "title": "Integrity",
+      "type": "object"
+    },
+    "IntentClaim": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "CHANGE",
+            "PRESERVE"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Quote"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "source_quote",
+        "statement"
+      ],
+      "title": "IntentClaim",
+      "type": "object"
+    },
+    "IntentContract": {
+      "properties": {
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/IntentClaim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "rejected": {
+          "items": {
+            "$ref": "#/$defs/ProposedClaim"
+          },
+          "title": "Rejected",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claims",
+        "rejected"
+      ],
+      "title": "IntentContract",
+      "type": "object"
+    },
+    "Job": {
+      "description": "The one verification this dashboard is running or ran last.",
+      "properties": {
+        "base_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Branch"
+        },
+        "created": {
+          "title": "Created",
+          "type": "number"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exit Code"
+        },
+        "head_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Head Sha"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "last_event_id": {
+          "default": 0,
+          "title": "Last Event Id",
+          "type": "integer"
+        },
+        "output": {
+          "default": "",
+          "title": "Output",
+          "type": "string"
+        },
+        "pr_number": {
+          "title": "Pr Number",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "done",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_branch",
+        "created",
+        "exit_code",
+        "head_sha",
+        "job_id",
+        "last_event_id",
+        "output",
+        "pr_number",
+        "run_id",
+        "status",
+        "step"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "JobEvents": {
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/VerificationEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "job": {
+          "$ref": "#/$defs/Job"
+        },
+        "model_stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Model Stages",
+          "type": "array"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events",
+        "job",
+        "model_stages",
+        "stages"
+      ],
+      "title": "JobEvents",
+      "type": "object"
+    },
+    "ModelUsage": {
+      "properties": {
+        "calls": {
+          "title": "Calls",
+          "type": "integer"
+        },
+        "completion_tokens": {
+          "title": "Completion Tokens",
+          "type": "integer"
+        },
+        "contributor_allowed": {
+          "default": false,
+          "title": "Contributor Allowed",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Models",
+          "type": "object"
+        },
+        "prompt_tokens": {
+          "title": "Prompt Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "calls",
+        "completion_tokens",
+        "contributor_allowed",
+        "endpoint",
+        "models",
+        "prompt_tokens"
+      ],
+      "title": "ModelUsage",
+      "type": "object"
+    },
+    "OrchestrationRecord": {
+      "description": "How the stages were scheduled. The verdict policy never reads this.",
+      "properties": {
+        "engine": {
+          "enum": [
+            "legacy",
+            "langgraph"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "langgraph_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Langgraph Version"
+        },
+        "nodes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "retries": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Retries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "engine",
+        "langgraph_version",
+        "nodes",
+        "retries"
+      ],
+      "title": "OrchestrationRecord",
+      "type": "object"
+    },
+    "OverviewMetrics": {
+      "properties": {
+        "benchmark_sets": {
+          "title": "Benchmark Sets",
+          "type": "integer"
+        },
+        "counts": {
+          "$ref": "#/$defs/DecisionCounts"
+        },
+        "integrity": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Integrity",
+          "type": "object"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Job"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model_calls": {
+          "title": "Model Calls",
+          "type": "integer"
+        },
+        "prs_enabled": {
+          "title": "Prs Enabled",
+          "type": "boolean"
+        },
+        "recent": {
+          "items": {
+            "$ref": "#/$defs/RunSummary"
+          },
+          "title": "Recent",
+          "type": "array"
+        },
+        "root": {
+          "title": "Root",
+          "type": "string"
+        },
+        "tokens": {
+          "title": "Tokens",
+          "type": "integer"
+        },
+        "total_runs": {
+          "title": "Total Runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "benchmark_sets",
+        "counts",
+        "integrity",
+        "job",
+        "model_calls",
+        "prs_enabled",
+        "recent",
+        "root",
+        "tokens",
+        "total_runs"
+      ],
+      "title": "OverviewMetrics",
+      "type": "object"
+    },
+    "Proof": {
+      "properties": {
+        "base_sha": {
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "contested_claim_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Contested Claim Ids",
+          "type": "array"
+        },
+        "diff_sha256": {
+          "title": "Diff Sha256",
+          "type": "string"
+        },
+        "experiments": {
+          "items": {
+            "$ref": "#/$defs/Experiment"
+          },
+          "title": "Experiments",
+          "type": "array"
+        },
+        "explained_probe_claim_ids": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Explained Probe Claim Ids",
+          "type": "object"
+        },
+        "explained_probe_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Explained Probe Ids",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "head_sha": {
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "hypotheses": {
+          "$ref": "#/$defs/HypothesisSet"
+        },
+        "intent": {
+          "$ref": "#/$defs/IntentContract"
+        },
+        "language": {
+          "default": "python",
+          "title": "Language",
+          "type": "string"
+        },
+        "mismatched_probe_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Mismatched Probe Ids",
+          "type": "array"
+        },
+        "model_usage": {
+          "$ref": "#/$defs/ModelUsage"
+        },
+        "orchestration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "proofmerge_version": {
+          "title": "Proofmerge Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "tamper_findings": {
+          "items": {
+            "$ref": "#/$defs/TamperFinding"
+          },
+          "title": "Tamper Findings",
+          "type": "array"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "base_sha",
+        "contested_claim_ids",
+        "diff_sha256",
+        "experiments",
+        "explained_probe_claim_ids",
+        "explained_probe_ids",
+        "findings",
+        "head_sha",
+        "hypotheses",
+        "intent",
+        "language",
+        "mismatched_probe_ids",
+        "model_usage",
+        "orchestration",
+        "proofmerge_version",
+        "run_id",
+        "tamper_findings",
+        "verdict"
+      ],
+      "title": "Proof",
+      "type": "object"
+    },
+    "ProposedClaim": {
+      "description": "A claim as Spark returns it, before the quote check.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "CHANGE",
+            "PRESERVE"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_quote": {
+          "title": "Source Quote",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "source_quote",
+        "statement"
+      ],
+      "title": "ProposedClaim",
+      "type": "object"
+    },
+    "ProposedHypothesis": {
+      "description": "A hypothesis as Spark returns it, before validation.",
+      "properties": {
+        "changed_locations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Changed Locations",
+          "type": "array"
+        },
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "expected_base": {
+          "title": "Expected Base",
+          "type": "string"
+        },
+        "expected_head": {
+          "title": "Expected Head",
+          "type": "string"
+        },
+        "falsification_criteria": {
+          "title": "Falsification Criteria",
+          "type": "string"
+        },
+        "possibly_intended": {
+          "title": "Possibly Intended",
+          "type": "boolean"
+        },
+        "risk_category": {
+          "title": "Risk Category",
+          "type": "string"
+        },
+        "suspected_behavior": {
+          "title": "Suspected Behavior",
+          "type": "string"
+        },
+        "test_intent": {
+          "title": "Test Intent",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed_locations",
+        "claim_id",
+        "expected_base",
+        "expected_head",
+        "falsification_criteria",
+        "possibly_intended",
+        "risk_category",
+        "suspected_behavior",
+        "test_intent",
+        "title"
+      ],
+      "title": "ProposedHypothesis",
+      "type": "object"
+    },
+    "PullRequest": {
+      "properties": {
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "base": {
+          "title": "Base",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "draft": {
+          "title": "Draft",
+          "type": "boolean"
+        },
+        "head": {
+          "title": "Head",
+          "type": "string"
+        },
+        "head_sha": {
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "number": {
+          "title": "Number",
+          "type": "integer"
+        },
+        "older_runs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Older Runs",
+          "type": "array"
+        },
+        "runs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "updated": {
+          "title": "Updated",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "author",
+        "base",
+        "body",
+        "draft",
+        "head",
+        "head_sha",
+        "number",
+        "older_runs",
+        "runs",
+        "state",
+        "title",
+        "updated",
+        "url"
+      ],
+      "title": "PullRequest",
+      "type": "object"
+    },
+    "PullRequests": {
+      "properties": {
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Job"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prs": {
+          "items": {
+            "$ref": "#/$defs/PullRequest"
+          },
+          "title": "Prs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "job",
+        "prs"
+      ],
+      "title": "PullRequests",
+      "type": "object"
+    },
+    "RejectedHypothesis": {
+      "properties": {
+        "hypothesis": {
+          "$ref": "#/$defs/ProposedHypothesis"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "reason"
+      ],
+      "title": "RejectedHypothesis",
+      "type": "object"
+    },
+    "RunDetail": {
+      "properties": {
+        "failures": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Failures",
+          "type": "object"
+        },
+        "logs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ExecutionLog"
+          },
+          "title": "Logs",
+          "type": "object"
+        },
+        "probes": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Probes",
+          "type": "object"
+        },
+        "proof": {
+          "$ref": "#/$defs/Proof"
+        },
+        "replay_command": {
+          "title": "Replay Command",
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/RunSummary"
+        }
+      },
+      "required": [
+        "failures",
+        "logs",
+        "probes",
+        "proof",
+        "replay_command",
+        "summary"
+      ],
+      "title": "RunDetail",
+      "type": "object"
+    },
+    "RunPage": {
+      "properties": {
+        "counts": {
+          "$ref": "#/$defs/DecisionCounts"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "title": "Offset",
+          "type": "integer"
+        },
+        "root": {
+          "title": "Root",
+          "type": "string"
+        },
+        "run_sets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Run Sets",
+          "type": "array"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/RunSummary"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "counts",
+        "limit",
+        "offset",
+        "root",
+        "run_sets",
+        "runs",
+        "total"
+      ],
+      "title": "RunPage",
+      "type": "object"
+    },
+    "RunSummary": {
+      "description": "One row of the run list. `decision` is copied from proof.json, never derived.",
+      "properties": {
+        "base_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Sha"
+        },
+        "benchmark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BenchmarkLabel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "calls": {
+          "default": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "enum": [
+                "PASS",
+                "REVIEW",
+                "BLOCK"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "has_report": {
+          "default": false,
+          "title": "Has Report",
+          "type": "boolean"
+        },
+        "head_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Head Sha"
+        },
+        "hypotheses": {
+          "default": 0,
+          "title": "Hypotheses",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "integrity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Integrity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label_disagrees": {
+          "default": false,
+          "title": "Label Disagrees",
+          "type": "boolean"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Models",
+          "type": "object"
+        },
+        "modified": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modified"
+        },
+        "orchestrator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Orchestrator"
+        },
+        "proof_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proof Path"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "regressions": {
+          "default": 0,
+          "title": "Regressions",
+          "type": "integer"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "tamper": {
+          "default": 0,
+          "title": "Tamper",
+          "type": "integer"
+        },
+        "tokens": {
+          "default": 0,
+          "title": "Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base_sha",
+        "benchmark",
+        "calls",
+        "decision",
+        "endpoint",
+        "error",
+        "has_report",
+        "head_sha",
+        "hypotheses",
+        "id",
+        "integrity",
+        "label_disagrees",
+        "models",
+        "modified",
+        "orchestrator",
+        "proof_path",
+        "reasons",
+        "regressions",
+        "run_id",
+        "tamper",
+        "tokens"
+      ],
+      "title": "RunSummary",
+      "type": "object"
+    },
+    "Session": {
+      "properties": {
+        "api_version": {
+          "default": 1,
+          "title": "Api Version",
+          "type": "integer"
+        },
+        "model_stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Model Stages",
+          "type": "array"
+        },
+        "prs": {
+          "title": "Prs",
+          "type": "boolean"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stages",
+          "type": "array"
+        },
+        "token": {
+          "title": "Token",
+          "type": "string"
+        }
+      },
+      "required": [
+        "api_version",
+        "model_stages",
+        "prs",
+        "stages",
+        "token"
+      ],
+      "title": "Session",
+      "type": "object"
+    },
+    "TamperFinding": {
+      "properties": {
+        "base_test_on_head_outcome": {
+          "anyOf": [
+            {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "ERROR",
+                "TIMEOUT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Test On Head Outcome"
+        },
+        "kind": {
+          "enum": [
+            "DELETED",
+            "SKIPPED",
+            "XFAIL",
+            "ASSERTION_REMOVED",
+            "MODIFIED"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "test_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Name"
+        },
+        "test_path": {
+          "title": "Test Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_test_on_head_outcome",
+        "kind",
+        "test_name",
+        "test_path"
+      ],
+      "title": "TamperFinding",
+      "type": "object"
+    },
+    "Verdict": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "PASS",
+            "REVIEW",
+            "BLOCK"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "scope_limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scope Limitations",
+          "type": "array"
+        },
+        "unresolved_risks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Risks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "reasons",
+        "scope_limitations",
+        "unresolved_risks"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    },
+    "VerificationEvent": {
+      "description": "One step of a verification. Metadata only: no source, prompts, logs or secrets.",
+      "properties": {
+        "data": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Data",
+          "type": "object"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "integer"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "message": {
+          "default": "",
+          "title": "Message",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "started",
+                "retrying",
+                "completed",
+                "skipped"
+              ],
+              "type": "string"
+            },
+            {
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "job.created",
+            "job.fetch_started",
+            "job.fetch_completed",
+            "stage.started",
+            "stage.retrying",
+            "stage.completed",
+            "stage.skipped",
+            "job.verdict_ready",
+            "job.evidence_written",
+            "job.completed",
+            "job.failed"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data",
+        "event_id",
+        "job_id",
+        "message",
+        "run_id",
+        "stage",
+        "status",
+        "timestamp",
+        "type",
+        "version"
+      ],
+      "title": "VerificationEvent",
+      "type": "object"
+    },
+    "VerificationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "exclusiveMinimum": 0,
+          "title": "Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "title": "VerificationRequest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ApiError": {
+      "$ref": "#/$defs/ApiError"
+    },
+    "Benchmarks": {
+      "$ref": "#/$defs/Benchmarks"
+    },
+    "Diagnostics": {
+      "$ref": "#/$defs/Diagnostics"
+    },
+    "Job": {
+      "$ref": "#/$defs/Job"
+    },
+    "JobEvents": {
+      "$ref": "#/$defs/JobEvents"
+    },
+    "OverviewMetrics": {
+      "$ref": "#/$defs/OverviewMetrics"
+    },
+    "PullRequests": {
+      "$ref": "#/$defs/PullRequests"
+    },
+    "RunDetail": {
+      "$ref": "#/$defs/RunDetail"
+    },
+    "RunPage": {
+      "$ref": "#/$defs/RunPage"
+    },
+    "Session": {
+      "$ref": "#/$defs/Session"
+    },
+    "VerificationEvent": {
+      "$ref": "#/$defs/VerificationEvent"
+    },
+    "VerificationRequest": {
+      "$ref": "#/$defs/VerificationRequest"
+    }
+  },
+  "required": [
+    "Session",
+    "OverviewMetrics",
+    "RunPage",
+    "RunDetail",
+    "Benchmarks",
+    "PullRequests",
+    "VerificationRequest",
+    "Job",
+    "JobEvents",
+    "VerificationEvent",
+    "Diagnostics",
+    "ApiError"
+  ],
+  "title": "ProofMergeApi",
+  "type": "object"
+}

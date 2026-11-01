@@ -95,6 +95,7 @@ def test_metadata_and_trusted_install():
     assert 'python-version: ${{ inputs.python-version }}' in ACTION
     assert 'ACTION_PATH: ${{ github.action_path }}' in step('name: Install action code')
     assert 'python -m pip install "$ACTION_PATH"' in script('name: Install action code')
+    assert 'orchestrator:\n' in ACTION and '    default: legacy' in ACTION
     assert 'docker build -t proofmerge-runner:0.1 "$ACTION_PATH/docker/runner"' in script(
         'name: Build sandbox runner'
     )
@@ -165,6 +166,31 @@ def test_verify_captures_exit_and_passes_literal_argv(env):
     assert 'BASE_SHA: ${{ github.event.pull_request.base.sha }}' in verify_step
     assert 'HEAD_SHA: ${{ github.event.pull_request.head.sha }}' in verify_step
     assert 'MODEL_API_KEY: ${{ inputs.model-api-key }}' in verify_step
+    # Selected through the environment, so argv above stays fixed.
+    assert 'PROOFMERGE_ORCHESTRATOR: ${{ inputs.orchestrator }}' in verify_step
+
+
+@pytest.mark.parametrize(('orchestrator', 'target'), [
+    ('legacy', '/action'), ('langgraph', '/action[graph]'), ('$(touch injected)', '/action'),
+])
+def test_install_adds_langgraph_only_when_selected(env, orchestrator, target):
+    fake = Path(env['RUNNER_TEMP']) / 'bin/python'
+    fake.unlink()  # the fixture's symlink to the real interpreter; never write through it
+    fake.write_text(f'#!{sys.executable}\n' + textwrap.dedent('''\
+        import json
+        import os
+        import sys
+        from pathlib import Path
+        Path(os.environ['RUNNER_TEMP'], 'pip-args').write_text(json.dumps(sys.argv[1:]))
+        '''))
+    fake.chmod(0o755)
+    result = run('name: Install action code', {
+        **env, 'ACTION_PATH': '/action', 'ORCHESTRATOR': orchestrator,
+    })
+    assert result.returncode == 0, result.stderr
+    temp = Path(env['RUNNER_TEMP'])
+    assert json.loads((temp / 'pip-args').read_text()) == ['-m', 'pip', 'install', target]
+    assert not (temp / 'injected').exists()
 
 
 @pytest.mark.parametrize(('decision', 'code', 'policy', 'expected'), [

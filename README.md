@@ -346,6 +346,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | PASS strength beyond the receipt (for example mutation checks) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
+| LangGraph orchestrator (`--orchestrator langgraph`): same stages, same plain-code verdict, retries of transient model failures only | Built and tested offline and with real Docker; parity with the default loop checked on nine scenarios; no real Meta API run on it yet; see [docs/orchestration.md](docs/orchestration.md) |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in

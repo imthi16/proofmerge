@@ -1,0 +1,70 @@
+# ProofMerge's own checks. No secrets: nothing here calls a model API.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: lint + unit (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check src tests
+      # Docker tests skip here; the docker job runs them and refuses to skip.
+      - run: python -m pytest -q -p no:cacheprovider -rs
+
+  graph-parity:
+    name: LangGraph orchestrator parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e ".[dev]"
+      # Every pipeline scenario again, through the graph instead of the legacy loop.
+      - run: python -m pytest -q -p no:cacheprovider tests/test_pipeline.py tests/test_graph.py
+        env:
+          PROOFMERGE_ORCHESTRATOR: langgraph
+
+  docker:
+    name: Docker sandbox integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e ".[dev]"
+      - run: docker build -t proofmerge-runner:0.1 docker/runner
+      # PROOFMERGE_REQUIRE_DOCKER=1 turns a missing daemon or image into a failure.
+      - run: >-
+          python -m pytest -q -p no:cacheprovider -rs
+          tests/test_sandbox.py tests/test_pipeline.py tests/test_replay_rerun.py
+        env:
+          PROOFMERGE_REQUIRE_DOCKER: '1'
+      - run: python -m pytest -q -p no:cacheprovider -rs tests/test_pipeline.py -k docker
+        env:
+          PROOFMERGE_REQUIRE_DOCKER: '1'
+          PROOFMERGE_ORCHESTRATOR: langgraph

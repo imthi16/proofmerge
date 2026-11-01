@@ -27,6 +27,10 @@ jobs:
           python-version: '3.13'
 ```
 
+Optional `orchestrator: langgraph` runs the same stages through LangGraph, which
+retries transient model failures; the default `legacy` needs no extra package. Both
+use the same plain-code verdict. See [orchestration.md](orchestration.md).
+
 Set the repository secret `MODEL_API_KEY` to your Meta API key. The default
 `fail-on: block` fails on BLOCK; `fail-on: review` also fails on REVIEW. PASS means
 no regression found within the tested scope. Missing or malformed evidence,

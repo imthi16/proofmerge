@@ -33,6 +33,7 @@ from proofmerge.dashboard_models import ApiError, VerificationRequest
 from proofmerge.dashboard_prs import PrError, PullRequests
 from proofmerge.evidence import Proof
 from proofmerge.manifest import verify_manifest
+from proofmerge.rederive import rederive
 from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
 
 STATIC = Path(__file__).parent / "dashboard_static"
@@ -88,14 +89,16 @@ class _Cache:
             self._trim(self._proofs)
         return proof
 
-    def integrity(self, run_dir: Path) -> dict[str, Any]:
-        key = tuple(_signature(run_dir, p) for p in sorted(run_dir.rglob("*"))
-                    if p.is_file() or p.is_symlink())
+    def integrity(self, run_dir: Path, proof: Proof | None = None) -> dict[str, Any]:
+        # proof.json's own stat is in the key, so a rewritten proof is re-checked.
+        key = (proof is not None,) + tuple(
+            _signature(run_dir, p) for p in sorted(run_dir.rglob("*"))
+            if p.is_file() or p.is_symlink())
         with self._lock:
             hit = self._integrity.get(run_dir)
         if hit and hit[0] == key:
             return hit[1]
-        result = _check_integrity(run_dir)
+        result = _check_integrity(run_dir, proof)
         with self._lock:
             self._integrity[run_dir] = (key, result)
             self._trim(self._integrity)
@@ -110,15 +113,18 @@ def _signature(run_dir: Path, path: Path) -> tuple[str, int, int]:
     return path.relative_to(run_dir).as_posix(), stat.st_size, stat.st_mtime_ns
 
 
-def _check_integrity(run_dir: Path) -> dict[str, Any]:
+def _check_integrity(run_dir: Path, proof: Proof | None = None) -> dict[str, Any]:
     if not (run_dir / "manifest.json").is_file():
         return {"status": "unsealed", "problems": ["No manifest.json in this run."]}
     problems = verify_manifest(run_dir)
+    # A rewritten proof can come with a rewritten manifest; the verdict must still follow.
+    if proof is not None:
+        problems += rederive(proof) or []
     return {"status": "changed" if problems else "intact", "problems": problems}
 
 
-def _integrity(run_dir: Path) -> dict[str, Any]:
-    return CACHE.integrity(run_dir)
+def _integrity(run_dir: Path, proof: Proof | None = None) -> dict[str, Any]:
+    return CACHE.integrity(run_dir, proof)
 
 
 def _label(run_dir: Path) -> dict[str, Any] | None:
@@ -177,7 +183,7 @@ def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
         "tokens": usage.prompt_tokens + usage.completion_tokens,
         "endpoint": getattr(usage, "endpoint", None),
         "models": getattr(usage, "models", {}),
-        "integrity": _integrity(run_dir),
+        "integrity": _integrity(run_dir, proof),
         "benchmark": benchmark,
         "label_disagrees": _disagrees(proof.verdict.decision, benchmark),
         "orchestrator": proof.orchestration.engine if proof.orchestration else None,

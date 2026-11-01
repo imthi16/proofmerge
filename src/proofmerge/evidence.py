@@ -63,6 +63,9 @@ class TamperFinding(BaseModel):
     test_name: str | None  # None when the whole file is affected
     kind: TamperKind
     base_test_on_head_outcome: Outcome | None  # None until the dynamic check runs
+    # The T experiment the outcome came from; None when no base test ran (and in older
+    # proofs). replay recomputes the outcome from that experiment's executions.
+    experiment_id: str | None = None
 
 
 class ModelUsage(BaseModel):
@@ -82,6 +85,19 @@ class OrchestrationRecord(BaseModel):
     langgraph_version: str | None = None
     nodes: list[str] = []  # graph nodes in execution order; empty for the legacy engine
     retries: list[str] = []  # "node: message" for each transient model failure retried
+
+
+class VerdictInputs(BaseModel):
+    """The verdict policy's inputs that are not already evidence elsewhere in the proof.
+
+    With these, `proofmerge replay` recomputes the verdict from the proof alone.
+    """
+
+    errors: list[str]  # stage failures, each a REVIEW reason
+    intent_established: bool  # intent extraction succeeded
+    intent_given: bool  # a non-blank PR description was supplied
+    wonder_checked: bool  # Wonder's probe check succeeded on a base-passing probe
+    tamper_guard_language: str | None = None  # set when the guard could not run (config runner)
 
 
 class Verdict(BaseModel):
@@ -110,3 +126,4 @@ class Proof(BaseModel):
     explained_probe_ids: list[str] = []
     explained_probe_claim_ids: dict[str, str] = {}
     orchestration: OrchestrationRecord | None = None  # None in proofs older than T55
+    verdict_inputs: VerdictInputs | None = None  # None in proofs older than T56

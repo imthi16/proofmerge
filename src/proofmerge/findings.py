@@ -5,19 +5,21 @@ import re
 from proofmerge.evidence import Classification, Experiment, Finding
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.probes import Probe
+from proofmerge.sandbox import ATTEMPTS
 
 
 def classify(experiment: Experiment) -> Classification:
-    """Classify only three agreeing PASS or FAIL runs on each revision."""
+    """Classify only ATTEMPTS agreeing PASS or FAIL runs on each revision."""
     base = [run.outcome for run in experiment.executions if run.revision == "base"]
     head = [run.outcome for run in experiment.executions if run.revision == "head"]
-    if len(base) != 3 or len(head) != 3:
+    if len(base) != ATTEMPTS or len(head) != ATTEMPTS:
         return "INCONCLUSIVE"
+    passed, failed = ("PASS",) * ATTEMPTS, ("FAIL",) * ATTEMPTS
     pairs: dict[tuple[tuple[str, ...], tuple[str, ...]], Classification] = {
-        (("PASS",) * 3, ("FAIL",) * 3): "REGRESSION",
-        (("FAIL",) * 3, ("PASS",) * 3): "POSSIBLE_FIX",
-        (("FAIL",) * 3, ("FAIL",) * 3): "EXISTING_FAILURE",
-        (("PASS",) * 3, ("PASS",) * 3): "NO_DIFFERENCE",
+        (passed, failed): "REGRESSION",
+        (failed, passed): "POSSIBLE_FIX",
+        (failed, failed): "EXISTING_FAILURE",
+        (passed, passed): "NO_DIFFERENCE",
     }
     return pairs.get((tuple(base), tuple(head)), "INCONCLUSIVE")
 

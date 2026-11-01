@@ -59,9 +59,12 @@ REVIEW. [Whole report](docs/assets/report-full-real-light.png).
 
 The report is one static HTML file, with no server, no JavaScript and nothing
 loaded from the network. Every probe, log and command in the run is hashed, and
-`proofmerge replay <proof.json>` checks that nothing changed after the run;
+`proofmerge replay <proof.json>` checks that nothing changed after the run and
+recomputes the findings and the verdict from the recorded executions with the same
+plain-code policy, so an edited verdict fails even if the manifest was rewritten too;
 with `--rerun --repo <repo>` it runs every probe again in Docker and reports
-whether each recorded outcome reproduces.
+whether each recorded outcome reproduces. Recomputation shows the verdict follows
+from the records; only `--rerun` checks the records themselves.
 
 ## The problem
 
@@ -345,6 +348,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Test-tamper guard: original tests run on the patch | Built and tested |
 | Muse Wonder cross-check of claims and probes | Built and tested |
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
+| `replay` recomputes findings and the verdict from the recorded evidence (proofs from T56 on) | Built and tested; an edited and resealed verdict or outcome fails; older proofs get a notice |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested offline; not yet run on GitHub |
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
@@ -403,6 +407,7 @@ src/proofmerge/
   verdict.py     the plain-code verdict rules
   evidence.py    the proof.json format
   manifest.py    evidence hashes and replay checks
+  rederive.py    recomputes findings and the verdict from a proof for replay
   report.py      renders proof.json as report.html
   dashboard.py   the local dashboard server and its trust checks
   dashboard_api.py  the typed /api/v1 data; dashboard_models.py its response models

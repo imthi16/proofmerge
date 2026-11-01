@@ -1129,6 +1129,17 @@
         },
         "verdict": {
           "$ref": "#/$defs/Verdict"
+        },
+        "verdict_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerdictInputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1149,7 +1160,8 @@
         "proofmerge_version",
         "run_id",
         "tamper_findings",
-        "verdict"
+        "verdict",
+        "verdict_inputs"
       ],
       "title": "Proof",
       "type": "object"
@@ -1750,6 +1762,18 @@
           ],
           "title": "Base Test On Head Outcome"
         },
+        "experiment_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experiment Id"
+        },
         "kind": {
           "enum": [
             "DELETED",
@@ -1779,6 +1803,7 @@
       },
       "required": [
         "base_test_on_head_outcome",
+        "experiment_id",
         "kind",
         "test_name",
         "test_path"
@@ -1826,6 +1851,51 @@
         "unresolved_risks"
       ],
       "title": "Verdict",
+      "type": "object"
+    },
+    "VerdictInputs": {
+      "description": "The verdict policy's inputs that are not already evidence elsewhere in the proof.\n\nWith these, `proofmerge replay` recomputes the verdict from the proof alone.",
+      "properties": {
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "intent_established": {
+          "title": "Intent Established",
+          "type": "boolean"
+        },
+        "intent_given": {
+          "title": "Intent Given",
+          "type": "boolean"
+        },
+        "tamper_guard_language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tamper Guard Language"
+        },
+        "wonder_checked": {
+          "title": "Wonder Checked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "errors",
+        "intent_established",
+        "intent_given",
+        "tamper_guard_language",
+        "wonder_checked"
+      ],
+      "title": "VerdictInputs",
       "type": "object"
     },
     "VerificationEvent": {

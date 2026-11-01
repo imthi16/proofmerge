@@ -24,6 +24,7 @@ from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import resolve_orchestrator, run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.project_config import load_config
+from proofmerge.rederive import rederive
 from proofmerge.report import render_html, scope_receipt
 from proofmerge.sandbox import (
     HYPOTHESIS_ID,
@@ -161,6 +162,7 @@ def replay(
     """Check evidence hashes and optionally re-run recorded experiments in Docker."""
     evidence_dir = proof_json.parent
     problems = verify_manifest(evidence_dir)
+    rederived: list[str] | None = None
     try:
         evidence_sha256(evidence_dir, proof_json.name)
         proof = Proof.model_validate_json(proof_json.read_text())
@@ -171,6 +173,9 @@ def replay(
                     problems.append(f"Probe hash mismatch: {experiment.test_source_path}.")
             except ManifestError as error:
                 problems.append(str(error))
+        # Hashes are not signatures: also check the verdict follows from the evidence.
+        rederived = rederive(proof)
+        problems.extend(rederived or ())
     except (OSError, ValueError) as error:
         problems.append(f"Cannot read proof: {error}.")
     if problems:
@@ -179,6 +184,10 @@ def replay(
         raise typer.Exit(1)
     manifest = json.loads((evidence_dir / "manifest.json").read_text())
     typer.echo(f"evidence intact: {len(manifest['files'])} files")
+    if rederived is None:
+        typer.echo("verdict not recomputed: this proof predates recorded verdict inputs")
+    else:
+        typer.echo(f"verdict recomputed from the evidence: {proof.verdict.decision}")
     if rerun:
         try:
             reproduced = _replay_experiments(proof, evidence_dir, repo)

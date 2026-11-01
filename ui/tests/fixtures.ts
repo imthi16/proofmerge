@@ -45,6 +45,7 @@ export function runDetail(decision: "PASS" | "REVIEW" | "BLOCK" = "REVIEW"): Run
       model_usage: { calls: 3, prompt_tokens: 20, completion_tokens: 10, endpoint: null, models: {}, contributor_allowed: false },
       contested_claim_ids: [], mismatched_probe_ids: [], explained_probe_ids: [], explained_probe_claim_ids: {},
       orchestration: { engine: "legacy", langgraph_version: null, nodes: [], retries: [] },
+      verdict_inputs: null,
     },
     probes: { H1: `def test_x():\n    assert "${HOSTILE}"` },
     failures: { H1: ["E   assert 1 == 2"] },

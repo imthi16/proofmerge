@@ -299,6 +299,7 @@ export interface Proof {
   run_id: string;
   tamper_findings: TamperFinding[];
   verdict: Verdict;
+  verdict_inputs: VerdictInputs | null;
 }
 /**
  * A Spark-written probe for one hypothesis, and every run of it.
@@ -455,6 +456,7 @@ export interface OrchestrationRecord {
  */
 export interface TamperFinding {
   base_test_on_head_outcome: ("PASS" | "FAIL" | "ERROR" | "TIMEOUT") | null;
+  experiment_id: string | null;
   kind: "DELETED" | "SKIPPED" | "XFAIL" | "ASSERTION_REMOVED" | "MODIFIED";
   test_name: string | null;
   test_path: string;
@@ -468,6 +470,21 @@ export interface Verdict {
   reasons: string[];
   scope_limitations: string[];
   unresolved_risks: string[];
+}
+/**
+ * The verdict policy's inputs that are not already evidence elsewhere in the proof.
+ *
+ * With these, `proofmerge replay` recomputes the verdict from the proof alone.
+ *
+ * This interface was referenced by `ProofMergeApi`'s JSON-Schema
+ * via the `definition` "VerdictInputs".
+ */
+export interface VerdictInputs {
+  errors: string[];
+  intent_established: boolean;
+  intent_given: boolean;
+  tamper_guard_language: string | null;
+  wonder_checked: boolean;
 }
 /**
  * This interface was referenced by `ProofMergeApi`'s JSON-Schema

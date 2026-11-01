@@ -10,8 +10,10 @@ and a human decide what merges. Flag a violation of any rule below as at least P
 
 ## Deterministic verdict authority
 
-- Every production verdict must come from `proofmerge.verdict.decide()`, called
-  from the `deterministic_decide` stage in `pipeline.py`.
+- Every production verdict must come from `proofmerge.verdict.decide()`, reached
+  through `verdict.adjudicate()` from the `deterministic_decide` stage in
+  `pipeline.py`. `proofmerge replay` recomputes it through the same function; flag
+  any verdict logic added outside `verdict.py`, which would break that recomputation.
 - Flag any code path (a LangGraph node or edge, the CLI, the GitHub Action, a model
   reply) that constructs, edits or overrides a `Verdict`, or feeds `decide()` a
   model's opinion as if it were executed evidence.

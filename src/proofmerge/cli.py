@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
 from proofmerge.dashboard import make_server
+from proofmerge.dashboard_events import JsonlEventSink
 from proofmerge.evidence import Experiment, Proof
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
@@ -35,6 +36,7 @@ from proofmerge.sandbox import (
     run_experiment,
     runner_dockerfile_path,
 )
+from proofmerge.telemetry import fan_out, verify_span
 
 app = typer.Typer()
 
@@ -341,9 +343,22 @@ def verify(
             "Both run the same stages and the same deterministic verdict policy."
         ),
     ] = None,
+    events_file: Annotated[
+        Path | None,
+        typer.Option(
+            hidden=True,
+            help="Append stage progress as JSON lines here (the dashboard reads it). "
+            "Must be outside the evidence directory; it is not evidence.",
+        ),
+    ] = None,
 ) -> None:
     """Verify base..head and write proof.json, report.html and a hashed manifest."""
+    sink = None
     try:
+        if events_file is not None and events_file.resolve().is_relative_to(
+            evidence_dir.resolve()
+        ):
+            raise ValueError("--events-file must be outside the evidence directory")
         engine = resolve_orchestrator(orchestrator)
         context = get_context(repo, base, head)
         check_diff(context)
@@ -356,10 +371,20 @@ def verify(
             client = MetaClient(max_calls=budget)
         except MetaError as error:
             client = MetaClient(completions=_UnavailableCompletions(error), max_calls=budget)
-        proof = run_verify(repo, base, head, intent, evidence_dir, client, orchestrator=engine)
+        sink = JsonlEventSink(events_file) if events_file is not None else None
+        with verify_span(evidence_dir.name, engine) as telemetry:
+            observer = fan_out(sink, telemetry.observer if telemetry else None)
+            extra = {} if observer is None else {"observer": observer}
+            proof = run_verify(repo, base, head, intent, evidence_dir, client,
+                               orchestrator=engine, **extra)
+            if telemetry:
+                telemetry.finish(proof.verdict.decision, client.calls, proof.language)
     except (ContextError, ValueError, OSError) as error:
         typer.echo(f"verify failed: {error}", err=True)
         raise typer.Exit(1) from None
+    finally:
+        if sink is not None:
+            sink.close()
     typer.echo(f"verdict: {proof.verdict.decision}")
     for reason in proof.verdict.reasons:
         typer.echo(reason)

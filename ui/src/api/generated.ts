@@ -40,6 +40,7 @@ export interface BenchmarkSet {
   id: string;
   kind: "run" | "baselines";
   model: string | null;
+  run_prefix: string;
 }
 /**
  * This interface was referenced by `ProofMergeApi`'s JSON-Schema

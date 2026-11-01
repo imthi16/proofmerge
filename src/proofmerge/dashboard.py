@@ -38,6 +38,9 @@ from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
 STATIC = Path(__file__).parent / "dashboard_static"
 MAX_RUNS = 2000
 MAX_LOG = 6000  # characters kept from the end of each execution's stdout and stderr
+# The id of a run whose proof.json sits in the dashboard folder itself. Not ".", which
+# URLs normalise away (/runs/. is /runs/). A subfolder with this exact name wins.
+ROOT_RUN = "(root)"
 MAX_STREAMS = 8  # concurrent server-sent event streams; each holds a thread
 # Control Center routes: the server answers them with the app shell, whose router
 # reads the path. /legacy keeps the previous dashboard reachable during the migration.
@@ -136,7 +139,11 @@ def scan(root: Path) -> dict[str, Path]:
         run_dir = proof.parent.resolve()
         # rglob does not follow directory symlinks, but a symlinked proof.json could point out.
         if proof.is_file() and not proof.is_symlink() and run_dir.is_relative_to(root):
-            runs[run_dir.relative_to(root).as_posix() or "."] = run_dir
+            relative = run_dir.relative_to(root).as_posix()
+            runs[relative] = run_dir
+    if "." in runs:
+        runs.setdefault(ROOT_RUN, runs["."])
+        del runs["."]
     return runs
 
 
@@ -202,7 +209,10 @@ def _benchmarks(root: Path) -> list[dict[str, Any]]:
             continue
         meta = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
         found.append({
-            "id": path.parent.resolve().relative_to(root.resolve()).as_posix() or ".",
+            "id": ROOT_RUN if (rel := path.parent.resolve().relative_to(root.resolve()).as_posix()) == "."
+            else rel,
+            # Candidate runs live next to results.json: "<id>/<name>", or "<name>" at the root.
+            "run_prefix": "" if rel == "." else f"{rel}/",
             "kind": kind, "git_sha": meta.get("git_sha"), "date": meta.get("date"),
             "model": meta.get("spark_model"), "candidates": rows,
         })

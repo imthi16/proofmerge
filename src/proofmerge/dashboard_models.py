@@ -120,6 +120,7 @@ class BenchmarkCandidate(BaseModel):
 
 class BenchmarkSet(BaseModel):
     id: str
+    run_prefix: str = ""  # a candidate's run id is run_prefix + its name
     kind: Literal["run", "baselines"]
     git_sha: str | None = None
     date: str | None = None

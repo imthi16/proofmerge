@@ -113,6 +113,27 @@ test("a PR verification streams live stages, then links its evidence", async ({ 
   await noHorizontalScroll(page);
 });
 
+test("the PR page follows a run it did not start and re-enables Verify", async ({ page }) => {
+  await page.goto("/pull-requests?pr=12");
+  const current = page.locator(".detail .run-links").first().locator("li");
+  await expect(current.first()).toBeVisible();  // count only once the detail has loaded
+  const before = await current.count();
+  // Start from outside this page (as another tab would), then stay here.
+  const status = await page.evaluate(async () => {
+    const session = await (await fetch("/api/v1/session")).json();
+    const response = await fetch("/api/v1/verifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-ProofMerge-Token": session.token },
+      body: JSON.stringify({ number: 12 }),
+    });
+    return response.status;
+  });
+  expect(status).toBe(202);
+  await expect(page.getByRole("button", { name: /Verifying PR #12/ })).toBeDisabled({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Verify this PR" })).toBeEnabled({ timeout: 20_000 });
+  await expect(current).toHaveCount(before + 1);
+});
+
 test("a request from another origin cannot start a run", async ({ request }) => {
   const forged = await request.post("/api/v1/verifications", {
     headers: { "Content-Type": "application/json", Origin: "https://evil.example" },

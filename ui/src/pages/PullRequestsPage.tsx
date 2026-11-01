@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { paths, startVerification } from "../api/client";
-import type { PullRequest, PullRequests, RunPage } from "../api/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getJSON, paths, startVerification } from "../api/client";
+import type { Job, PullRequest, PullRequests, RunPage } from "../api/types";
 import { useApi } from "../api/useApi";
 import { Link, routes, useRouter } from "../app/router";
 import { useSession } from "../app/session";
@@ -33,14 +33,54 @@ function RunLinks({ ids, decisions }: { ids: string[]; decisions: Map<string, st
 export function PullRequestsPage() {
   const session = useSession();
   const { query, navigate } = useRouter();
-  const [refresh, setRefresh] = useState(false);
-  const prs = useApi<PullRequests>(session?.prs ? paths.pullRequests(refresh) : null);
+  const prs = useApi<PullRequests>(session?.prs ? paths.pullRequests() : null);
   // Decisions for the run links; each is proof.json's recorded verdict.
   const runs = useApi<RunPage>(session?.prs ? paths.runs(new URLSearchParams({ limit: "500", sort: "recent" })) : null);
   const [text, setText] = useState("");
   const [asking, setAsking] = useState(false);
   const [posting, setPosting] = useState(false);
   const [failure, setFailure] = useState("");
+
+  const [reloading, setReloading] = useState(false);
+  const reloadFromGitHub = () => {
+    // One fresh `gh pr list`; later reads (and polling) use the server's short cache.
+    setReloading(true);
+    getJSON<PullRequests>(paths.pullRequests(true))
+      .catch(() => undefined)
+      .finally(() => {
+        setReloading(false);
+        prs.reload();
+      });
+  };
+
+  // While a verification runs, poll; when it ends, refresh PRs and run decisions so the
+  // Verify button re-enables and the new run appears.
+  const status = prs.data?.job?.status;
+  const previous = useRef(status);
+  const { reload: reloadPrs, data: prData } = prs;
+  const reloadRuns = runs.reload;
+  useEffect(() => {
+    if (previous.current === "running" && status && status !== "running") reloadRuns();
+    previous.current = status;
+    if (status !== "running") return;
+    const timer = window.setTimeout(reloadPrs, 3000);
+    return () => window.clearTimeout(timer);
+  }, [status, prData, reloadPrs, reloadRuns]);
+
+  // A run started elsewhere (another tab) is noticed through the cheap active-job check.
+  const shownJob = prData?.job ? `${prData.job.job_id}:${prData.job.status}` : "";
+  useEffect(() => {
+    if (!session?.prs || status === "running") return;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      getJSON<Job | null>(paths.activeJob)
+        .then((job) => {
+          if (job && `${job.job_id}:${job.status}` !== shownJob) reloadPrs();
+        })
+        .catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [session?.prs, status, shownJob, reloadPrs]);
 
   const decisions = useMemo(
     () => new Map((runs.data?.runs ?? []).map((r) => [r.id, r.decision] as const)),
@@ -121,10 +161,10 @@ export function PullRequestsPage() {
         <button
           type="button"
           className="btn"
-          onClick={() => (refresh ? prs.reload() : setRefresh(true))}
-          disabled={prs.loading}
+          onClick={reloadFromGitHub}
+          disabled={reloading}
         >
-          {prs.loading ? "Loading…" : "Reload from GitHub"}
+          {reloading ? "Loading…" : "Reload from GitHub"}
         </button>
         <span className="muted">
           {list.length} of {prs.data.prs.length}

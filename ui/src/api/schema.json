@@ -177,6 +177,11 @@
           ],
           "default": null,
           "title": "Model"
+        },
+        "run_prefix": {
+          "default": "",
+          "title": "Run Prefix",
+          "type": "string"
         }
       },
       "required": [
@@ -185,7 +190,8 @@
         "git_sha",
         "id",
         "kind",
-        "model"
+        "model",
+        "run_prefix"
       ],
       "title": "BenchmarkSet",
       "type": "object"

@@ -25,6 +25,34 @@ function csv(rows: RunSummary[]): string {
   return [cols.join(","), ...lines].join("\n") + "\n";
 }
 
+const EXPORT_PAGE = 500; // the server's largest page
+
+/** Every run matching the filters, fetched page by page; refuses a partial result. */
+export async function allMatchingRuns(
+  filters: URLSearchParams,
+  get: (url: string) => Promise<RunPageData> = getJSON,
+): Promise<{ page: RunPageData; rows: RunSummary[] }> {
+  const query = new URLSearchParams(filters);
+  query.set("limit", String(EXPORT_PAGE));
+  const rows: RunSummary[] = [];
+  let first: number | null = null;
+  let page: RunPageData;
+  do {
+    query.set("offset", String(rows.length));
+    page = await get(paths.runs(query));
+    first ??= page.total;
+    // Runs added or removed between pages would shift offsets and skip or repeat rows.
+    if (page.total !== first) {
+      throw new Error("The run list changed during export; export again.");
+    }
+    rows.push(...page.runs);
+  } while (page.runs.length > 0 && rows.length < page.total);
+  if (rows.length !== page.total) {
+    throw new Error(`Exported ${rows.length} of ${page.total} runs; export again.`);
+  }
+  return { page, rows };
+}
+
 export function RunsPage() {
   const { query, navigate } = useRouter();
   const params = useMemo(() => {
@@ -70,12 +98,18 @@ export function RunsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const [exportError, setExportError] = useState("");
   const exportCsv = async () => {
-    const all = new URLSearchParams(params);
-    all.set("limit", "500");
-    all.delete("offset");
-    const page = await getJSON<RunPageData>(paths.runs(all));
-    const url = URL.createObjectURL(new Blob([csv(page.runs)], { type: "text/csv" }));
+    setExportError("");
+    let page: RunPageData;
+    let rows: RunSummary[];
+    try {
+      ({ page, rows } = await allMatchingRuns(params));
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : String(reason));
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([csv(rows)], { type: "text/csv" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `proofmerge-runs-${page.root}.csv` });
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -143,6 +177,7 @@ export function RunsPage() {
           Export CSV
         </button>
       </div>
+      {exportError ? <ErrorBox>{exportError}</ErrorBox> : null}
 
       {data.total === 0 ? (
         anyFilter ? (

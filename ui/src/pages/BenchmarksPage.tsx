@@ -155,8 +155,8 @@ export function BenchmarksPage() {
                     <ul className="reasons">
                       {misses.map((r) => (
                         <li key={r.name}>
-                          {known.has(`${b.id}/${r.name}`) ? (
-                            <Link to={routes.run(`${b.id}/${r.name}`)}>{r.name}</Link>
+                          {known.has(`${b.run_prefix}${r.name}`) ? (
+                            <Link to={routes.run(`${b.run_prefix}${r.name}`)}>{r.name}</Link>
                           ) : (
                             <strong>{r.name}</strong>
                           )}

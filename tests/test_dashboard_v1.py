@@ -440,3 +440,31 @@ def test_legacy_endpoints_still_answer_beside_v1(jobs) -> None:
     assert fetch(base + "/api/prs")[0] == 200
     pr = get(base, "/api/v1/pull-requests")[1]["prs"][0]
     assert pr["number"] == 7 and pr["runs"] == ["tenant-cache-take2"]
+
+
+def test_a_run_at_the_root_has_a_url_safe_id(tmp_path: Path) -> None:
+    # "." would be normalised out of /runs/. and /api/v1/runs/. by browsers.
+    root = tmp_path / "single"
+    shutil.copytree(DEMO / "intended-change", root)
+    (root / "results.json").write_text(json.dumps({"candidates": {
+        "x": {"label": "BLOCK", "decision": "BLOCK"}}}))
+    httpd, base = serve(root)
+    try:
+        _, page = get(base, "/api/v1/runs", RunPage)
+        assert [r.id for r in page.runs] == ["(root)"]
+        status, detail = get(base, "/api/v1/runs/%28root%29", RunDetail)
+        assert status == 200 and detail.summary.id == "(root)"
+        assert fetch(base + "/api/v1/runs/(root)/report")[0] == 200
+        assert fetch(base + "/api/v1/runs/.")[0] == 404  # "." is no longer an id
+        _, bench = get(base, "/api/v1/benchmarks", Benchmarks)
+        assert (bench.benchmarks[0].id, bench.benchmarks[0].run_prefix) == ("(root)", "")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_benchmark_candidates_link_to_runs_by_prefix() -> None:
+    found = dashboard_api.benchmarks(Path(__file__).parent.parent / "bench" / "results")
+    run3 = next(b for b in found.benchmarks if b.id == "2026-10-30-run3")
+    assert run3.run_prefix == "2026-10-30-run3/"
+    assert f"{run3.run_prefix}{run3.candidates[0].name}" in found.known_runs

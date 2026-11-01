@@ -69,7 +69,8 @@ class PythonProject(BaseModel):
 
     `root` None and an empty `pythonpath` keep the historical `src` plus repository
     root layout. `install` defaults to false. When it is true, packages come from
-    the base commit's `uv.lock` or a hashed requirements file.
+    the base commit's `uv.lock`, `poetry.lock`, `Pipfile.lock` or a hashed
+    requirements file.
     """
 
     model_config = {"extra": "forbid"}
@@ -110,8 +111,15 @@ class PythonProject(BaseModel):
         if self.install and not self.lockfile and not self.requirements:
             root = self.root or ""
             self.lockfile = f"{root}/uv.lock" if root else "uv.lock"
-        if self.lockfile and self.lockfile != "uv.lock" and not self.lockfile.endswith("/uv.lock"):
-            raise ValueError("lockfile must be a uv.lock path")
+        kind = lockfile_kind(self.lockfile) if self.lockfile else None
+        if self.lockfile and kind is None:
+            raise ValueError("lockfile must be a uv.lock, poetry.lock or Pipfile.lock path")
+        if kind == "poetry.lock" and not self.pyproject:
+            # poetry.lock does not list the project's own dependencies; pyproject does.
+            parent = self.lockfile.rpartition("/")[0]
+            self.pyproject = f"{parent}/pyproject.toml" if parent else "pyproject.toml"
+        if kind == "Pipfile.lock" and self.pyproject:
+            raise ValueError("pyproject is not used with Pipfile.lock; remove it")
         if self.requirements and not self.requirements.endswith(".txt"):
             raise ValueError("requirements must be a .txt file")
         pyproject_ok = self.pyproject in ("", "pyproject.toml") or self.pyproject.endswith(
@@ -120,6 +128,15 @@ class PythonProject(BaseModel):
         if not pyproject_ok:
             raise ValueError("pyproject must be a pyproject.toml path")
         return self
+
+
+LOCKFILE_KINDS = ("uv.lock", "poetry.lock", "Pipfile.lock")
+
+
+def lockfile_kind(path: str) -> str | None:
+    """The lockfile format a path names, by its file name; None when unsupported."""
+    name = path.rpartition("/")[2]
+    return name if name in LOCKFILE_KINDS else None
 
 
 def normalize_repo_path(value: str, *, allow_root: bool) -> str:

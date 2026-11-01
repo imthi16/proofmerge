@@ -14,7 +14,7 @@ import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from proofmerge.project_config import PythonProject
+from proofmerge.project_config import PythonProject, lockfile_kind
 
 DEFAULT_CONTAINER_PYTHONPATH = "/work/code/src:/work/code"
 _SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
@@ -390,7 +390,17 @@ def requirements_for_base(
     if project.pyproject:
         pyproject = read_commit_file(repo, base_sha, project.pyproject).decode("utf-8")
     lock = read_commit_file(repo, base_sha, project.lockfile).decode("utf-8")
-    return plan_uv_lock(lock, pyproject, project.python_version)
+    kind = lockfile_kind(project.lockfile)
+    if kind == "uv.lock":
+        return plan_uv_lock(lock, pyproject, project.python_version)
+    # Imported here: lockfiles imports its shared helpers from this module.
+    from proofmerge.lockfiles import plan_pipfile_lock, plan_poetry_lock
+
+    if kind == "poetry.lock":
+        return plan_poetry_lock(lock, pyproject, project.python_version)
+    if kind == "Pipfile.lock":
+        return plan_pipfile_lock(lock, project.python_version)
+    raise LayoutError(f"unsupported lockfile {project.lockfile}")
 
 
 def parse_requirements(text: str) -> list[tuple[str, str, list[str]]]:

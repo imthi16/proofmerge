@@ -23,9 +23,9 @@ On a `pull_request` event GitHub uses the workflow file from the merge of the pu
 root = "apps/api"          # import path, repository-relative. "." is the repo root.
 pythonpath = ["libs/shared"]  # extra import paths, optional
 install = false            # default. true installs third-party packages
-lockfile = "apps/api/uv.lock"       # used when install is true; default is <root>/uv.lock
+lockfile = "apps/api/uv.lock"       # uv.lock, poetry.lock or Pipfile.lock; default <root>/uv.lock
 pyproject = "apps/api/pyproject.toml"  # optional cross-check against the lockfile
-# requirements = "requirements.txt"  # alternative to uv.lock; every line must be name==version with sha256 hashes
+# requirements = "requirements.txt"  # alternative to a lockfile; every line must be name==version with sha256 hashes
 python_version = "3.13"    # runner image, used only to evaluate lockfile markers
 ```
 
@@ -35,7 +35,7 @@ python_version = "3.13"    # runner image, used only to evaluate lockfile marker
 
 `install = false` is the default. Nothing is downloaded, and probe containers stay on `--network none`.
 
-`install = true` reads the lockfile or requirements file from the **base** commit, not from the head tree and not by executing project code. A `uv.lock` is reduced to `name==version` lines with the sha256 of every published wheel. The project itself is not installed; the exported tree stays on `PYTHONPATH`. Path, git, and URL packages are refused. Packages with no wheel are refused, so an sdist cannot run `setup.py`. Marker expressions are evaluated for CPython on Linux at `python_version`, using this machine's CPU architecture because a native container shares it. An unknown marker variable fails the install.
+`install = true` reads the lockfile or requirements file from the **base** commit, not from the head tree and not by executing project code. A `uv.lock` is reduced to `name==version` lines with the sha256 of every published wheel. A `poetry.lock` is read the same way, starting from the main dependencies in the base commit's `pyproject.toml` (`[project].dependencies` or `[tool.poetry.dependencies]`; `pyproject` defaults to the file next to the lockfile): dev groups and optional dependencies without a requested extra are not installed, and only wheel hashes are kept. A `Pipfile.lock` is already resolved: its `default` packages are installed and `develop` is not. Its hashes do not say which file is a wheel, so an sdist-only package fails the install (`--only-binary=:all:`) instead of running `setup.py`. Every format must use one https package index. The project itself is not installed; the exported tree stays on `PYTHONPATH`. Path, git, and URL packages are refused. Packages with no wheel are refused, so an sdist cannot run `setup.py`. Marker expressions are evaluated for CPython on Linux at `python_version`, using this machine's CPU architecture because a native container shares it. An unknown marker variable fails the install.
 
 The install runs in its own container: network is `bridge` (so the index in the lockfile can be reached), capabilities are dropped, the host environment is not passed (`MODEL_API_KEY` is not in the container), the root filesystem is read-only, and the dependency directory is the only writable mount. `pip install` is invoked with `--require-hashes`, `--only-binary=:all:`, and `--no-deps`. Probe containers then mount that directory read-only at `/deps` and still use `--network none`. The install container runs as the host's own non-root UID:GID, so a non-root CI runner owns the installed files and can make them readable for the probe user and delete them afterwards; on a root host it runs as `65534:65534`, never as root.
 
@@ -56,7 +56,17 @@ repository-relative and read from the base commit.
 | Monorepo, one service (`services/api/app/`) | `[python]` with `root = "services/api"` |
 | Monorepo with shared code (`apps/web/` does `import shared`, which lives at `libs/shared/`) | `root = "apps/web"`, `pythonpath = ["libs"]` |
 | Third-party imports locked with uv | add `install = true`; `lockfile` defaults to `<root>/uv.lock` |
+| Third-party imports locked with Poetry | `install = true`, `lockfile = "<root>/poetry.lock"` (reads the `pyproject.toml` beside it) |
+| Third-party imports locked with Pipenv | `install = true`, `lockfile = "<root>/Pipfile.lock"` |
 | Third-party imports locked with pip-tools or `pip freeze --require-hashes` | `install = true`, `requirements = "requirements.txt"` (every line `name==version --hash=sha256:...`) |
+
+```toml
+# Example: a Poetry project, with its pyproject.toml next to the lockfile.
+[python]
+root = "backend"
+install = true
+lockfile = "backend/poetry.lock"
+```
 
 ```toml
 # Example: a service in a monorepo that imports a shared library and needs its locked packages.
@@ -96,9 +106,9 @@ not that verdict.
 
 ## Not supported yet
 
-- `poetry.lock`, `Pipfile.lock` and unhashed `requirements.txt` cannot be installed. Export
-  hashed requirements instead (for example `poetry export --format requirements.txt`
-  from the poetry-plugin-export plugin, which writes hashes by default), or keep
-  `install = false`.
+- Unhashed `requirements.txt` and lockfiles of other tools (PDM, Conda) cannot be
+  installed. Export hashed requirements instead, or keep `install = false`.
+- In `poetry.lock`, a dependency's `python = "..."` constraint is not evaluated; its
+  `markers` are. A package that turns out not to install fails as REVIEW.
 - Packages without a wheel (sdist only), and path, git or URL dependencies, are refused.
 - Only one `[python]` table: one project root per repository.

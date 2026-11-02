@@ -1,8 +1,8 @@
 /* ProofMerge dashboard: an evidence ledger. Dark ink by default, light on request.
    Verdict hues carry meaning only (PASS / REVIEW / BLOCK); the periwinkle brand marks interaction. */
-@font-face { font-family: "Geist"; src: url("/static/vendor/geist-latin-wght-normal.woff2") format("woff2");
+@font-face { font-family: "Geist"; src: url("/static/legacy/vendor/geist-latin-wght-normal.woff2") format("woff2");
   font-weight: 100 900; font-display: swap; }
-@font-face { font-family: "Geist Mono"; src: url("/static/vendor/geist-mono-latin-wght-normal.woff2") format("woff2");
+@font-face { font-family: "Geist Mono"; src: url("/static/legacy/vendor/geist-mono-latin-wght-normal.woff2") format("woff2");
   font-weight: 100 900; font-display: swap; }
 
 :root {

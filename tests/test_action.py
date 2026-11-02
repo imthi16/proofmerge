@@ -95,6 +95,7 @@ def test_metadata_and_trusted_install():
     assert 'python-version: ${{ inputs.python-version }}' in ACTION
     assert 'ACTION_PATH: ${{ github.action_path }}' in step('name: Install action code')
     assert 'python -m pip install "$ACTION_PATH"' in script('name: Install action code')
+    assert 'orchestrator:\n' in ACTION and '    default: legacy' in ACTION
     assert 'docker build -t proofmerge-runner:0.1 "$ACTION_PATH/docker/runner"' in script(
         'name: Build sandbox runner'
     )
@@ -106,8 +107,17 @@ def test_metadata_and_trusted_install():
     assert labels.index('uses: actions/upload-artifact@v4') < labels.index(
         'name: Post or update verdict'
     ) < labels.index('name: Apply verdict policy')
+    unguarded = {'name: Fail when the model key is missing'}
     for part in STEPS[1:]:
+        if part.splitlines()[0] in unguarded:
+            assert "missing_key == 'fail'" in part
+            continue
         assert "steps.credentials.outputs.enabled == 'true'" in part
+    assert 'fail-on-missing-key:\n' in ACTION
+    missing_key = ACTION.split('fail-on-missing-key:', 1)[1].split('runs:', 1)[0]
+    assert "default: 'false'" in missing_key
+    assert 'python-root' not in ACTION
+    assert '--config' not in ACTION
     for part in STEPS:
         if '      run: |\n' in part:
             assert '${{' not in part.split('      run: |\n')[1]
@@ -116,16 +126,52 @@ def test_metadata_and_trusted_install():
 def test_empty_key_skips_cleanly(env):
     result = run('name: Check credentials', {**env, 'MODEL_API_KEY': ''})
     assert result.returncode == 0
-    assert result.stdout == 'skipped: no MODEL_API_KEY (fork PR?)\n'
-    assert Path(env['GITHUB_OUTPUT']).read_text() == 'enabled=false\n'
+    assert result.stdout == (
+        'skipped: no MODEL_API_KEY (fork PR?)\n'
+        '::warning::ProofMerge skipped because MODEL_API_KEY is not set. '
+        'No verdict was produced.\n'
+    )
+    output = Path(env['GITHUB_OUTPUT']).read_text()
+    assert 'enabled=false\n' in output
+    assert 'skipped=true\n' in output
+    assert 'missing_key=warn\n' in output
+    skipped = json.loads((Path(env['RUNNER_TEMP']) / 'proofmerge-evidence/skipped.json').read_text())
+    assert skipped == {
+        'status': 'skipped',
+        'reason': 'MODEL_API_KEY is not set',
+        'verdict': None,
+    }
     assert not Path(env['GH_CALLS']).exists()
+
+
+def test_missing_key_can_fail_the_job(env):
+    result = run('name: Check credentials', {
+        **env, 'MODEL_API_KEY': '', 'FAIL_ON_MISSING_KEY': 'true',
+    })
+    assert result.returncode == 0, result.stderr
+    assert 'missing_key=fail' in Path(env['GITHUB_OUTPUT']).read_text()
+    failed = run('name: Fail when the model key is missing', env)
+    assert failed.returncode == 1
+    assert 'MODEL_API_KEY is not set' in failed.stdout
+    assert 'not a code verdict' in failed.stdout
+
+
+def test_invalid_missing_key_flag_fails(env):
+    result = run('name: Check credentials', {
+        **env, 'MODEL_API_KEY': 'fake-secret', 'FAIL_ON_MISSING_KEY': 'yes',
+    })
+    assert result.returncode == 1
+    assert 'fake-secret' not in result.stdout + result.stderr
+    assert 'invalid fail-on-missing-key' in result.stderr
 
 
 def test_present_key_is_not_printed(env):
     result = run('name: Check credentials', {**env, 'MODEL_API_KEY': 'fake-secret'})
     assert result.returncode == 0
     assert 'fake-secret' not in result.stdout + result.stderr
-    assert Path(env['GITHUB_OUTPUT']).read_text() == 'enabled=true\n'
+    assert Path(env['GITHUB_OUTPUT']).read_text() == (
+        'enabled=true\nskipped=false\nmissing_key=ok\n'
+    )
 
 
 def test_pr_body_is_env_data(env):
@@ -165,6 +211,31 @@ def test_verify_captures_exit_and_passes_literal_argv(env):
     assert 'BASE_SHA: ${{ github.event.pull_request.base.sha }}' in verify_step
     assert 'HEAD_SHA: ${{ github.event.pull_request.head.sha }}' in verify_step
     assert 'MODEL_API_KEY: ${{ inputs.model-api-key }}' in verify_step
+    # Selected through the environment, so argv above stays fixed.
+    assert 'PROOFMERGE_ORCHESTRATOR: ${{ inputs.orchestrator }}' in verify_step
+
+
+@pytest.mark.parametrize(('orchestrator', 'target'), [
+    ('legacy', '/action'), ('langgraph', '/action[graph]'), ('$(touch injected)', '/action'),
+])
+def test_install_adds_langgraph_only_when_selected(env, orchestrator, target):
+    fake = Path(env['RUNNER_TEMP']) / 'bin/python'
+    fake.unlink()  # the fixture's symlink to the real interpreter; never write through it
+    fake.write_text(f'#!{sys.executable}\n' + textwrap.dedent('''\
+        import json
+        import os
+        import sys
+        from pathlib import Path
+        Path(os.environ['RUNNER_TEMP'], 'pip-args').write_text(json.dumps(sys.argv[1:]))
+        '''))
+    fake.chmod(0o755)
+    result = run('name: Install action code', {
+        **env, 'ACTION_PATH': '/action', 'ORCHESTRATOR': orchestrator,
+    })
+    assert result.returncode == 0, result.stderr
+    temp = Path(env['RUNNER_TEMP'])
+    assert json.loads((temp / 'pip-args').read_text()) == ['-m', 'pip', 'install', target]
+    assert not (temp / 'injected').exists()
 
 
 @pytest.mark.parametrize(('decision', 'code', 'policy', 'expected'), [

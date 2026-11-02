@@ -168,3 +168,145 @@ def test_http_folder_listing_and_jobs_need_the_session_token(project: Path, tmp_
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_rerun_stop_kills_containers_with_its_own_label(tmp_path: Path) -> None:
+    gate = threading.Event()
+    spawned = threading.Event()
+    calls = []
+    envs = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "container1\n", "")
+
+    def spawn(argv, **kwargs):
+        envs.append(kwargs["env"])
+        spawned.set()
+        return FakeProcess([], 0, gate)
+
+    jobs = Jobs(tmp_path, runner=runner, spawn=spawn)
+    # A rerun has no new evidence directory, just like replay/setup.
+    job = {"id": "rerun-job-123", "run": "", "command": "rerun", "status": "running",
+           "output": "", "finished": None}
+    jobs.job = job
+    worker = threading.Thread(target=jobs._work, args=(job, ["fake-cli"], ""))
+    worker.start()
+    assert spawned.wait(2)
+    for _ in range(100):
+        if jobs._process is not None:
+            break
+        time.sleep(0.01)
+    jobs.cancel()
+    worker.join(2)
+    assert not worker.is_alive()
+    assert envs[0]["PROOFMERGE_JOB_ID"] == "rerun-job-123"
+    assert ["docker", "ps", "-q", "--filter", "label=proofmerge.job=rerun-job-123"] in calls
+    assert ["docker", "kill", "container1"] in calls
+
+
+def test_project_switch_cannot_orphan_running_pr(project: Path, tmp_path: Path) -> None:
+    httpd = make_server(tmp_path, 0)
+    handler = httpd.RequestHandlerClass
+    from proofmerge.dashboard_prs import PullRequests
+    handler.prs = PullRequests(project, tmp_path, environment=handler.jobs.environment)
+    original = handler.prs
+    original.job = {"status": "running", "number": 7}
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    headers = {"Origin": base, "Content-Type": "application/json",
+               "X-ProofMerge-Token": handler.token}
+    try:
+        status, _ = fetch(base + "/api/settings", "POST", headers,
+                          json.dumps({"project": str(project)}).encode())
+        assert status == 422 and handler.prs is original
+        assert fetch(base + "/api/jobs", "POST", headers,
+                     json.dumps({"command": "smoke"}).encode())[0] == 422
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_pr_and_home_start_requests_share_one_lock(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    httpd = make_server(tmp_path, 0)
+    handler = httpd.RequestHandlerClass
+    entered, release, home_started = threading.Event(), threading.Event(), threading.Event()
+    prs = SimpleNamespace(job=None)
+
+    def start_pr(number):
+        entered.set()
+        assert release.wait(2)
+        prs.job = {"status": "running", "number": number}
+        return prs.job
+
+    def start_home(*args):
+        home_started.set()
+
+    prs.start = start_pr
+    handler.prs = prs
+    handler.jobs.start = start_home
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    headers = {"Origin": base, "Content-Type": "application/json",
+               "X-ProofMerge-Token": handler.token}
+    results = {}
+
+    def request(name, route, body):
+        results[name] = fetch(base + route, "POST", headers, json.dumps(body).encode())[0]
+
+    first = threading.Thread(target=request, args=("pr", "/api/verify", {"number": 7}))
+    second = threading.Thread(target=request, args=("home", "/api/jobs", {"command": "smoke"}))
+    try:
+        first.start()
+        assert entered.wait(2)
+        second.start()
+        assert not home_started.wait(0.1)
+        release.set()
+        first.join(2)
+        second.join(2)
+        assert results == {"pr": 202, "home": 422}
+        assert not home_started.is_set()
+    finally:
+        release.set()
+        first.join(2)
+        if second.ident is not None:
+            second.join(2)
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_control_center_and_browser_app_keep_separate_entrypoints(tmp_path: Path) -> None:
+    httpd = make_server(tmp_path, 0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        for path, expected in [("/", b"/static/app/assets/"),
+                               ("/app/", b"/static/legacy/app.js"),
+                               ("/legacy/", b"/static/legacy/app.js")]:
+            with urllib.request.urlopen(base + path) as response:
+                assert expected in response.read()
+        with urllib.request.urlopen(base + "/static/legacy/vendor/geist-latin-wght-normal.woff2") as response:
+            assert response.status == 200
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+@pytest.mark.parametrize("route", ["/api/verify", "/api/v1/verifications"])
+def test_both_pr_apis_refuse_to_overlap_home_job(tmp_path: Path, route: str) -> None:
+    from types import SimpleNamespace
+    httpd = make_server(tmp_path, 0)
+    handler = httpd.RequestHandlerClass
+    handler.jobs.job = {"status": "running"}
+    handler.prs = SimpleNamespace(job=None)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    headers = {"Origin": base, "Content-Type": "application/json",
+               "X-ProofMerge-Token": handler.token}
+    try:
+        assert fetch(base + route, "POST", headers, b'{"number": 7}')[0] == 409
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

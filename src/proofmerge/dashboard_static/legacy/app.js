@@ -668,7 +668,6 @@
       : !head || !base ? "Pick both branches." : head === base ? "Pick two different branches."
       : health && !health.model_key ? "Add your model key in Setup."
       : health && needsSandbox && !health.docker_running ? "Start Docker Desktop, then check again in Setup."
-      : health && needsSandbox && !health.runner_image ? "Build the sandbox image in Setup."
       : ctx.busy ? "Another action is running." : "";
     const fixable = /Setup/.test(blocker);
     const submit = (event) => {
@@ -970,8 +969,12 @@
       if (wasRunning.current && !running) { load(); reloadHealth(); }
       wasRunning.current = running;
       if (!running) return;
-      const timer = setTimeout(() => authGet("/api/job").then((d) => setJob(d.job)).catch(() => {}), 1200);
-      return () => clearTimeout(timer);
+      let active = true;
+      let timer;
+      const poll = () => authGet("/api/job").then((d) => { if (active) setJob(d.job); })
+        .catch(() => { if (active) timer = setTimeout(poll, 1200); });
+      timer = setTimeout(poll, 1200);
+      return () => { active = false; clearTimeout(timer); };
     }, [job]);
     useEffect(() => {
       const onHash = () => setRoute(readHash());

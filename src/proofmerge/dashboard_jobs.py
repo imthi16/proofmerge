@@ -18,6 +18,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -152,6 +153,12 @@ class Jobs:
             raise JobError("That does not look like an API key.")
         self._key = key.strip()
 
+    def environment(self) -> dict[str, str]:
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+        if self._key:
+            env["MODEL_API_KEY"] = self._key
+        return env
+
     def health(self) -> dict[str, Any]:
         git = _which(self._run, ["git", "--version"])
         docker = _which(self._run, ["docker", "info", "--format", "{{.ServerVersion}}"])
@@ -213,18 +220,15 @@ class Jobs:
             if self.job and self.job["status"] == "running":
                 raise JobError("Another action is still running. Wait for it or stop it.")
             argv, run_id, intent = self._argv(request, runs)
-            self.job = {"command": request["command"], "status": "running", "run": run_id,
+            self.job = {"id": uuid.uuid4().hex, "command": request["command"], "status": "running", "run": run_id,
                         "started": time.time(), "finished": None, "exit_code": None, "output": ""}
             job = self.job
         threading.Thread(target=self._work, args=(job, argv, intent), daemon=True).start()
         return job
 
     def _work(self, job: dict[str, Any], argv: list[str], intent: str) -> None:
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
-        if self._key:
-            env["MODEL_API_KEY"] = self._key
-        if job["run"]:
-            env["PROOFMERGE_JOB_ID"] = job["run"]
+        env = self.environment()
+        env["PROOFMERGE_JOB_ID"] = job["id"]
         with tempfile.TemporaryDirectory(prefix="proofmerge-ui-") as tmp:
             if intent.strip():
                 path = Path(tmp) / "intent.md"
@@ -261,9 +265,9 @@ class Jobs:
             raise JobError("Nothing is running.")
         job["status"] = reason
         process.kill()
-        if job["run"]:  # killing the CLI leaves its sandbox containers; stop them by label
+        if job["id"]:  # killing the CLI leaves its sandbox containers; stop them by label
             listed = _which(self._run, ["docker", "ps", "-q", "--filter",
-                                        f"label=proofmerge.job={job['run']}"])
+                                        f"label=proofmerge.job={job['id']}"])
             for container in (listed.stdout.split() if listed and listed.returncode == 0 else []):
                 _which(self._run, ["docker", "kill", container])
         return job

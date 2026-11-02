@@ -84,6 +84,7 @@ Keep source files, commands, logs and hashes in `evidence/<run-id>/` (ignored lo
 | FAIL | FAIL | Existing/unresolved failure; do not assert regression |
 | PASS | PASS | No failure found by this probe; not general proof |
 | ERROR / TIMEOUT / FLAKY | any | REVIEW until conclusively resolved |
+| ENVIRONMENT (import or install) | any | REVIEW. Not a behavioral pass or failure, and not BLOCK |
 
 Test validity needs scrutiny: generated test must exercise the *same intended behavior* against both revisions. Avoid false positives from nondeterminism, fixture leakage, environmental differences and patch-specific assertions. Rerun suspected regressions where practical.
 

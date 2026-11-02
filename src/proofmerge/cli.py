@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
 from proofmerge.dashboard import make_server
+from proofmerge.dashboard_events import JsonlEventSink
 from proofmerge.evidence import Experiment, Proof
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
@@ -21,9 +22,16 @@ from proofmerge.manifest import (
     write_manifest,
 )
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
-from proofmerge.pipeline import run_verify
+from proofmerge.pipeline import resolve_orchestrator, run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
-from proofmerge.project_config import load_config
+from proofmerge.project_config import (
+    ProjectConfig,
+    PythonProject,
+    assert_operator_config_allowed,
+    load_operator_config,
+    load_setup,
+)
+from proofmerge.rederive import rederive
 from proofmerge.report import render_html, scope_receipt
 from proofmerge.sandbox import (
     HYPOTHESIS_ID,
@@ -36,8 +44,37 @@ from proofmerge.sandbox import (
     run_experiment,
     runner_dockerfile_path,
 )
+from proofmerge.telemetry import fan_out, verify_span
 
 app = typer.Typer()
+
+ConfigOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--config",
+        help=(
+            "Operator-controlled .proofmerge.toml. Replaces the base-commit file for "
+            "this run. Not read from the pull request head. The GitHub Action does not "
+            "pass this flag."
+        ),
+    ),
+]
+
+
+def _load_setup(
+    repo: Path, base_sha: str, config_file: Path | None
+) -> tuple[ProjectConfig | None, PythonProject | None, str]:
+    if config_file is None:
+        project, python = load_setup(repo, base_sha)
+        return project, python, "the base commit's .proofmerge.toml"
+    assert_operator_config_allowed(repo, base_sha, config_file)
+    typer.echo(
+        f"using operator config {config_file} "
+        "(trusted because this process was given the path; not read from the pull request head)",
+        err=True,
+    )
+    project, python = load_operator_config(config_file)
+    return project, python, f"operator config {config_file}"
 
 
 class SmokeReply(BaseModel):
@@ -170,7 +207,7 @@ def open_app(
     except OSError as error:
         typer.echo(f"app failed: {error}", err=True)
         raise typer.Exit(1) from None
-    url = f"http://127.0.0.1:{server.server_port}/"
+    url = f"http://127.0.0.1:{server.server_port}/app/"
     typer.echo(f"ProofMerge is open at {url}")
     typer.echo("Keep this window open while you use it. Close it, or press Quit in the app, to stop.")
     if browser:
@@ -193,10 +230,12 @@ def replay(
     proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
     rerun: Annotated[bool, typer.Option(help="Re-run recorded experiments in Docker")] = False,
     repo: Annotated[Path | None, typer.Option(help="Git repository for --rerun")] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Check evidence hashes and optionally re-run recorded experiments in Docker."""
     evidence_dir = proof_json.parent
     problems = verify_manifest(evidence_dir)
+    rederived: list[str] | None = None
     try:
         evidence_sha256(evidence_dir, proof_json.name)
         proof = Proof.model_validate_json(proof_json.read_text())
@@ -207,6 +246,9 @@ def replay(
                     problems.append(f"Probe hash mismatch: {experiment.test_source_path}.")
             except ManifestError as error:
                 problems.append(str(error))
+        # Hashes are not signatures: also check the verdict follows from the evidence.
+        rederived = rederive(proof)
+        problems.extend(rederived or ())
     except (OSError, ValueError) as error:
         problems.append(f"Cannot read proof: {error}.")
     if problems:
@@ -215,9 +257,13 @@ def replay(
         raise typer.Exit(1)
     manifest = json.loads((evidence_dir / "manifest.json").read_text())
     typer.echo(f"evidence intact: {len(manifest['files'])} files")
+    if rederived is None:
+        typer.echo("verdict not recomputed: this proof predates recorded verdict inputs")
+    else:
+        typer.echo(f"verdict recomputed from the evidence: {proof.verdict.decision}")
     if rerun:
         try:
-            reproduced = _replay_experiments(proof, evidence_dir, repo)
+            reproduced = _replay_experiments(proof, evidence_dir, repo, config_file)
         except (OSError, ValueError, SandboxError) as error:
             typer.echo(f"replay failed: {error}", err=True)
             raise typer.Exit(1) from None
@@ -233,7 +279,9 @@ def _outcomes(experiment: Experiment, revision: str) -> str:
     )
 
 
-def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> bool:
+def _replay_experiments(
+    proof: Proof, evidence_dir: Path, repo: Path | None, config_file: Path | None
+) -> bool:
     if repo is None:
         raise ValueError("--repo is required with --rerun")
     # Validate both before either reaches git; a ref or an option must never be executed.
@@ -251,7 +299,7 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
         raise ValueError("no recorded experiments to re-run")
     # Same rule as verify: the test setup comes from the recorded base commit, and a
     # config there means verify used the config runner, whatever its language.
-    config = load_config(repo, proof.base_sha)
+    config, python_project, _source = _load_setup(repo, proof.base_sha, config_file)
     if (config.language if config else "python") != proof.language:
         raise ValueError(f"{repo} has no .proofmerge.toml for {proof.language} at the base commit")
     seen = set()
@@ -285,9 +333,12 @@ def _replay_experiments(proof: Proof, evidence_dir: Path, repo: Path | None) -> 
         attempts = len(experiment.executions) // 2
         try:
             if config is None:
+                options = {"attempts": attempts, "timeout": experiment.timeout_seconds}
+                if python_project is not None:
+                    options["python_project"] = python_project
                 current = run_experiment(
                     repo, proof.base_sha, proof.head_sha, identifier, source, destination,
-                    attempts=attempts, timeout=experiment.timeout_seconds,
+                    **options,
                 )
             else:
                 current = run_config_experiment(
@@ -319,6 +370,7 @@ def hypotheses(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Print intent claims and Spark hypotheses for base..head (up to 2 real calls)."""
     try:
@@ -330,7 +382,7 @@ def hypotheses(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2)
         contract = extract_intent(intent, client)
-        config = load_config(repo, context.base_sha)
+        config, _python_project, _source = _load_setup(repo, context.base_sha, config_file)
         found = generate_hypotheses(context, contract, client, config=config)
     except (ContextError, MetaError, ValueError, OSError) as error:
         typer.echo(f"hypotheses failed: {error}", err=True)
@@ -372,9 +424,31 @@ def verify(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
+    orchestrator: Annotated[
+        str | None,
+        typer.Option(
+            help="legacy (default) or langgraph; PROOFMERGE_ORCHESTRATOR sets the default. "
+            "Both run the same stages and the same deterministic verdict policy."
+        ),
+    ] = None,
+    events_file: Annotated[
+        Path | None,
+        typer.Option(
+            hidden=True,
+            help="Append stage progress as JSON lines here (the dashboard reads it). "
+            "Must be outside the evidence directory; it is not evidence.",
+        ),
+    ] = None,
 ) -> None:
     """Verify base..head and write proof.json, report.html and a hashed manifest."""
+    sink = None
     try:
+        if events_file is not None and events_file.resolve().is_relative_to(
+            evidence_dir.resolve()
+        ):
+            raise ValueError("--events-file must be outside the evidence directory")
+        engine = resolve_orchestrator(orchestrator)
         context = get_context(repo, base, head)
         check_diff(context)
         if not context.changed_files:
@@ -386,10 +460,27 @@ def verify(
             client = MetaClient(max_calls=budget)
         except MetaError as error:
             client = MetaClient(completions=_UnavailableCompletions(error), max_calls=budget)
-        proof = run_verify(repo, base, head, intent, evidence_dir, client)
+        extra: dict = {}
+        if config_file is not None:
+            # An operator-supplied config replaces the base commit's .proofmerge.toml.
+            config, python_project, source = _load_setup(repo, context.base_sha, config_file)
+            extra = {"config": config, "python_project": python_project,
+                     "load_repo_config": False, "config_source": source}
+        sink = JsonlEventSink(events_file) if events_file is not None else None
+        with verify_span(evidence_dir.name, engine) as telemetry:
+            observer = fan_out(sink, telemetry.observer if telemetry else None)
+            if observer is not None:
+                extra["observer"] = observer
+            proof = run_verify(repo, base, head, intent, evidence_dir, client,
+                               orchestrator=engine, **extra)
+            if telemetry:
+                telemetry.finish(proof.verdict.decision, client.calls, proof.language)
     except (ContextError, ValueError, OSError) as error:
         typer.echo(f"verify failed: {error}", err=True)
         raise typer.Exit(1) from None
+    finally:
+        if sink is not None:
+            sink.close()
     typer.echo(f"verdict: {proof.verdict.decision}")
     for reason in proof.verdict.reasons:
         typer.echo(reason)
@@ -409,6 +500,7 @@ def probe(
     intent_file: Annotated[
         Path | None, typer.Option(help="File holding the PR description")
     ] = None,
+    config_file: ConfigOption = None,
 ) -> None:
     """Write a Spark probe per hypothesis and run it on base and head in Docker."""
     try:
@@ -421,10 +513,11 @@ def probe(
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
         contract = extract_intent(intent, client)
-        config = load_config(repo, context.base_sha)
+        config, python_project, _source = _load_setup(repo, context.base_sha, config_file)
         found = generate_hypotheses(context, contract, client, config=config)
         probes, experiments = probe_hypotheses(
-            repo, context, contract, found.hypotheses, client, evidence_dir, config=config
+            repo, context, contract, found.hypotheses, client, evidence_dir,
+            config=config, python_project=python_project,
         )
     except (ContextError, MetaError, SandboxError, ValueError, OSError) as error:
         typer.echo(f"probe failed: {error}", err=True)

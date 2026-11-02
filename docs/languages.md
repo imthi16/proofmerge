@@ -2,6 +2,8 @@
 
 A repository can describe how ProofMerge should test it by adding `.proofmerge.toml` at the repository root. The file is read from the **base** commit, so a pull request cannot change how it is tested.
 
+A `[python]` table is separate from this runner. It keeps the Python pytest runner and only sets import paths and an optional hashed install. See [python-projects.md](python-projects.md). Do not combine `[python]` with the `language` key below.
+
 ## Config fields
 
 | Field | Type | Required | Default | Description |

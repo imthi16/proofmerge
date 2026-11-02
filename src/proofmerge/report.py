@@ -180,7 +180,7 @@ section > p, section > ul { max-width: 72ch; }
 @media print { .banner .decision, .outcome { animation: none; } }"""
 
 
-_FONTS = Path(__file__).parent / "dashboard_static" / "vendor"
+_FONTS = Path(__file__).parent / "dashboard_static" / "legacy" / "vendor"
 
 
 @cache

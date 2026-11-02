@@ -38,9 +38,39 @@ def test_never_accepts_licenses_or_runs_downloaded_scripts() -> None:
     assert script.count("Install-WithWinget '") == 3 and script.count("(Ask '") == 3
 
 
-def test_uninstaller_keeps_the_users_checks() -> None:
+def test_git_stores_the_file_as_is_so_the_raw_download_keeps_crlf() -> None:
+    attributes = (INSTALLER.parents[2] / ".gitattributes").read_text()
+    assert "*.cmd -text" in attributes
+
+
+def test_system_programs_are_called_by_full_path() -> None:
+    # cmd looks in the current folder (often Downloads) before PATH.
+    script = text()
+    assert '"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile' in script
+    assert "\npowershell " not in script and "\r\npowershell " not in script
+
+
+def test_rerun_replaces_the_code_even_when_the_version_number_is_the_same() -> None:
+    script = text()
+    stop, uninstall, install = (script.index(s) for s in (
+        "    Stop-App\r\n", "'pip', 'uninstall'", 'pip install --disable-pip-version-check "proofmerge @'))
+    assert stop < uninstall < install
+    assert "--quiet --disable-pip-version-check --upgrade" not in script  # progress stays visible
+
+
+def test_ref_is_checked_before_it_reaches_pip() -> None:
+    script = text()
+    assert script.index("$Ref -notmatch") < script.index("git+$Repo@$Ref")
+
+
+def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
     script = text()
     uninstall = script[script.index("$lines = @("):script.index("Set-Content")]
     assert 'rmdir /s /q "%LOCALAPPDATA%\\ProofMerge' in uninstall
     assert "USERPROFILE%\\ProofMerge stay" in uninstall
     assert "rmdir /s /q \"%USERPROFILE%" not in uninstall
+    # Leaves the folder it deletes, stops the app that locks it, and looks folders up at run
+    # time instead of baking in paths that an ASCII file could garble.
+    assert uninstall.index("cd /d \"%TEMP%\"") < uninstall.index("taskkill.exe") < uninstall.index("rmdir")
+    assert "GetFolderPath" in uninstall and "$Desktop" not in uninstall
+    assert "$link.WorkingDirectory = $env:TEMP" in script

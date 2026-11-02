@@ -3,7 +3,7 @@
 setlocal
 title Install ProofMerge
 set "PM_SELF=%~f0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression ([IO.File]::ReadAllText($env:PM_SELF))"
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression ([IO.File]::ReadAllText($env:PM_SELF))"
 set "PM_CODE=%errorlevel%"
 echo.
 pause
@@ -26,6 +26,11 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $Repo = 'https://github.com/imthi16/proofmerge'
 $Ref = if ($env:PROOFMERGE_REF) { $env:PROOFMERGE_REF } else { 'main' }
+# The ref goes into a pip requirement; allow only branch, tag and commit characters.
+if ($Ref -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$' -or $Ref -match '\.\.') {
+    Write-Host "    PROOFMERGE_REF '$Ref' is not a branch, tag or commit name." -ForegroundColor Red
+    exit 1
+}
 $InstallDir = Join-Path $env:LOCALAPPDATA 'ProofMerge'
 $Venv = Join-Path $InstallDir 'venv'
 $VenvPython = Join-Path $Venv 'Scripts\python.exe'
@@ -55,7 +60,21 @@ function Install-WithWinget($id, $name) {
     winget install --exact --id $id
     $code = $LASTEXITCODE
     Refresh-Path
+    # Callers look for the tool again instead of trusting this code: winget also returns
+    # non-zero for "already installed" and "restart needed".
     return ($code -eq 0)
+}
+
+function Invoke-Quietly([string]$exe, [string[]]$arguments) {
+    # Windows PowerShell 5.1 turns a program's redirected stderr into a terminating error
+    # under 'Stop'; these calls may print "not found" and that is fine.
+    $ErrorActionPreference = 'Continue'
+    & $exe @arguments 2>&1 | Out-Null
+}
+
+function Stop-App {
+    # A running app locks proofmerge-app.exe, so pip cannot replace it and rmdir cannot delete it.
+    Invoke-Quietly "$env:SystemRoot\System32\taskkill.exe" @('/f', '/t', '/im', 'proofmerge-app.exe')
 }
 
 function Find-Python {
@@ -80,7 +99,7 @@ function Write-Shortcut($folder, $name, $target, $arguments, $description) {
     $link = $shell.CreateShortcut((Join-Path $folder "$name.lnk"))
     $link.TargetPath = $target
     $link.Arguments = $arguments
-    $link.WorkingDirectory = $InstallDir
+    $link.WorkingDirectory = $env:TEMP  # never the install folder, so the uninstaller can delete it
     $link.Description = $description
     $link.Save()
 }
@@ -94,7 +113,8 @@ try {
     $python = Find-Python
     if (-not $python) {
         Say 'ProofMerge needs Python 3.11 or newer, and it is not installed.'
-        if ((Ask 'Install Python 3.13 now?') -and (Install-WithWinget 'Python.Python.3.13' 'Python 3.13')) {
+        if (Ask 'Install Python 3.13 now?') {
+            Install-WithWinget 'Python.Python.3.13' 'Python 3.13' | Out-Null
             $python = Find-Python
         }
     }
@@ -106,7 +126,8 @@ try {
     Step 'Step 2 of 6: Git'
     if (-not (Has 'git')) {
         Say 'ProofMerge reads your branches with Git, and it is not installed.'
-        if (-not ((Ask 'Install Git now?') -and (Install-WithWinget 'Git.Git' 'Git') -and (Has 'git'))) {
+        if (Ask 'Install Git now?') { Install-WithWinget 'Git.Git' 'Git' | Out-Null }
+        if (-not (Has 'git')) {
             throw 'Git is needed. Get it from https://git-scm.com/downloads and run this installer again.'
         }
     }
@@ -119,8 +140,11 @@ try {
         & $pyExe @pyArgs -m venv $Venv
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the Python environment.' }
     }
+    Stop-App
+    # Same version number, new code: pip would keep the old copy, so remove it first.
+    Invoke-Quietly $VenvPython @('-m', 'pip', 'uninstall', '--yes', '--quiet', 'proofmerge')
     Say "Downloading ProofMerge ($Ref) from $Repo. This takes a minute."
-    & $VenvPython -m pip install --quiet --disable-pip-version-check --upgrade "proofmerge @ git+$Repo@$Ref"
+    & $VenvPython -m pip install --disable-pip-version-check "proofmerge @ git+$Repo@$Ref"
     if ($LASTEXITCODE -ne 0) { throw 'ProofMerge could not be installed. Check the internet connection and try again.' }
     if (-not (Test-Path $AppExe)) { throw "The ProofMerge launcher is missing: $AppExe" }
     Ok ('Installed ' + (& (Join-Path $Venv 'Scripts\proofmerge.exe') version))
@@ -141,13 +165,17 @@ try {
 
     Step 'Step 5 of 6: Shortcuts'
     $uninstaller = Join-Path $InstallDir 'Uninstall ProofMerge.cmd'
+    # The uninstaller holds no paths of its own: folders are looked up when it runs, so a
+    # non-ASCII user or desktop folder cannot be garbled by the batch file's code page.
     $lines = @(
         '@echo off',
         'title Uninstall ProofMerge',
+        'cd /d "%TEMP%"',
         'echo Removing ProofMerge. Your checks in %USERPROFILE%\ProofMerge stay where they are.',
-        'del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\ProofMerge.lnk" 2>nul',
-        'del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Uninstall ProofMerge.lnk" 2>nul',
-        ('del /q "' + (Join-Path $Desktop 'ProofMerge.lnk') + '" 2>nul'),
+        '"%SystemRoot%\System32\taskkill.exe" /f /t /im proofmerge-app.exe >nul 2>&1',
+        ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "' +
+         "foreach (`$f in 'Programs','Desktop') { Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath(`$f)) 'ProofMerge.lnk') -ErrorAction SilentlyContinue }; " +
+         "Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Uninstall ProofMerge.lnk') -ErrorAction SilentlyContinue" + '"'),
         'rmdir /s /q "%LOCALAPPDATA%\ProofMerge\venv"',
         'echo Done.',
         'pause',

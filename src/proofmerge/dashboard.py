@@ -281,6 +281,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.OK, path.read_bytes(), f"{content_type}; charset=utf-8")
 
     def do_POST(self) -> None:
+        with self.action_lock:
+            self._post()
+
+    def _post(self) -> None:
         if not self._host_ok():
             return
         path = urlsplit(self.path).path
@@ -331,11 +335,13 @@ class _Handler(BaseHTTPRequestHandler):
                 if "key" in body:
                     self.jobs.set_key(body["key"])
                 if "project" in body:
+                    if self.prs and self.prs.job and self.prs.job["status"] == "running":
+                        raise JobError("A pull request is still being verified.")
                     project = git_project(str(body["project"]), self.runner)
                     self.jobs.project = str(project)
                     # Pull requests follow the chosen project unless --repo pinned one.
                     if not self.pinned_repo:
-                        type(self).prs = PullRequests(project, self.root, self.runner)
+                        type(self).prs = PullRequests(project, self.root, self.runner, self.jobs.environment)
                 self._json({"settings": self.jobs.settings(), "prs": self.prs is not None})
             else:  # /api/quit: the app has no terminal to press Ctrl+C in
                 self._json({"bye": True})
@@ -351,12 +357,12 @@ class _Handler(BaseHTTPRequestHandler):
 
 def make_server(root: Path, port: int, repo: Path | None = None,
                 runner: Any = subprocess.run) -> ThreadingHTTPServer:
-    prs = PullRequests(repo, root, runner) if repo is not None else None
     jobs = Jobs(root, runner)
+    prs = PullRequests(repo, root, runner, jobs.environment) if repo is not None else None
     if repo is not None:
         jobs.project = str(repo.resolve())
     handler = type("Handler", (_Handler,), {
         "root": root.resolve(), "prs": prs, "jobs": jobs, "runner": staticmethod(runner),
-        "pinned_repo": repo is not None, "token": secrets.token_urlsafe(32),
+        "action_lock": threading.Lock(), "pinned_repo": repo is not None, "token": secrets.token_urlsafe(32),
     })
     return ThreadingHTTPServer(("127.0.0.1", port), handler)

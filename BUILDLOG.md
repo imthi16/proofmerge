@@ -564,3 +564,10 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Tests: `tests/test_dashboard_jobs.py` (project and ref checks, branch guess, folder listing, verify argv and run naming, key kept out of settings, one job at a time, stop, token on folder listing and jobs, step flags) and a report font test. `pytest -q`: 624 passed. `ruff check src tests`: all checks passed. Impeccable detector: no findings (Geist flagged as overused and kept on purpose).
 - Checked in headless Chrome driven over CDP at 1440 px and 390 px: Setup key save, folder picker, branch pick, start, running steps, the REVIEW reveal and Runs. A real `verify` on the demo shop ran from the page with `PROOFMERGE_BASE_URL` pointed at a closed local port: REVIEW "could not reach the Meta API", only the read and verdict steps ticked.
 - Not done: a run from the page with a real model key, any run on Windows, and the README report screenshots, which still show the previous report look.
+
+### 2026-11-02 — T57 PR #50 review fixes (Codex)
+- PR verification now receives the in-memory Setup key through the same environment builder as Home jobs. It is not stored in settings or job output.
+- Every Home action, including replay --rerun, has a unique sandbox job label so Stop/timeout can clean up its containers. POST actions share one lock, and changing project while a PR runs is refused, preserving the one-action limit.
+- The composer lets the CLI validate the configured runner image instead of requiring the Python image for every language. Job polling retries transient failures and cancels its timer on cleanup.
+- Offline regression coverage includes key forwarding, rerun cleanup, project switching, concurrent PR/Home starts, and browser polling/form validation executed with Node. No model/network calls in tests.
+- Validation: `ruff check src tests`: `All checks passed!`; `PYTEST_ADDOPTS= PYTHONPATH=src python -m pytest -q`: `630 passed in 94.73s (0:01:34)`; `node --check src/proofmerge/dashboard_static/app.js` and `git diff --check`: exit 0. `graphify update .` completed (AST only).

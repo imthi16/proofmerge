@@ -310,3 +310,30 @@ def test_verify_timeout_kills_the_jobs_containers(tmp_path: Path) -> None:
     assert [a for a, _ in calls if a[:2] == ["docker", "kill"]] == [
         ["docker", "kill", "abc"], ["docker", "kill", "def"]]
     assert prs.job["status"] == "failed" and "containers were stopped" in prs.job["step"]
+
+
+def test_pr_verification_uses_session_key_without_exposing_it(tmp_path: Path, monkeypatch) -> None:
+    from proofmerge.dashboard_jobs import Jobs
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        if "verify" in argv:
+            run = Path(argv[argv.index("--evidence-dir") + 1])
+            run.mkdir()
+            (run / "proof.json").write_text("{}")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    jobs = Jobs(tmp_path)
+    jobs.set_key("session-key-for-offline-test")
+    prs = PullRequests(tmp_path, tmp_path, runner, jobs.environment)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    prs.job = {"status": "running"}
+    prs._verify({"number": 7, "base": "main", "title": "t", "body": ""}, "pr-test")
+    env = next(kw["env"] for argv, kw in calls if "verify" in argv)
+    assert env["MODEL_API_KEY"] == "session-key-for-offline-test"
+    assert env["PROOFMERGE_JOB_ID"] == "pr-test"
+    assert "session-key-for-offline-test" not in json.dumps(prs.job)
+    assert "session-key-for-offline-test" not in json.dumps(jobs.settings())
+    assert prs.job["status"] == "done"

@@ -356,8 +356,17 @@ running on a repository you don't own.
 <br>
 
 Add the workflow from [docs/github-action.md](docs/github-action.md). It runs
-ProofMerge on each PR, uploads the evidence and comments with the verdict. It is
-built and tested offline, but has not yet run on GitHub.
+ProofMerge on each PR, uploads the evidence and comments with the verdict.
+
+It runs on three agent-style PRs in the public
+[proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop) repository,
+and each comment links its evidence:
+
+| Pull request | Verdict | Why | Model calls |
+|---|---|---|---|
+| [#1 Add caching to price lookup](https://github.com/imthi16/proofmerge-demo-shop/pull/1) | BLOCK | Spark's probe passes on base and fails on the PR, against a claim the intent does not contest | 6 |
+| [#2 Refactor discount calculation for readability](https://github.com/imthi16/proofmerge-demo-shop/pull/2) | BLOCK | A verified regression, and the PR edits tests that now fail, with no CHANGE claim to explain it | 5 |
+| [#3 Raise the bulk discount threshold to 150](https://github.com/imthi16/proofmerge-demo-shop/pull/3) | REVIEW | Changed tests fail, but the PR's description asks for that change | 3 |
 
 ```yaml
 name: ProofMerge
@@ -477,7 +486,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | GitHub sign-in, repository and pull request picker in the app | Built and tested offline; a real `gh` sign-in was started and cancelled, and with a real account the page listed repositories, cloned one and listed its 50 pull requests; a full sign-in by a person and a run on Windows are not done yet |
 | Windows installer (`installer/windows/Install-ProofMerge.cmd`) | Built; its structure and safety rules are checked by tests on Linux; not yet run on a Windows machine |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
-| GitHub Action | Built and tested offline; not yet run on GitHub |
+| GitHub Action | Built and tested; ran on three PRs in [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr) (BLOCK, BLOCK, REVIEW), each with a verdict comment and an evidence artifact |
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
 | Other languages through `.proofmerge.toml` (Go demo) | Built and tested; one real `verify` on the synthetic Go demo gave BLOCK (Spark-written Go probe, base PASS 3/3, head FAIL 3/3), bundle in `demo/runs/2026-10-30-go`; no tamper guard for other languages; see [docs/languages.md](docs/languages.md) |
 | JavaScript and TypeScript repositories set up automatically (npm `package-lock.json`, no config) | Built and tested; a real `verify` on the synthetic TypeScript demo gave BLOCK (H1: Spark-written `node:test` probe, base PASS 3/3, head FAIL 3/3, while the repo's own vitest suite passes on both), bundle in `demo/runs/2026-11-02-ts`; npm only; no tamper guard; code that needs a browser is not tested; see [docs/languages.md](docs/languages.md) |

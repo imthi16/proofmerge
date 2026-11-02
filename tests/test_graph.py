@@ -1,12 +1,14 @@
 """LangGraph orchestration: same stages, same evidence, verdict only from decide()."""
 
+from types import SimpleNamespace
+
 import httpx2
 import openai
 import pytest
 from test_pipeline import INTENT, Replies, assert_bundle
 from test_probes import fake_runner, make_repo
 
-from proofmerge import graph, pipeline
+from proofmerge import graph, pipeline, sandbox
 from proofmerge.evidence import Proof
 from proofmerge.meta import MetaClient, MetaError
 from proofmerge.pipeline import STAGES, run_verify
@@ -108,7 +110,9 @@ def _raise(error):
 
 
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
-def test_graph_and_legacy_produce_identical_evidence(tmp_path, name):
+def test_graph_and_legacy_produce_identical_evidence(tmp_path, name, monkeypatch):
+    # Wall-clock durations differ between the two runs (0 vs 2 ms on CI); freeze them.
+    monkeypatch.setattr(sandbox, "time", SimpleNamespace(monotonic=lambda: 0.0))
     spec = SCENARIOS[name]
     repo, context = make_repo(tmp_path)
     results = {}

@@ -1,0 +1,36 @@
+{
+  "name": "proofmerge",
+  "version": "0.1.0",
+  "description": "Make your coding agent verify its own change before it calls the work done: ProofMerge writes probes aimed at what the change could break, runs them on base and head in Docker, and returns PASS, REVIEW or BLOCK with replayable evidence.",
+  "author": {
+    "name": "imthi16",
+    "url": "https://github.com/imthi16"
+  },
+  "homepage": "https://github.com/imthi16/proofmerge",
+  "repository": "https://github.com/imthi16/proofmerge",
+  "license": "MIT",
+  "keywords": [
+    "verification",
+    "pull-requests",
+    "regression",
+    "testing",
+    "code-review",
+    "evidence"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ProofMerge",
+    "shortDescription": "Verify your own change with evidence before you call it done",
+    "longDescription": "Make your coding agent verify its own change before it calls the work done: ProofMerge writes probes aimed at what the change could break, runs them on base and head in Docker, and returns PASS, REVIEW or BLOCK with replayable evidence.",
+    "developerName": "imthi16",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Verify my branch with ProofMerge before we open the pull request."
+    ],
+    "websiteURL": "https://github.com/imthi16/proofmerge"
+  }
+}

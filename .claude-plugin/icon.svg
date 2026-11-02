@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128" fill="none" role="img" aria-label="ProofMerge">
+  <rect width="24" height="24" rx="5" fill="#090c11"/>
+  <rect x="3.5" y="3.5" width="10.5" height="10.5" rx="2.6" stroke="#8b97a9" stroke-width="1.4"/>
+  <rect x="9.5" y="9.5" width="11" height="11" rx="2.6" fill="#8b9cff"/>
+  <path d="M12.4 15.3l2 2 3.8-4" stroke="#090c11" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

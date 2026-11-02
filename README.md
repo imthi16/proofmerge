@@ -328,13 +328,17 @@ the verdict word for word before it calls the work done. A BLOCK sends the
 agent back to fix the code, never to edit the tests or the evidence; a PASS is
 reported as "no regression found within the tested scope", never as proven.
 
-For Claude Code, from a clone:
+This repository is also a plugin marketplace, so the skill installs and updates
+like any other plugin:
 
-```bash
-cp -r skills/proofmerge ~/.claude/skills/
-```
+| Agent | Install |
+|---|---|
+| **Claude Code** | `/plugin marketplace add imthi16/proofmerge`, then `/plugin install proofmerge@proofmerge` |
+| **Codex CLI** | `codex plugin marketplace add imthi16/proofmerge`, then `codex plugin add proofmerge@proofmerge` |
+| **Any agent that reads Agent Skills** | copy [`skills/proofmerge`](skills/proofmerge) into that agent's skills folder |
 
-or without one:
+For a plain copy without a clone, for example into Claude Code's personal
+skills:
 
 ```bash
 mkdir -p ~/.claude/skills/proofmerge
@@ -342,10 +346,10 @@ curl -fsSL https://raw.githubusercontent.com/imthi16/proofmerge/main/skills/proo
   -o ~/.claude/skills/proofmerge/SKILL.md
 ```
 
-Other agents that read the Agent Skills format take the same folder in their
-own skills directory. The skill needs `proofmerge` installed and `MODEL_API_KEY`
-set in the agent's environment; it tells the agent never to ask for the key in
-chat.
+The skill needs `proofmerge` installed and `MODEL_API_KEY` set in the agent's
+environment; it tells the agent never to ask for the key in chat. It asks before
+a third run on the same task (each run makes at most 19 model calls) and before
+running on a repository you don't own.
 
 <details>
 <summary><b>On every pull request: the GitHub Action</b></summary>
@@ -466,7 +470,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard` (Control Center): runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | LangGraph orchestrator (`--orchestrator langgraph`): same stages, same plain-code verdict, retries of transient model failures only | Built and tested offline and with real Docker; parity with the default loop checked on nine scenarios; no real Meta API run on it yet; see [docs/orchestration.md](docs/orchestration.md) |
-| Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
+| Agent Skill for coding agents, packaged as Claude Code and Codex plugins | Built; commands and options checked offline against the CLI; manifests pass `claude plugin validate`, and `codex plugin add` installed it into an isolated Codex home; not yet used by an agent on a real task |
 | PASS strength beyond the receipt (for example mutation checks) | Planned |
 
 Each row has a dated entry with its real check results in
@@ -535,6 +539,7 @@ docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth
 bench/           28 benchmark PRs, ground truth, runner and results
 action.yml       the GitHub Action
+skills/          the Agent Skill; .claude-plugin/, .codex-plugin/ and .agents/plugins/ make this repo a plugin marketplace for Claude Code and Codex
 docs/            spec, plan, Meta API notes, model backends, prior art, Action guide
 BUILDLOG.md      what was actually built, and when
 ORIGINALITY.md   what counts as new work for this hackathon

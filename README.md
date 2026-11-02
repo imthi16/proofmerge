@@ -18,6 +18,7 @@
   <a href="#how-a-verdict-is-reached"><b>How it decides</b></a>&emsp;
   <a href="#results"><b>Results</b></a>&emsp;
   <a href="#get-started"><b>Get started</b></a>&emsp;
+  <a href="#in-your-coding-agent-the-agent-skill"><b>Agent Skill</b></a>&emsp;
   <a href="#safety-and-limits"><b>Limits</b></a>
 </p>
 
@@ -313,6 +314,34 @@ proofmerge verify demo/.build/demo-shop \
 
 `verify` exits 0 for PASS and REVIEW, 2 for BLOCK and 1 if it could not run.
 
+### In your coding agent: the Agent Skill
+
+[skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill. It
+tells a coding agent to commit its change, write down what the change should do
+before it sees a verdict, run `proofmerge verify` on its own branch, and report
+the verdict word for word before it calls the work done. A BLOCK sends the
+agent back to fix the code, never to edit the tests or the evidence; a PASS is
+reported as "no regression found within the tested scope", never as proven.
+
+For Claude Code, from a clone:
+
+```bash
+cp -r skills/proofmerge ~/.claude/skills/
+```
+
+or without one:
+
+```bash
+mkdir -p ~/.claude/skills/proofmerge
+curl -fsSL https://raw.githubusercontent.com/imthi16/proofmerge/main/skills/proofmerge/SKILL.md \
+  -o ~/.claude/skills/proofmerge/SKILL.md
+```
+
+Other agents that read the Agent Skills format take the same folder in their
+own skills directory. The skill needs `proofmerge` installed and `MODEL_API_KEY`
+set in the agent's environment; it tells the agent never to ask for the key in
+chat.
+
 <details>
 <summary><b>On every pull request: the GitHub Action</b></summary>
 <br>
@@ -344,23 +373,6 @@ jobs:
 
 </details>
 
-<details>
-<summary><b>In your coding agent: the Agent Skill</b></summary>
-<br>
-
-[skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill
-that tells a coding agent to run `proofmerge verify` on its own branch before it
-calls a change done, and to report the verdict without softening it. For Claude
-Code:
-
-```bash
-cp -r skills/proofmerge ~/.claude/skills/
-```
-
-Other agents that read the Agent Skills format take the same folder in their
-own skills directory.
-
-</details>
 
 <details>
 <summary><b>Without a Meta API key</b></summary>

@@ -1,14 +1,25 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-  <img src="docs/assets/hero-light.svg" alt="ProofMerge. A real run: the same Spark-written test passes 3 of 3 times on the original commit 9dcc104 and fails 3 of 3 times on the AI's patch 32dff53, so the verdict is BLOCK, decided in plain code." width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
+  <img src="docs/assets/hero-light.png" alt="ProofMerge: Don't trust AI-generated code. Make it prove itself. A real run: hypothesis H1, 'Cached SKU bypasses the unknown-tenant check'. The same Spark-written test passes 3 of 3 times on the original commit 9dcc104 and fails 3 of 3 times on the AI's patch 32dff53, so the verdict is BLOCK, decided in plain code." width="100%">
 </picture>
 
 <p align="center">
+  <a href="https://github.com/imthi16/proofmerge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imthi16/proofmerge/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
-  <img alt="Runtime model: Muse Spark 1.3" src="https://img.shields.io/badge/Muse%20Spark-1.3-6CA0FF">
-  <img alt="Runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-8B7CF6">
-  <img alt="Track: Indie Developer" src="https://img.shields.io/badge/track-Indie%20Developer-2C3E52">
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2C3E52">
+  <img alt="Runtime model: Muse Spark 1.3" src="https://img.shields.io/badge/Muse%20Spark-1.3-8b9cff">
+  <img alt="Runtime model: Muse Wonder 1.0" src="https://img.shields.io/badge/Muse%20Wonder-1.0-b88cfb">
+  <img alt="Windows installer" src="https://img.shields.io/badge/Windows-installer-0f141b?logo=windows&logoColor=white">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f141b">
+</p>
+
+<p align="center">
+  <a href="#use-it-without-a-terminal"><b>Use the app</b></a>&emsp;
+  <a href="#what-a-run-looks-like"><b>See a run</b></a>&emsp;
+  <a href="#how-a-verdict-is-reached"><b>How it decides</b></a>&emsp;
+  <a href="#results"><b>Results</b></a>&emsp;
+  <a href="#get-started"><b>Get started</b></a>&emsp;
+  <a href="#in-your-coding-agent-the-agent-skill"><b>Agent Skill</b></a>&emsp;
+  <a href="#safety-and-limits"><b>Limits</b></a>
 </p>
 
 ProofMerge checks a pull request written by an AI coding agent. It doesn't ask
@@ -24,6 +35,36 @@ tests; Muse Wonder 1.0 checks Spark's work. [MIT licensed](LICENSE).
 > ProofMerge is meant for repositories you own and for synthetic fixtures. A
 > PASS means no regression was found within the tested scope. It does not prove
 > the change correct or secure.
+
+## Use it without a terminal
+
+<img alt="The ProofMerge app in the browser: the Runs page with three BLOCK runs and one REVIEW run, every one marked 'evidence intact', and the selected run's verdict, BLOCK, 'Verified regression — do not merge', with its reasons, commits, model calls and buttons to open the report, download it, check the evidence and run the tests again." src="docs/assets/app-runs.png" width="100%">
+
+`proofmerge app` opens ProofMerge in your browser and does everything the
+command line does. It was built for people who never open a terminal:
+
+1. **Install.** On Windows, download the
+   [installer](installer/windows/Install-ProofMerge.cmd) and double-click it. It
+   sets up Python, Git, the GitHub CLI and Docker Desktop if they are missing,
+   asking before each one.
+2. **Set up once.** The Setup page checks Docker, builds the sandbox image, takes
+   your model key (kept in memory, never written to disk) and signs you in to
+   GitHub with a one-time code.
+3. **Check a change.** Pick one of your GitHub repositories and an open pull
+   request, or a folder on your computer and two branches, and press
+   **Check this change**. The page shows each step as it happens, then the
+   verdict, the reasons and the full report.
+
+<img alt="Setup page, GitHub row while signing in: a one-time code in large type with a copy button, the line 'Open GitHub, paste the code and press Authorize. This page updates by itself.', an Open GitHub button and a Cancel button." src="docs/assets/app-github-sign-in.png" width="100%">
+
+**Sign in to GitHub without a terminal.** The page shows a one-time code; enter
+it at github.com/login/device. The GitHub CLI keeps the sign-in in the system
+credential store, so ProofMerge never sees the token. Downloading a repository
+never runs its code; only the sandbox does.
+
+The app also lists risks without running anything, writes tests without a
+verdict, re-checks a run's evidence hashes and re-runs its tests. Runs are saved
+in `~/ProofMerge/runs`, repositories in `~/ProofMerge/repos`.
 
 ## What a run looks like
 
@@ -46,25 +87,28 @@ calls=6 tokens: prompt=5702 completion=9902
 
 (Token totals from `demo/runs/2026-10-29/tenant-cache-take2/proof.json`.)
 
-The report has one card per hypothesis. This is H1, unedited:
+<table>
+  <tr>
+    <td width="56%" valign="top"><img alt="Report card H1, 'Cached SKU bypasses unknown-tenant check', citing the implicit PRESERVE claim C0. A grid shows the Spark-written probe passing on base 9dcc104 in attempts 1, 2 and 3 and failing on head 32dff53 in all three, classified as a verified REGRESSION, with 'Why head failed: Failed: DID NOT RAISE ValueError', the probe source and the replay command." src="docs/assets/report-card.png"></td>
+    <td valign="top">
+    <b>One card per hypothesis.</b> This is H1, unedited. On the patch, an
+    unknown tenant gets a cached price instead of an error.<br><br>
+    In the same run, Muse Wonder flagged H2: its probe caught a cross-tenant
+    price leak, but it doesn't test the "stale cache" behavior H2 describes, so
+    H2 counts only as REVIEW. <a href="docs/assets/report-full.png">Whole report</a>.<br><br>
+    The report is one static HTML file, with no server, no JavaScript and
+    nothing loaded from the network.
+    </td>
+  </tr>
+</table>
 
-<p align="center">
-  <img alt="Report card H1, 'Cached SKU bypasses unknown-tenant check', citing the implicit claim C0. A grid shows the Spark-written probe passing on base 9dcc104 in 3 of 3 attempts and failing on head 32dff53 in 3 of 3, with the head failure 'Failed: DID NOT RAISE ValueError', the probe source and a replay command." src="docs/assets/report-card-real-light.png" width="720">
-</p>
-
-On the patch, an unknown tenant gets a cached price instead of an error. In the
-same run, Muse Wonder flagged H2: its probe caught a cross-tenant price leak, but
-it doesn't test the "stale cache" behavior H2 describes, so H2 counts only as
-REVIEW. [Whole report](docs/assets/report-full-real-light.png).
-
-The report is one static HTML file, with no server, no JavaScript and nothing
-loaded from the network. Every probe, log and command in the run is hashed, and
-`proofmerge replay <proof.json>` checks that nothing changed after the run and
-recomputes the findings and the verdict from the recorded executions with the same
-plain-code policy, so an edited verdict fails even if the manifest was rewritten too;
-with `--rerun --repo <repo>` it runs every probe again in Docker and reports
-whether each recorded outcome reproduces. Recomputation shows the verdict follows
-from the records; only `--rerun` checks the records themselves.
+Every probe, log and command in the run is hashed. `proofmerge replay
+<proof.json>` checks that nothing changed after the run and recomputes the
+findings and the verdict from the recorded executions with the same plain-code
+policy, so an edited verdict fails even if the manifest was rewritten too. With
+`--rerun --repo <repo>` it runs every probe again in Docker and reports whether
+each recorded outcome reproduces. Recomputation shows the verdict follows from
+the records; only `--rerun` checks the records themselves.
 
 ## The problem
 
@@ -73,9 +117,9 @@ The shop's own test suite passes on all three. Two of them are broken.
 
 | | Pull request | What it says | What it really does |
 |---|---|---|---|
-| 🔴 | `tenant-cache-regression` | "Add caching to price lookup for speed. Returned prices must not change." | Caches prices by product only. A tenant can get another tenant's price, and an unknown tenant gets a price instead of an error. |
-| 🔴 | `test-tamper` | "Refactor discount calculation for readability. Keep the existing results." | Stops giving the discount at exactly 100, then edits the test that checked it, so the suite stays green. |
-| 🟢 | `intended-change` | "Raise the bulk discount threshold from 100 to 150. Update the implementation and existing tests…" | Exactly that. The old test fails because the rule changed on purpose. It must not be blocked. |
+| <img src="docs/assets/icons/fail.svg" width="14" alt="broken"> | `tenant-cache-regression` | "Add caching to price lookup for speed. Returned prices must not change." | Caches prices by product only. A tenant can get another tenant's price, and an unknown tenant gets a price instead of an error. |
+| <img src="docs/assets/icons/fail.svg" width="14" alt="broken"> | `test-tamper` | "Refactor discount calculation for readability. Keep the existing results." | Stops giving the discount at exactly 100, then edits the test that checked it, so the suite stays green. |
+| <img src="docs/assets/icons/pass.svg" width="14" alt="safe"> | `intended-change` | "Raise the bulk discount threshold from 100 to 150. Update the implementation and existing tests…" | Exactly that. The old test fails because the rule changed on purpose. It must not be blocked. |
 
 Here is the whole first bug. The cache key is the product alone:
 
@@ -111,12 +155,12 @@ flowchart LR
     W["Muse Wonder<br/>re-reads claims, checks probes"] -. "can only lower to REVIEW" .-> E
     E --> R["report.html, proof.json,<br/>hashed manifest"]
 
-    classDef spark fill:#6CA0FF,stroke:#3B6FD8,color:#0B1A2E
-    classDef wonder fill:#8B7CF6,stroke:#6352D9,color:#ffffff
-    classDef base fill:#2DA44E,stroke:#1A7F37,color:#ffffff
-    classDef patch fill:#E5484D,stroke:#C5282F,color:#ffffff
-    classDef code fill:#D4A72C,stroke:#9A6700,color:#16212E
-    classDef plain fill:#16212E,stroke:#2C3E52,color:#EEF2F6
+    classDef spark fill:#8b9cff,stroke:#5b6fe0,color:#0b0f2a
+    classDef wonder fill:#b88cfb,stroke:#8f5fe0,color:#1a0b2e
+    classDef base fill:#34d399,stroke:#0b7550,color:#05261a
+    classDef patch fill:#ff5d5d,stroke:#b42323,color:#2a0606
+    classDef code fill:#fbbf24,stroke:#855000,color:#1f1400
+    classDef plain fill:#0f141b,stroke:#2c3644,color:#e9eef5
     class I,H spark
     class W wonder
     class C base
@@ -142,17 +186,17 @@ How results map to a decision:
 
 | Base | Patch | Meaning |
 |---|---|---|
-| 🟢 pass 3/3 | 🔴 fail 3/3 | The patch introduced a failure. **BLOCK**, unless the PR said this change is intended. |
-| 🔴 fail | 🟢 pass | Possibly a fix. Not a regression. |
-| 🔴 fail | 🔴 fail | The problem was already there. Not a regression. |
-| 🟢 pass | 🟢 pass | This test found nothing. That is not proof of correctness. |
-| 🟡 error, timeout or mixed | any | **REVIEW** until resolved. |
+| <img src="docs/assets/icons/pass.svg" width="14" alt=""> pass 3/3 | <img src="docs/assets/icons/fail.svg" width="14" alt=""> fail 3/3 | The patch introduced a failure. **BLOCK**, unless the PR said this change is intended. |
+| <img src="docs/assets/icons/fail.svg" width="14" alt=""> fail | <img src="docs/assets/icons/pass.svg" width="14" alt=""> pass | Possibly a fix. Not a regression. |
+| <img src="docs/assets/icons/fail.svg" width="14" alt=""> fail | <img src="docs/assets/icons/fail.svg" width="14" alt=""> fail | The problem was already there. Not a regression. |
+| <img src="docs/assets/icons/pass.svg" width="14" alt=""> pass | <img src="docs/assets/icons/pass.svg" width="14" alt=""> pass | This test found nothing. That is not proof of correctness. |
+| <img src="docs/assets/icons/review.svg" width="14" alt=""> error, timeout or mixed | any | **REVIEW** until resolved. |
 
 | Verdict | When |
 |---|---|
-| <img alt="BLOCK" src="https://img.shields.io/badge/-BLOCK-E5484D?style=for-the-badge"> | A reproducible failure the patch introduced, or an original test that now fails while the PR claims no change. |
-| <img alt="REVIEW" src="https://img.shields.io/badge/-REVIEW-D4A72C?style=for-the-badge"> | Anything uncertain: a flaky or broken test, an API error, a change the PR says is intended, a test Wonder doubts. The default when in doubt. |
-| <img alt="PASS" src="https://img.shields.io/badge/-PASS-2DA44E?style=for-the-badge"> | Every check ran and none found a regression: "no regression found within the tested scope". |
+| <img alt="BLOCK" src="https://img.shields.io/badge/-BLOCK-ff5d5d?style=for-the-badge"> | A reproducible failure the patch introduced, or an original test that now fails while the PR claims no change. |
+| <img alt="REVIEW" src="https://img.shields.io/badge/-REVIEW-fbbf24?style=for-the-badge"> | Anything uncertain: a flaky or broken test, an API error, a change the PR says is intended, a test Wonder doubts. The default when in doubt. |
+| <img alt="PASS" src="https://img.shields.io/badge/-PASS-34d399?style=for-the-badge"> | Every check ran and none found a regression: "no regression found within the tested scope". |
 
 > [!IMPORTANT]
 > A model can push a verdict toward REVIEW. It can never push one to BLOCK or
@@ -160,7 +204,8 @@ How results map to a decision:
 > confidence is not.
 
 <details>
-<summary>The one rule that looks like an exception: a regression that cites a CHANGE claim</summary>
+<summary><b>The one rule that looks like an exception: a regression that cites a CHANGE claim</b></summary>
+<br>
 
 When a verified regression (base pass 3/3, patch fail 3/3) is tied to a claim
 the PR marks as a change, three things can happen:
@@ -190,10 +235,10 @@ was written, so the held-out slice is the clean number. Counts come from
 
 | Label and slice | BLOCK | REVIEW | PASS | ERROR |
 |---|---:|---:|---:|---:|
-| Faulty, all (16) | 14 | 2 | 0 | 0 |
+| Faulty, all (16) | **14** | 2 | **0** | 0 |
 | Safe, all (12) | 1 | 6 | 5 | 0 |
-| Faulty, held out (8) | 6 | 2 | 0 | 0 |
-| Safe, held out (7) | 0 | 4 | 3 | 0 |
+| Faulty, held out (8) | **6** | 2 | **0** | 0 |
+| Safe, held out (7) | **0** | 4 | 3 | 0 |
 
 121 model calls, 0 errors. PASS means no regression found within tested scope.
 
@@ -223,17 +268,39 @@ and [baseline bundles](bench/results/2026-10-30-baselines).
 History: [run 2](bench/results/2026-10-29-run2) followed rule changes and was
 not a clean held-out evaluation.
 
-## Install
+## Get started
+
+### Windows, no terminal at all
+
+Open [installer/windows/Install-ProofMerge.cmd](installer/windows/Install-ProofMerge.cmd),
+press **Download raw file**, and double-click the downloaded file. If Windows
+says it protected your PC, choose **More info**, then **Run anyway**.
+
+The installer finds or offers to install Python 3.11+, Git, the GitHub CLI
+(optional, for signing in to GitHub) and Docker Desktop through winget; you
+accept each license yourself. It installs ProofMerge for your user only in
+`%LOCALAPPDATA%\ProofMerge`, adds ProofMerge and Uninstall ProofMerge to the
+Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
+Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.
+
+### macOS, Linux, or Windows with Python
 
 You need Python 3.11 or newer, Git and Docker.
 
 ```bash
 uv tool install git+https://github.com/imthi16/proofmerge
+proofmerge app                       # the browser app; or carry on in the terminal:
 proofmerge setup                     # builds the Docker runner image
 export MODEL_API_KEY=...             # your Meta developer key; never commit it
 ```
 
-Run it on the demo. The demo files need a clone; the tool itself does not.
+Installing puts a `proofmerge-app` launcher in the Python Scripts folder; on
+Windows that is a `.exe` you can pin to the Start menu. Keep its window open
+while you use the app, or press **Quit ProofMerge**.
+
+### Run the demo
+
+The demo files need a clone; the tool itself does not.
 
 ```bash
 git clone https://github.com/imthi16/proofmerge
@@ -247,45 +314,42 @@ proofmerge verify demo/.build/demo-shop \
 
 `verify` exits 0 for PASS and REVIEW, 2 for BLOCK and 1 if it could not run.
 
-### Without a terminal
+### In your coding agent: the Agent Skill
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/agent-skill-dark.png">
+  <img src="docs/assets/agent-skill-light.png" alt="The Agent Skill: what a coding agent does before it calls a change done. 1, commit the change on a branch. 2, write the intent first, never edited after. 3, run proofmerge verify with a new evidence folder. 4, report the verdict word for word. Beside it, the real command and output of the demo run: verdict BLOCK, its two reason lines, the report path, the call count and exit code 2. Below: on BLOCK, fix the code and run again, never edit tests, probes or evidence; on REVIEW, hand the reasons to the person word for word; on PASS, say no regression found within the tested scope, never proven." width="100%">
+</picture>
+
+[skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill. It
+tells a coding agent to commit its change, write down what the change should do
+before it sees a verdict, run `proofmerge verify` on its own branch, and report
+the verdict word for word before it calls the work done. A BLOCK sends the
+agent back to fix the code, never to edit the tests or the evidence; a PASS is
+reported as "no regression found within the tested scope", never as proven.
+
+For Claude Code, from a clone:
 
 ```bash
-proofmerge app                       # or double-click proofmerge-app(.exe)
+cp -r skills/proofmerge ~/.claude/skills/
 ```
 
-This opens ProofMerge in your browser and does everything the commands above do:
-pick a project folder and two branches, paste the PR description, and press
-**Check this change**. The page shows each step as the run writes its files, then
-the verdict and the report. Setup checks Git and Docker, builds the sandbox image
-and tests the model connection; the model key you paste there stays in memory
-until you quit and is never written to disk. Runs are saved in
-`~/ProofMerge/runs`. The page also lists risks without running anything, writes
-tests without a verdict, re-checks a run's evidence hashes, re-runs its tests,
-and verifies open pull requests through the GitHub CLI.
+or without one:
 
-**Pull requests from GitHub, without a terminal:** on Setup, press **Sign in to
-GitHub**. The page shows a one-time code; enter it at github.com/login/device and
-press Authorize. Then **Pull requests** lists your repositories (or takes any
-`owner/name`), downloads the one you pick to `~/ProofMerge/repos/<owner>/<name>`,
-and lists its pull requests, each one a click away from a check. The GitHub CLI
-keeps the sign-in in the system credential store; ProofMerge never sees the token,
-and downloading a repository never runs its code (only the sandbox does).
+```bash
+mkdir -p ~/.claude/skills/proofmerge
+curl -fsSL https://raw.githubusercontent.com/imthi16/proofmerge/main/skills/proofmerge/SKILL.md \
+  -o ~/.claude/skills/proofmerge/SKILL.md
+```
 
-Installing `pip install` or `uv tool install` puts a `proofmerge-app` launcher in
-the Python Scripts folder; on Windows that is a `.exe` you can pin to the Start
-menu. Keep its window open while you use the app, or press **Quit ProofMerge**.
+Other agents that read the Agent Skills format take the same folder in their
+own skills directory. The skill needs `proofmerge` installed and `MODEL_API_KEY`
+set in the agent's environment; it tells the agent never to ask for the key in
+chat.
 
-**On Windows, with no terminal at all:** open
-[installer/windows/Install-ProofMerge.cmd](installer/windows/Install-ProofMerge.cmd),
-press **Download raw file**, and double-click the downloaded file. If Windows
-says it protected your PC, choose **More info**, then **Run anyway**. The
-installer finds or offers to install Python 3.11+, Git, the GitHub CLI (optional,
-for signing in to GitHub) and Docker Desktop through winget (you accept each license yourself), installs ProofMerge for your user only
-in `%LOCALAPPDATA%\ProofMerge`, adds ProofMerge and Uninstall ProofMerge to the
-Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
-Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.
-
-### On every pull request
+<details>
+<summary><b>On every pull request: the GitHub Action</b></summary>
+<br>
 
 Add the workflow from [docs/github-action.md](docs/github-action.md). It runs
 ProofMerge on each PR, uploads the evidence and comments with the verdict. It is
@@ -312,28 +376,23 @@ jobs:
           python-version: '3.13'
 ```
 
-### In your coding agent
+</details>
 
-[skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill
-that tells a coding agent to run `proofmerge verify` on its own branch before it
-calls a change done, and to report the verdict without softening it. For Claude
-Code:
 
-```bash
-cp -r skills/proofmerge ~/.claude/skills/
-```
-
-Other agents that read the Agent Skills format take the same folder in their
-own skills directory.
-
-### Without a Meta API key
+<details>
+<summary><b>Without a Meta API key</b></summary>
+<br>
 
 ProofMerge can use another OpenAI-compatible endpoint, or a plan you are already
 signed in to through Claude Code (`PROOFMERGE_BACKEND=claude-cli`). See
 [docs/model-backends.md](docs/model-backends.md) for the settings, the
 training-data warning for contributor models and which agent CLIs were checked.
 
-### Dashboard
+</details>
+
+<details>
+<summary><b>The Control Center dashboard</b></summary>
+<br>
 
 ```bash
 proofmerge dashboard bench/results       # or any folder of evidence runs
@@ -347,8 +406,9 @@ tamper findings, model use, orchestration, the replay command and the static
 report). A Benchmarks page compares each `results.json` with its labels, the
 held-out slice and the baselines; a Diagnostics page says whether Docker, the
 runner image, `gh`, the model key (present or not, never its value) and LangGraph
-are ready. Light, dark and system themes; it works at phone width. The previous
-page stays at `/legacy/`. See [docs/control-center.md](docs/control-center.md).
+are ready. Light, dark and system themes; it works at phone width. The app from
+`proofmerge app` is served beside it at `/app/`. See
+[docs/control-center.md](docs/control-center.md).
 
 ![Control Center evidence explorer](docs/assets/control-center-evidence.png)
 
@@ -362,10 +422,14 @@ then follows the run live: each pipeline stage as it starts, retries, finishes o
 is skipped, streamed over server-sent events. The verdict appears only after the
 deterministic verdict stage has run.
 
-The server answers on 127.0.0.1 only. Apart from that one verify request, which
-needs a per-session token and a same-origin request, it only reads files.
+The server answers on 127.0.0.1 only. Every request that starts work needs a
+per-session token and a same-origin request.
 
-### Working on ProofMerge itself
+</details>
+
+<details>
+<summary><b>Working on ProofMerge itself</b></summary>
+<br>
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -374,6 +438,8 @@ pytest -q                            # offline: no network, no API key needed
 ruff check src tests
 python3 demo/check_demo.py           # compares the demo branches with the hand-written ground truth
 ```
+
+</details>
 
 ## What works today
 
@@ -387,20 +453,21 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Muse Wonder cross-check of claims and probes | Built and tested |
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
 | `replay` recomputes findings and the verdict from the recorded evidence (proofs from T56 on) | Built and tested; an edited and resealed verdict or outcome fails; older proofs get a notice |
+| `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
+| Scope receipt: what a run checked (hypotheses, probes, attempts, changed tests), in `report.html` and `verify` output | Built and tested |
+| `proofmerge app` (`/app/`): every command from the browser (verify, risks only, probes only, evidence check, re-run, setup, model check) | Built and tested offline with fakes; a real `verify` on the demo shop was started and finished from the page in headless Chrome with the model endpoint pointed at a closed local port (REVIEW, as expected); not yet run with a real key from the page, and not yet run on Windows |
+| GitHub sign-in, repository and pull request picker in the app | Built and tested offline; a real `gh` sign-in was started and cancelled, and with a real account the page listed repositories, cloned one and listed its 50 pull requests; a full sign-in by a person and a run on Windows are not done yet |
+| Windows installer (`installer/windows/Install-ProofMerge.cmd`) | Built; its structure and safety rules are checked by tests on Linux; not yet run on a Windows machine |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested offline; not yet run on GitHub |
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
-| `replay --rerun`: experiments re-run in Docker | Built; demo run reproduced |
-| Scope receipt: what a run checked (hypotheses, probes, attempts, changed tests), in `report.html` and `verify` output | Built and tested |
 | Other languages through `.proofmerge.toml` (Go demo) | Built and tested; one real `verify` on the synthetic Go demo gave BLOCK (Spark-written Go probe, base PASS 3/3, head FAIL 3/3), bundle in `demo/runs/2026-10-30-go`; no tamper guard for other languages; see [docs/languages.md](docs/languages.md) |
 | Python monorepo import paths and optional hashed installs | Built and tested offline. `[python]` in the base commit's `.proofmerge.toml` sets the import root; head config is ignored. Install is opt-in from the base lockfile. Import and install failures are REVIEW, never PASS or BLOCK. See [docs/python-projects.md](docs/python-projects.md) |
-| PASS strength beyond the receipt (for example mutation checks) | Planned |
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
-| `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
+| `proofmerge dashboard` (Control Center): runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | LangGraph orchestrator (`--orchestrator langgraph`): same stages, same plain-code verdict, retries of transient model failures only | Built and tested offline and with real Docker; parity with the default loop checked on nine scenarios; no real Meta API run on it yet; see [docs/orchestration.md](docs/orchestration.md) |
-| `proofmerge app` (`/app/`, beside the Control Center at `/`): every command from the browser (verify, risks only, probes only, evidence check, re-run, setup, model check) | Built and tested offline with fakes; a real `verify` on the demo shop was started and finished from the page in headless Chrome with the model endpoint pointed at a closed local port (REVIEW, as expected); not yet run with a real key from the page, and not yet run on Windows |
-| Windows installer (`installer/windows/Install-ProofMerge.cmd`) | Built; its structure and safety rules are checked by tests on Linux; not yet run on a Windows machine |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
+| PASS strength beyond the receipt (for example mutation checks) | Planned |
 
 Each row has a dated entry with its real check results in
 [BUILDLOG.md](BUILDLOG.md).
@@ -409,9 +476,11 @@ Each row has a dated entry with its real check results in
 
 - Repository code, diffs, PR text and model-written tests are treated as
   untrusted. Model-written shell commands are never run on your machine.
-- Git and Docker are called with argument lists, never through a shell.
-- The API key is read from the `MODEL_API_KEY` environment variable. It is
-  never written to logs, reports or the sandbox.
+- Git, Docker and the GitHub CLI are called with argument lists, never through a
+  shell.
+- The API key is read from the `MODEL_API_KEY` environment variable, or typed
+  into the app and kept in memory. It is never written to logs, reports or the
+  sandbox. The GitHub token stays inside the GitHub CLI.
 - Hashes show that a file changed after the run. They are not signatures and
   don't prove who produced the evidence.
 - A model can still guess wrong. Spark may cite a different claim from one run
@@ -429,11 +498,11 @@ Each row has a dated entry with its real check results in
 > Isolated runs have been checked on the bundled fixtures only.
 
 <details>
-<summary>Repository layout</summary>
+<summary><b>Repository layout</b></summary>
 
 ```text
 src/proofmerge/
-  cli.py         command-line entry point
+  cli.py         command-line entry point, including `proofmerge app`
   pipeline.py    runs every stage of verify and writes the evidence
   context.py     reads base/head commits and the diff from Git
   meta.py        the model client: Meta API by default, or another backend
@@ -450,14 +519,17 @@ src/proofmerge/
   manifest.py    evidence hashes and replay checks
   rederive.py    recomputes findings and the verdict from a proof for replay
   report.py      renders proof.json as report.html
-  dashboard.py   the local dashboard server and its trust checks
-  dashboard_api.py  the typed /api/v1 data; dashboard_models.py its response models
+  dashboard.py   the local server for the app and the Control Center, and its trust checks
+  dashboard_jobs.py    the app's jobs: every CLI command started from the page
+  dashboard_github.py  GitHub sign-in, repository list and clone through the GitHub CLI
+  dashboard_prs.py     pull requests: list with gh, verify on request
+  dashboard_api.py     the typed /api/v1 data; dashboard_models.py its response models
   dashboard_events.py  verification progress events and the SSE stream
-  dashboard_static/  the built Control Center (app/) and the previous page (legacy/)
+  dashboard_static/    the built Control Center (app/) and the browser app (legacy/)
   telemetry.py   opt-in OpenTelemetry spans for verify (PROOFMERGE_OTEL=1)
-  dashboard_prs.py  pull requests for the dashboard: list with gh, verify on request
   prompts/       the instructions given to Muse Spark and Muse Wonder
 ui/              Control Center source (React + TypeScript + Vite); see docs/control-center.md
+installer/windows/  the double-click Windows installer
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from proofmerge.dashboard_events import EventJournal, tail_events
+from proofmerge.dashboard_github import GH_CREDENTIALS
 
 PR_FIELDS = "number,title,author,headRefName,baseRefName,headRefOid,state,url,updatedAt,isDraft,body"
 PR_LIMIT = 50
@@ -172,7 +173,9 @@ class PullRequests:
         try:
             journal.append("job.fetch_started", status="running",
                            message="Fetching the PR and its base into refs/proofmerge/")
-            fetched = self._step(["git", "-C", str(self.repo), "fetch", "--no-tags", f"{self._repository()[1]}.git",
+            # gh's sign-in also lets git fetch private repositories, without touching git config.
+            fetched = self._step(["git", "-C", str(self.repo), *GH_CREDENTIALS, "fetch", "--no-tags",
+                                  f"{self._repository()[1]}.git",
                                   f"+refs/pull/{n}/head:{head}", f"+refs/heads/{pr['base']}:{base}"], 300)
             if fetched.returncode != 0:
                 finish("failed", "git fetch failed", exit_code=fetched.returncode)

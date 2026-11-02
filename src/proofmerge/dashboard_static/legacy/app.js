@@ -528,7 +528,7 @@
       <${JobPanel} job=${job} onOpenRun=${onOpenRun} />
       <div class="split">
         <div class="panel runs">
-          ${prs.length ? html`<table>
+          ${prs.length ? html`<table class="pr-table">
             <thead><tr><th>PR</th><th>Title</th><th class="hide-sm">Branch</th><th>ProofMerge</th></tr></thead>
             <tbody>${prs.map((p) => {
               const verdict = p.runs.length ? verdictOf(p.runs[p.runs.length - 1]) : null;
@@ -837,6 +837,164 @@
       </section>` : null}`;
   }
 
+  // ---------------------------------------------------------------- GitHub sign-in and repositories
+  const DEVICE_URL = "https://github.com/login/device"; // fixed: never a URL from the server
+  const REPO_INPUT = /^(?:https?:\/\/github\.com\/)?([A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/;
+  const parseRepo = (text) => {
+    const m = text.trim().match(REPO_INPUT);
+    return m && !/\/\.\.?$/.test(m[1]) ? m[1] : null;
+  };
+  const ago = (iso) => {
+    const days = Math.floor((Date.now() - Date.parse(iso)) / 864e5);
+    return !iso || Number.isNaN(days) ? "" : days < 1 ? "today" : days === 1 ? "yesterday"
+      : days < 30 ? `${days} days ago` : days < 60 ? "a month ago" : days < 365 ? `${Math.floor(days / 30)} months ago`
+      : days < 730 ? "a year ago" : `${Math.floor(days / 365)} years ago`;
+  };
+
+  // GitHub state from the server; polls only while sign-in waits or a download runs.
+  function useGitHub() {
+    const { token } = React.useContext(AppCtx);
+    const [gh, setGh] = useState(null);
+    const [error, setError] = useState("");
+    const [reads, setReads] = useState(0);
+    const load = useCallback(() => authGet("/api/github").then((d) => { setGh(d); setError(""); })
+      .catch((e) => setError(e.message)).finally(() => setReads((n) => n + 1)), []);
+    useEffect(() => { if (token) load(); }, [token]);
+    const waiting = gh?.login?.state === "waiting";
+    const busy = waiting || gh?.clone?.state === "running";
+    useEffect(() => {
+      if (!busy) return;
+      const timer = setTimeout(load, waiting ? 2000 : 1500);
+      return () => clearTimeout(timer);
+    }, [reads, busy]);
+    const act = (url, body = {}) => post(url, body).then((d) => { setGh(d); setReads((n) => n + 1); return d; });
+    return { gh, error, load, act };
+  }
+
+  function GitHubRow() {
+    const { gh, error, load, act } = useGitHub();
+    const [pending, setPending] = useState(false);
+    const [fail, setFail] = useState("");
+    const run = (url) => {
+      setPending(true); setFail("");
+      act(url).catch((e) => setFail(e.message)).finally(() => setPending(false));
+    };
+    if (!gh) {
+      return html`<${SetupRow} optional=${true} icon="pull" title="GitHub">${error || "Checking…"}</${SetupRow}>`;
+    }
+    const login = gh.login;
+    let body;
+    let action = null;
+    if (gh.error) {
+      body = gh.error;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => { setPending(true); load().finally(() => setPending(false)); }}>Try again</button>`;
+    } else if (!gh.gh) {
+      body = "To open pull requests from GitHub, ProofMerge needs the GitHub CLI. Run the ProofMerge installer again and it can add it for you.";
+      action = html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get GitHub CLI</a>`;
+    } else if (gh.user) {
+      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.`;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out</button>`;
+    } else if (login?.state === "waiting") {
+      body = html`<div class="device" aria-live="polite">
+        ${login.code
+          ? html`<div class="device-code-row"><span class="device-code">${login.code}</span><${Copy} text=${login.code} label="the code" /></div>`
+          : html`<div class="device-code-row"><span class="spinner" aria-hidden="true"></span><span>Getting a code…</span></div>`}
+        <p>Open GitHub, paste the code and press <strong>Authorize</strong>. This page updates by itself.</p>
+        <a class="primary" href=${DEVICE_URL} target="_blank" rel="noopener noreferrer">Open GitHub</a>
+      </div>`;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/login/cancel")}>Cancel</button>`;
+    } else {
+      body = login?.state === "failed" ? login.error
+        : "Sign in to pick a repository and check its pull requests. You approve it on github.com; ProofMerge never sees your password.";
+      action = html`<button class="primary" type="button" disabled=${pending} onClick=${() => run("/api/github/login")}>
+        ${login?.state === "failed" ? "Try again" : "Sign in to GitHub"}</button>`;
+    }
+    return html`<${SetupRow} ok=${!!gh.user} optional=${true} icon="pull" title="GitHub" action=${action}>
+      ${body}${fail ? html`<div class="error-box gh-error">${fail}</div>` : null}</${SetupRow}>`;
+  }
+
+  function RepoPicker({ onPicked, onCancel }) {
+    const ctx = React.useContext(AppCtx);
+    const { gh, error, load, act } = useGitHub();
+    const [repos, setRepos] = useState(null);
+    const [listError, setListError] = useState("");
+    const [query, setQuery] = useState("");
+    const [other, setOther] = useState("");
+    const [fail, setFail] = useState("");
+    const asked = useRef("");
+    const signedIn = !!gh?.user;
+    const loadRepos = () => {
+      setListError("");
+      authGet("/api/github/repos").then((d) => setRepos(d.repos)).catch((e) => setListError(e.message));
+    };
+    useEffect(() => { if (signedIn) loadRepos(); }, [signedIn]);
+    const clone = gh?.clone;
+    useEffect(() => {
+      // Once the download we asked for finishes, make it the project; the PR list follows it.
+      if (!clone || clone.repo !== asked.current || clone.state === "running") return;
+      asked.current = "";
+      if (clone.state === "done") ctx.saveSettings({ project: clone.path }).then(onPicked).catch((e) => setFail(e.message));
+    }, [gh]);
+    const [starting, setStarting] = useState("");
+    const pick = (name) => {
+      setFail(""); asked.current = name; setStarting(name);
+      act("/api/github/clone", { repo: name }).catch((e) => { asked.current = ""; setFail(e.message); })
+        .finally(() => setStarting(""));
+    };
+    const otherName = parseRepo(other);
+    const back = onCancel ? html`<button class="ghost" type="button" onClick=${onCancel}>Keep the current repository</button>` : null;
+    if (!gh) return error ? html`<div class="error-box">${error}</div>` : html`<p class="boot">Checking GitHub…</p>`;
+    if (gh.error) {
+      return html`<div class="panel empty picker-empty"><strong>GitHub is not answering</strong>${gh.error}
+        <div class="actions center"><button class="primary" type="button" onClick=${load}>Try again</button>${back}</div></div>`;
+    }
+    if (!gh.gh || !gh.user) {
+      return html`<div class="panel empty picker-empty"><strong>Sign in to GitHub first</strong>
+        Then pick any of your repositories here and check its pull requests, no terminal needed.
+        <div class="actions center">
+          <button class="primary" type="button" onClick=${() => ctx.go({ tab: "setup" })}>Go to Setup</button>
+          <button class="ghost" type="button" onClick=${() => ctx.go({ tab: "home" })}>Use a folder on this computer</button>
+          ${back}</div></div>`;
+    }
+    if (starting || clone?.state === "running") {
+      return html`<div class="panel clone-progress" role="status" aria-live="polite">
+        <div class="clone-head"><span class="spinner" aria-hidden="true"></span><strong>Downloading ${starting || clone.repo}…</strong></div>
+        <p class="muted">The first time takes a minute for a big repository. Next time ProofMerge only fetches what changed.</p>
+        <div class="bar" aria-hidden="true"><span></span></div></div>`;
+    }
+    const q = query.trim().toLowerCase();
+    const shown = (repos || []).filter((r) => !q || `${r.name} ${r.description}`.toLowerCase().includes(q));
+    const failed = fail || (clone?.state === "failed" ? clone.error : "");
+    return html`<section class="panel picker">
+      <div class="picker-head">
+        <div><strong>Choose a repository</strong>
+          <div class="muted">Signed in as @${gh.user}. ProofMerge downloads it to your ProofMerge folder; its code only ever runs in the sandbox.</div></div>
+        ${back}
+      </div>
+      ${failed ? html`<div class="error-box" role="alert">${failed}</div>` : null}
+      <input class="search" type="search" placeholder="Search your repositories" value=${query}
+        onInput=${(e) => setQuery(e.target.value)} aria-label="Search your repositories" />
+      ${listError ? html`<div class="error-box">${listError} <button class="ghost" type="button" onClick=${loadRepos}>Try again</button></div>`
+        : !repos ? html`<p class="boot">Loading your repositories…</p>`
+        : shown.length ? html`<ul class="repo-list">${shown.map((r) => html`<li key=${r.name}>
+            <button class="repo-item" type="button" onClick=${() => pick(r.name)}>
+              <span class="repo-name">${r.name}${r.private ? html`<span class="tag">Private</span>` : null}</span>
+              ${r.description ? html`<span class="repo-desc">${r.description}</span>` : null}
+              <span class="repo-when">${ago(r.updated)}</span>
+            </button></li>`)}</ul>`
+        : html`<p class="muted">${repos.length ? "No repository matches. Change the search." : "Your account has no repositories yet."}</p>`}
+      <form class="repo-other" onSubmit=${(e) => { e.preventDefault(); if (otherName) pick(otherName); }}>
+        <label for="repo-other">Another repository</label>
+        <div class="repo-other-row">
+          <input id="repo-other" class="search" type="text" spellcheck="false" autocomplete="off"
+            placeholder="owner/name or https://github.com/owner/name" value=${other} onInput=${(e) => setOther(e.target.value)} />
+          <button class="ghost" type="submit" disabled=${!otherName}>Open</button>
+        </div>
+        ${other.trim() && !otherName ? html`<span class="muted">Use owner/name, like octocat/hello-world.</span>` : null}
+      </form>
+    </section>`;
+  }
+
   function SetupRow({ ok, optional, icon, title, children, action }) {
     return html`<li class=${"setup-row " + (ok ? "ok" : optional ? "optional" : "todo")}>
       <span class="status-dot" aria-label=${ok ? "Ready" : optional ? "Optional" : "Needs setup"}><${Icon} name=${ok ? "check" : icon} size=${16} /></span>
@@ -883,9 +1041,7 @@
               value=${key} onInput=${(e) => setKey(e.target.value)} aria-label="Model API key" />
             <button class="ghost" type="submit" disabled=${!key.trim()}>Save</button>
             ${saved ? html`<span class="muted">${saved}</span>` : null}</form>` : null}</${SetupRow}>
-        <${SetupRow} ok=${h.gh} optional=${true} icon="pull" title="GitHub CLI (optional)"
-          action=${h.gh ? null : html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get gh</a>`}>
-          ${h.gh ? "Installed. Pull requests of your project show up under Pull requests." : "Only needed to list and check pull requests from GitHub. Sign in with it once after installing."}</${SetupRow}>
+        <${GitHubRow} />
       </ol>
       <div class="actions"><button class="ghost" type="button" onClick=${ctx.reloadHealth}><${Icon} name="refresh" />Check again</button></div>
       <dl class="facts about">
@@ -933,6 +1089,7 @@
     const [notice, setNotice] = useState("");
     const [quitArmed, setQuitArmed] = useState(false);
     const [quit, setQuit] = useState(false);
+    const [picking, setPicking] = useState(false);
     const reloadHealth = useCallback(() => authGet("/api/health").then(setHealth).catch(() => {}), []);
     useEffect(() => {
       getJSON("/api/session").then((s) => {
@@ -994,7 +1151,8 @@
     });
     const dismiss = () => { if (job) { setDismissed(job.started); store.set("pm-dismissed", String(job.started)); } };
     const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, stop, go,
-      saveSettings, reloadHealth, dismiss, dismissed, tab: route.tab };
+      saveSettings, reloadHealth, dismiss, dismissed, tab: route.tab, token: session.token };
+    const project = session.settings?.project || "";
     const nextTheme = { auto: "light", light: "dark", dark: "auto" }[theme];
     if (quit) {
       return html`<div class="quit"><${Icon} name="power" size=${28} /><h1>ProofMerge has stopped</h1>
@@ -1037,13 +1195,16 @@
               <button class="ghost" type="button" onClick=${load} disabled=${loading}><${Icon} name="refresh" />${loading ? "Scanning…" : "Refresh"}</button></div>
             <${RunsView} index=${index} selected=${route.run} onSelect=${(run) => go({ run })} />` : null}
           ${index && route.tab === "bench" ? html`<${BenchmarksView} index=${index} onOpenRun=${(run) => go({ tab: "runs", run })} />` : null}
-          ${index && route.tab === "prs" ? (session.prs
-            ? html`<div class="page-head"><h1>Pull requests</h1></div><${PullsView} index=${index} token=${session.token} selected=${route.pr}
-              onSelect=${(pr) => go({ pr: String(pr) })} onOpenRun=${(run) => { load(); go({ tab: "runs", run }); }}
-              onRunsChanged=${load} />`
-            : html`<div class="page-head"><h1>Pull requests</h1></div><div class="panel empty"><strong>Choose a project first</strong>
-              Pick your project on Home. Its GitHub pull requests show up here, ready to check with one click.
-              <div class="actions center"><button class="primary" type="button" onClick=${() => go({ tab: "home" })}>Go to Home</button></div></div>`) : null}
+          ${index && route.tab === "prs" ? html`<div class="page-head"><h1>Pull requests</h1>
+              ${session.prs && !picking ? html`<div class="repo-now">
+                <span class="muted">Repository</span><code title=${project}>${project.split(/[\\/]/).slice(-2).join("/")}</code>
+                <button class="ghost" type="button" onClick=${() => setPicking(true)}>Change repository</button></div>` : null}</div>
+            ${!session.prs || picking
+              ? html`<div class="swap" key="picker"><${RepoPicker} onPicked=${() => setPicking(false)}
+                  onCancel=${session.prs ? () => setPicking(false) : null} /></div>`
+              : html`<div class="swap" key=${"prs:" + project}><${PullsView} index=${index} token=${session.token} selected=${route.pr}
+                  onSelect=${(pr) => go({ pr: String(pr) })} onOpenRun=${(run) => { load(); go({ tab: "runs", run }); }}
+                  onRunsChanged=${load} /></div>`}` : null}
         </main>
         <${JobDock} />
       </div>

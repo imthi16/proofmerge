@@ -16,10 +16,11 @@ exit /b %PM_CODE%
 # What it does, in order:
 #   1. finds Python 3.11 or newer, or offers to install it with winget
 #   2. finds Git, or offers to install it with winget
-#   3. installs ProofMerge into %LOCALAPPDATA%\ProofMerge\venv (no admin rights, PATH untouched)
-#   4. offers to install Docker Desktop, which runs the tests in a sandbox
-#   5. adds ProofMerge and Uninstall ProofMerge to the Start menu, and ProofMerge to the desktop
-#   6. opens ProofMerge in the browser
+#   3. offers to install the GitHub CLI, which lets the app sign in to GitHub (optional)
+#   4. installs ProofMerge into %LOCALAPPDATA%\ProofMerge\venv (no admin rights, PATH untouched)
+#   5. offers to install Docker Desktop, which runs the tests in a sandbox
+#   6. adds ProofMerge and Uninstall ProofMerge to the Start menu, and ProofMerge to the desktop
+#   7. opens ProofMerge in the browser
 # Winget shows each package's license and asks you to accept it; this script never accepts for you.
 
 $ErrorActionPreference = 'Stop'
@@ -110,7 +111,7 @@ try {
     Write-Host '  ProofMerge installer' -ForegroundColor White
     Write-Host '  Checks a code change before you merge it, with evidence.'
 
-    Step 'Step 1 of 6: Python'
+    Step 'Step 1 of 7: Python'
     $python = Find-Python
     if (-not $python) {
         Say 'ProofMerge needs Python 3.11 or newer, and it is not installed.'
@@ -124,7 +125,7 @@ try {
     $pyArgs = @($python | Select-Object -Skip 1)
     Ok ('Found ' + (& $pyExe @pyArgs --version))
 
-    Step 'Step 2 of 6: Git'
+    Step 'Step 2 of 7: Git'
     if (-not (Has 'git')) {
         Say 'ProofMerge reads your branches with Git, and it is not installed.'
         if (Ask 'Install Git now?') { Install-WithWinget 'Git.Git' 'Git' | Out-Null }
@@ -134,7 +135,15 @@ try {
     }
     Ok ('Found ' + (git --version))
 
-    Step 'Step 3 of 6: ProofMerge'
+    Step 'Step 3 of 7: GitHub sign-in'
+    if (-not (Has 'gh')) {
+        Say 'The GitHub CLI lets ProofMerge sign in to GitHub and open your pull requests.'
+        if (Ask 'Install the GitHub CLI now?') { Install-WithWinget 'GitHub.cli' 'GitHub CLI' | Out-Null }
+    }
+    if (Has 'gh') { Ok ('Found ' + @(gh --version)[0]) }
+    else { Say 'Skipped. You can still check changes in folders on this computer.' }
+
+    Step 'Step 4 of 7: ProofMerge'
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     if (-not (Test-Path $VenvPython)) {
         Say "Making a private Python environment in $Venv"
@@ -153,7 +162,7 @@ try {
     if (-not (Test-Path $AppExe)) { throw "The ProofMerge launcher is missing: $AppExe" }
     Ok ('Installed ' + (& (Join-Path $Venv 'Scripts\proofmerge.exe') version))
 
-    Step 'Step 4 of 6: Docker Desktop'
+    Step 'Step 5 of 7: Docker Desktop'
     if (Has 'docker') {
         Ok 'Found Docker. Start Docker Desktop before your first check.'
     } else {
@@ -167,7 +176,7 @@ try {
         }
     }
 
-    Step 'Step 5 of 6: Shortcuts'
+    Step 'Step 6 of 7: Shortcuts'
     $uninstaller = Join-Path $InstallDir 'Uninstall ProofMerge.cmd'
     # Run by the uninstaller: stop only this install's processes (they lock the files), wait,
     # then remove the shortcuts from folders looked up at that moment.
@@ -193,7 +202,7 @@ $own = (Join-Path $env:LOCALAPPDATA 'ProofMerge') + '\'; Get-Process -ErrorActio
     Write-Shortcut $Desktop 'ProofMerge' $AppExe '' 'Check a change before you merge it'
     Ok 'Added ProofMerge to the Start menu and the desktop.'
 
-    Step 'Step 6 of 6: Open ProofMerge'
+    Step 'Step 7 of 7: Open ProofMerge'
     Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP
     Ok 'ProofMerge is opening in your browser. Its small window must stay open while you use it.'
     Say 'Next time, open it from the Start menu or the desktop.'

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from proofmerge.dashboard import _benchmarks, _detail, _summary, make_server, scan
+from proofmerge.dashboard_github import GH_CREDENTIALS
 from proofmerge.dashboard_prs import PrError, PullRequests
 from proofmerge.sandbox import docker_argv
 
@@ -233,8 +234,9 @@ def test_verify_fetches_into_proofmerge_refs_and_runs_verify(pr_server, runs: Pa
     assert runner.done.wait(5)
 
     fetch_call = next(c for c in runner.calls if "fetch" in c)
-    assert fetch_call[:6] == ["git", "-C", str(repo.resolve()), "fetch", "--no-tags",
-                              "https://github.com/o/r.git"]
+    # gh's sign-in reaches private repositories for this one command only.
+    assert fetch_call[:10] == ["git", "-C", str(repo.resolve()), *GH_CREDENTIALS, "fetch", "--no-tags",
+                               "https://github.com/o/r.git"]
     assert "origin" not in fetch_call
     assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[3:5] == ["--repo", "o/r"]
     assert "+refs/pull/7/head:refs/proofmerge/pr-7" in fetch_call

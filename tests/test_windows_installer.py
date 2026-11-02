@@ -1,5 +1,6 @@
 """The Windows installer cannot run here, so these checks pin what it must and must not do."""
 
+import re
 from pathlib import Path
 
 INSTALLER = Path(__file__).parent.parent / "installer" / "windows" / "Install-ProofMerge.cmd"
@@ -34,8 +35,8 @@ def test_never_accepts_licenses_or_runs_downloaded_scripts() -> None:
     assert "--accept-source-agreements" not in script
     for remote_exec in ("Invoke-WebRequest", "irm ", "iwr ", "DownloadString", "| iex"):
         assert remote_exec not in script
-    # Each of the three winget installs (Python, Git, Docker Desktop) sits behind a question.
-    assert script.count("Install-WithWinget '") == 3 and script.count("(Ask '") == 3
+    # Each winget install (Python, Git, GitHub CLI, Docker Desktop) sits behind a question.
+    assert script.count("Install-WithWinget '") == 4 and script.count("(Ask '") == 4
 
 
 def test_git_stores_the_file_as_is_so_the_raw_download_keeps_crlf() -> None:
@@ -94,3 +95,13 @@ def test_winget_displays_output_and_returns_only_exit_status() -> None:
     function = text().split("function Install-WithWinget", 1)[1].split("function Stop-App", 1)[0]
     assert "winget install --exact --id $id | Out-Host\r\n    $code = $LASTEXITCODE" in function
     assert "return ($code -eq 0)" in function
+
+
+def test_github_cli_is_offered_after_git_and_is_optional() -> None:
+    script = text()
+    labels = re.findall(r"Step 'Step (\d) of (\d): ([^']+)'", script)
+    assert [(int(n), int(total)) for n, total, _ in labels] == [(i, 7) for i in range(1, 8)]
+    assert [name for _, _, name in labels][1:4] == ["Git", "GitHub sign-in", "ProofMerge"]
+    step = script.split("Step 3 of 7: GitHub sign-in", 1)[1].split("Step 4 of 7", 1)[0]
+    assert "(Ask 'Install the GitHub CLI now?')" in step and "Install-WithWinget 'GitHub.cli'" in step
+    assert "throw" not in step  # without it the app still checks local folders

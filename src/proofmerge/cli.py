@@ -1,6 +1,7 @@
 import json
 import subprocess
 import tempfile
+import webbrowser
 from pathlib import Path
 from typing import Annotated
 
@@ -185,6 +186,43 @@ def dashboard(
         pass
     finally:
         server.server_close()
+
+
+@app.command("app")
+def open_app(
+    folder: Annotated[
+        Path | None, typer.Argument(help="Folder for evidence runs [default: ~/ProofMerge/runs]")
+    ] = None,
+    port: Annotated[int, typer.Option(help="Local port; a free one is used if it is busy")] = 8765,
+    browser: Annotated[bool, typer.Option(help="Open the app in the web browser")] = True,
+) -> None:
+    """Open ProofMerge in the browser: verify changes, read runs and set up, no terminal needed."""
+    folder = folder or Path.home() / "ProofMerge" / "runs"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            server = make_server(folder, port)
+        except OSError:
+            server = make_server(folder, 0)  # the port is taken: let the system pick one
+    except OSError as error:
+        typer.echo(f"app failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    url = f"http://127.0.0.1:{server.server_port}/app/"
+    typer.echo(f"ProofMerge is open at {url}")
+    typer.echo("Keep this window open while you use it. Close it, or press Quit in the app, to stop.")
+    if browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
+def run_app() -> None:
+    """Entry point for the `proofmerge-app` launcher (a double-clickable .exe on Windows)."""
+    app(["app"])
 
 
 @app.command()

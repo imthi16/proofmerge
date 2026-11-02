@@ -35,6 +35,12 @@ def test_samples_render_decision_claims_and_hypotheses(name: str) -> None:
         assert html.escape(finding.test_path) in page
 
 
+def test_fonts_are_inlined_so_the_page_makes_no_requests() -> None:
+    page = render_html(load(SAMPLES[0]), FIXTURES)
+    assert page.count("url(data:font/woff2;base64,") == 2
+    assert "http://" not in page and "https://" not in page
+
+
 @pytest.mark.parametrize("name", SAMPLES)
 def test_probe_source_missing_is_said_in_words(name: str, tmp_path: Path) -> None:
     assert "probe source not captured" in render_html(load(name), tmp_path)

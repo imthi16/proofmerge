@@ -5,8 +5,10 @@ escaped before it enters the page. The file is static: inline CSS, no scripts,
 no external resources.
 """
 
+import base64
 import html
 import shlex
+from functools import cache
 from pathlib import Path
 
 from proofmerge.evidence import Experiment, Finding, ModelUsage, Proof
@@ -24,115 +26,175 @@ _HEADLINE = {
 
 _CSS = """\
 :root {
-  color-scheme: light dark;
-  --bg: #fbfcfd; --fg: #17202b; --muted: #586678; --rule: #dde3ea;
-  --surface: #ffffff; --code-bg: #f1f4f7; --select: #cfe0f5;
-  --pass-bg: #e3f3e7; --pass-fg: #1b6a31;
-  --review-bg: #fbf1d6; --review-fg: #6b4a04;
-  --block-bg: #fbe6e4; --block-fg: #a3221d;
-  --change-fg: #2c5aa0; --change-bg: #e5edf9;
+  color-scheme: dark;
+  --bg: #090c11; --surface: #0f141b; --raised: #151b24;
+  --rule: #1f2732; --rule-strong: #2c3644;
+  --fg: #e9eef5; --muted: #8b97a9; --faint: #75818f;
+  --brand: #8b9cff; --pass: #34d399; --review: #fbbf24; --block: #ff5d5d;
+  --glow-a: rgba(139, 156, 255, .12);
 }
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #10171f; --fg: #e6ecf3; --muted: #9fb0c3; --rule: #273746;
-    --surface: #16202b; --code-bg: #0c131b; --select: #2b4a70;
-    --pass-bg: #123020; --pass-fg: #6fd18c;
-    --review-bg: #33280f; --review-fg: #e8bb4f;
-    --block-bg: #3a1714; --block-fg: #ff8a83;
-    --change-fg: #8fb4f0; --change-bg: #1a2a42;
+    color-scheme: light;
+    --bg: #f5f6f8; --surface: #ffffff; --raised: #f0f2f5;
+    --rule: #e2e6ec; --rule-strong: #cdd3dc;
+    --fg: #0e131a; --muted: #5b6676; --faint: #5f6a7a;
+    --brand: #3f4fd0; --pass: #0b7550; --review: #855000; --block: #b42323;
+    --glow-a: rgba(75, 92, 228, .07);
   }
 }
-* { box-sizing: border-box; }
+:root {
+  --pass-bg: color-mix(in oklab, var(--pass) 14%, transparent);
+  --review-bg: color-mix(in oklab, var(--review) 14%, transparent);
+  --block-bg: color-mix(in oklab, var(--block) 14%, transparent);
+  --pass-line: color-mix(in oklab, var(--pass) 45%, transparent);
+  --review-line: color-mix(in oklab, var(--review) 45%, transparent);
+  --block-line: color-mix(in oklab, var(--block) 45%, transparent);
+  --select: color-mix(in oklab, var(--brand) 32%, transparent);
+  --r-sm: 6px; --r-md: 14px;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  accent-color: var(--brand);
+}
+* { box-sizing: border-box; scrollbar-color: var(--rule-strong) transparent; }
 ::selection { background: var(--select); color: var(--fg); }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 \
-system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; \
--webkit-font-smoothing: antialiased; }
-main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-p { margin: .5rem 0; }
-code, pre, .sha { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, \
-"Liberation Mono", monospace; font-size: .88em; }
-code { background: var(--code-bg); padding: .05rem .3rem; border-radius: 4px; overflow-wrap: anywhere; }
-pre { background: var(--code-bg); padding: .85rem 1rem; border-radius: 8px; margin: .5rem 0 1rem; \
-overflow-x: auto; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
-pre code { background: none; padding: 0; font-size: 1em; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-sm); }
+body { margin: 0; color: var(--fg); font: 15.5px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+  background: radial-gradient(56rem 20rem at 20% -8rem, var(--glow-a), transparent 70%) no-repeat, var(--bg); }
+main { max-width: 58rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+p { margin: .5rem 0; text-wrap: pretty; }
+code, pre, .sha { font-family: var(--mono); font-size: .86em; font-variant-ligatures: none; }
+code { background: var(--raised); border: 1px solid var(--rule); padding: .02rem .32rem; border-radius: 5px;
+  overflow-wrap: anywhere; }
+pre { background: var(--bg); border: 1px solid var(--rule); padding: .9rem 1rem; border-radius: var(--r-sm);
+  margin: .5rem 0 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+pre code { background: none; border: 0; padding: 0; font-size: 1em; }
 .muted { color: var(--muted); }
-h2 { font-size: 1.25rem; letter-spacing: -.01em; margin: 2.75rem 0 1rem; padding-top: 1rem; \
-border-top: 1px solid var(--rule); }
-h3 { font-size: 1.15rem; letter-spacing: -.01em; line-height: 1.3; margin: 0 0 .5rem; text-wrap: balance; }
-h4 { font-size: .95rem; margin: 1.25rem 0 .25rem; }
-blockquote { margin: .5rem 0; padding: .5rem .85rem; background: var(--code-bg); \
-border-radius: 6px; font-style: italic; }
+h2 { font-size: 1.4rem; font-weight: 600; letter-spacing: -.025em; margin: 3rem 0 1rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--rule); text-wrap: balance; }
+h3 { font-size: 1.1rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.35; margin: 0 0 .5rem; text-wrap: balance; }
+h4 { font-size: .85rem; font-weight: 600; color: var(--muted); margin: 1.4rem 0 .3rem; }
+blockquote { margin: .5rem 0; padding: .5rem .85rem; background: var(--raised); border-radius: var(--r-sm);
+  font-style: italic; color: var(--muted); }
 
-.banner { border-radius: 12px; padding: 1.5rem 1.5rem 1.25rem; border: 2px solid; }
-.banner.pass { background: var(--pass-bg); color: var(--pass-fg); border-color: var(--pass-fg); }
-.banner.review { background: var(--review-bg); color: var(--review-fg); border-color: var(--review-fg); }
-.banner.block { background: var(--block-bg); color: var(--block-fg); border-color: var(--block-fg); }
-.banner .decision { font-size: 2.75rem; font-weight: 800; letter-spacing: -.02em; line-height: 1; margin: 0; }
-.banner .headline { font-size: 1.2rem; font-weight: 650; margin: .5rem 0 0; color: var(--fg); }
-.banner .run { margin: .75rem 0 0; font-size: .9rem; color: var(--fg); }
-.banner .run code { background: var(--surface); }
-.banner ul { margin: .75rem 0 0; padding-left: 1.2rem; color: var(--fg); }
-.banner li + li { margin-top: .25rem; }
+/* The verdict: the one loud element on the page. */
+.banner { position: relative; overflow: hidden; border-radius: var(--r-md); padding: 1.75rem 1.75rem 1.5rem;
+  border: 1px solid var(--rule); background: var(--surface); }
+.banner::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; }
+.banner.pass { background: linear-gradient(180deg, var(--pass-bg), transparent 60%), var(--surface); border-color: var(--pass-line); }
+.banner.pass::before { background: var(--pass); }
+.banner.review { background: linear-gradient(180deg, var(--review-bg), transparent 60%), var(--surface); border-color: var(--review-line); }
+.banner.review::before { background: var(--review); }
+.banner.block { background: linear-gradient(180deg, var(--block-bg), transparent 60%), var(--surface); border-color: var(--block-line); }
+.banner.block::before { background: var(--block); }
+.banner .decision { font-size: clamp(3rem, 11vw, 5.5rem); font-weight: 700; letter-spacing: -.06em; line-height: .88;
+  margin: 0; animation: decision-open 1s var(--ease) both; }
+.banner.pass .decision { color: var(--pass); }
+.banner.review .decision { color: var(--review); }
+.banner.block .decision { color: var(--block); }
+@keyframes decision-open { from { clip-path: inset(0 0 100% 0); transform: translateY(.15em); }
+  to { clip-path: inset(0 0 -10% 0); transform: none; } }
+.banner .headline { font-size: 1.3rem; font-weight: 600; letter-spacing: -.025em; line-height: 1.25; margin: .9rem 0 0;
+  text-wrap: balance; }
+.banner .run { margin: .6rem 0 0; font-size: .88rem; color: var(--muted); }
+.banner ul { margin: 1.1rem 0 0; padding: 1rem 0 0 1.2rem; border-top: 1px solid var(--rule); color: var(--muted); }
+.banner li::marker { color: var(--faint); }
+.banner li + li { margin-top: .3rem; }
 
-.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; \
-padding: 1.25rem 1.5rem 1rem; margin: 0 0 1.5rem; box-shadow: 0 1px 2px rgba(23, 32, 43, .05), \
-0 4px 16px rgba(23, 32, 43, .04); }
-.card h3 code { font-size: .8em; margin-right: .35rem; }
-.meta { color: var(--muted); font-size: .92rem; margin: .25rem 0; }
-.note { font-size: .92rem; padding: .4rem .75rem; border-radius: 6px; background: var(--review-bg); \
-color: var(--review-fg); }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md);
+  padding: 1.4rem 1.5rem 1.1rem; margin: 0 0 1.25rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 16px 40px -20px rgba(0, 0, 0, .5); }
+.card h3 code { font-size: .78em; margin-right: .4rem; color: var(--brand);
+  border-color: color-mix(in oklab, var(--brand) 35%, transparent); }
+.meta { color: var(--muted); font-size: .88rem; margin: .25rem 0; }
+.note { font-size: .88rem; padding: .45rem .75rem; border-radius: var(--r-sm); background: var(--review-bg);
+  color: var(--review); border: 1px solid var(--review-line); }
 
-.evidence { width: 100%; border-collapse: separate; border-spacing: 4px; margin: 1rem -4px .25rem; \
-font-variant-numeric: tabular-nums; }
-.evidence th { font-size: .82rem; font-weight: 600; color: var(--muted); text-align: left; \
-padding: .2rem .5rem; }
-.evidence th[scope="row"] { color: var(--fg); font-size: .95rem; white-space: nowrap; }
-.evidence td.expected { font-size: .88rem; color: var(--muted); padding: .35rem .5rem; \
-vertical-align: middle; min-width: 12rem; }
-.outcome { text-align: center; font-weight: 800; letter-spacing: .02em; padding: .7rem .5rem; \
-border-radius: 6px; width: 5.5rem; background: var(--code-bg); }
-.outcome.pass { background: var(--pass-bg); color: var(--pass-fg); }
-.outcome.fail { background: var(--block-bg); color: var(--block-fg); }
-.outcome.error, .outcome.timeout { background: var(--review-bg); color: var(--review-fg); }
+/* The proof itself: base and head across attempts. */
+.evidence { width: 100%; border-collapse: separate; border-spacing: 6px; margin: 1.1rem -6px .4rem;
+  font-variant-numeric: tabular-nums; }
+.evidence th { font-size: .76rem; font-weight: 500; color: var(--faint); text-align: left; padding: .2rem .4rem; }
+.evidence th[scope="row"] { color: var(--fg); font-size: .92rem; font-weight: 600; white-space: nowrap; }
+.evidence th[scope="row"] code { font-size: .78em; margin-left: .2rem; }
+.evidence td.expected { font-size: .84rem; color: var(--muted); padding: .35rem .4rem; vertical-align: middle; min-width: 12rem; }
+.outcome { text-align: center; font-family: var(--mono); font-size: .8rem; font-weight: 600; letter-spacing: .06em;
+  padding: .8rem .5rem; border-radius: var(--r-sm); width: 5.75rem; background: var(--raised); color: var(--muted);
+  border: 1px solid var(--rule); animation: stamp .5s var(--ease) both; }
+.evidence tr:nth-child(1) .outcome:nth-of-type(2) { animation-delay: .35s; }
+.evidence tr:nth-child(1) .outcome:nth-of-type(3) { animation-delay: .42s; }
+.evidence tr:nth-child(1) .outcome:nth-of-type(4) { animation-delay: .49s; }
+.evidence tr:nth-child(2) .outcome:nth-of-type(2) { animation-delay: .56s; }
+.evidence tr:nth-child(2) .outcome:nth-of-type(3) { animation-delay: .63s; }
+.evidence tr:nth-child(2) .outcome:nth-of-type(4) { animation-delay: .7s; }
+@keyframes stamp { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+.outcome.pass { background: var(--pass-bg); color: var(--pass); border-color: var(--pass-line); }
+.outcome.fail { background: var(--block-bg); color: var(--block); border-color: var(--block-line); }
+.outcome.error, .outcome.timeout { background: var(--review-bg); color: var(--review); border-color: var(--review-line); }
 
-.classification { font-size: .95rem; }
-.classification strong { padding: .1rem .45rem; border-radius: 4px; background: var(--code-bg); }
-.classification strong.regression { background: var(--block-bg); color: var(--block-fg); }
+.classification { font-size: .92rem; color: var(--muted); }
+.classification strong { font-family: var(--mono); font-size: .8rem; font-weight: 600; letter-spacing: .04em;
+  padding: .15rem .5rem; border-radius: 999px; background: var(--raised); color: var(--fg); border: 1px solid var(--rule); }
+.classification strong.regression { background: var(--block-bg); color: var(--block); border-color: var(--block-line); }
 
 .claims { list-style: none; padding: 0; margin: 0; }
-.claim { padding: .85rem 0; border-bottom: 1px solid var(--rule); }
+.claim { padding: 1rem 0; border-bottom: 1px solid var(--rule); }
 .claim:first-child { padding-top: 0; }
 .claim:last-child { border-bottom: 0; }
-.claim.rejected { opacity: .85; }
+.claim.rejected { opacity: .8; }
 .claim h3 { font-size: 1rem; margin: 0; }
-.kind { font-size: .78rem; font-weight: 700; padding: .1rem .45rem; border-radius: 4px; \
-background: var(--code-bg); color: var(--muted); }
-.kind.change { background: var(--change-bg); color: var(--change-fg); }
-.kind.contested { background: var(--review-bg); color: var(--review-fg); }
+.kind { font-family: var(--mono); font-size: .7rem; font-weight: 500; padding: .1rem .5rem; border-radius: 999px;
+  border: 1px solid var(--rule); color: var(--muted); vertical-align: middle; }
+.kind.change { color: var(--brand); border-color: color-mix(in oklab, var(--brand) 40%, transparent);
+  background: color-mix(in oklab, var(--brand) 10%, transparent); }
+.kind.contested { background: var(--review-bg); color: var(--review); border-color: var(--review-line); }
 
-.receipt h2 { border-top: 0; margin-top: 1.5rem; padding-top: 0; }
-.receipt ul { margin: 0; padding-left: 1.2rem; }
-.receipt li + li { margin-top: .2rem; }
-.provenance { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.25rem; margin: 0; }
-.provenance dt { color: var(--muted); font-size: .92rem; }
-.provenance dd { margin: 0; overflow-wrap: anywhere; }
-.scope ul, section > ul { padding-left: 1.2rem; }
+.receipt h2 { border-top: 0; margin-top: 2.25rem; padding-top: 0; }
+.receipt ul, .scope ul, section > ul { padding-left: 1.2rem; }
+.receipt li::marker, section > ul li::marker { color: var(--faint); }
+.receipt li + li { margin-top: .3rem; }
+.provenance { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1.5rem; margin: 0;
+  padding: 1.1rem 1.25rem; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md); }
+.provenance dt { color: var(--faint); font-size: .86rem; }
+.provenance dd { margin: 0; overflow-wrap: anywhere; font-size: .92rem; }
+.provenance dd.sha { color: var(--muted); }
+/* Prose in the sections keeps a reading measure; cards stay full width for the evidence tables. */
+section > p, section > ul { max-width: 72ch; }
 @media (max-width: 40rem) {
   body { font-size: 15px; }
-  .banner { padding: 1.1rem 1rem 1rem; }
-  .banner .decision { font-size: 2.1rem; }
-  .card { padding: 1rem; }
+  main { padding-top: 1.25rem; }
+  .banner { padding: 1.3rem 1.1rem 1.1rem; }
+  .card { padding: 1.1rem 1rem; }
   /* Each revision becomes a block: label and expectation, then the attempts in one row. */
   .evidence, .evidence thead, .evidence tbody { display: block; }
   .evidence { margin: 1rem 0 .25rem; }
-  .evidence tr { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: .5rem; }
+  .evidence tr { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: .6rem; }
   .evidence thead th:nth-child(-n+2) { display: none; }
   .evidence th[scope="row"], .evidence td.expected { grid-column: 1 / -1; padding: 0; }
   .evidence td.expected { min-width: 0; }
-  .outcome { width: auto; padding: .55rem .25rem; }
+  .outcome { width: auto; padding: .6rem .25rem; }
   .provenance { grid-template-columns: 1fr; gap: 0; }
-  .provenance dd { margin-bottom: .5rem; }
-}"""
+  .provenance dd { margin-bottom: .6rem; }
+}
+@media (prefers-reduced-motion: reduce) { .banner .decision, .outcome { animation: none; } }
+@media print { .banner .decision, .outcome { animation: none; } }"""
+
+
+_FONTS = Path(__file__).parent / "dashboard_static" / "legacy" / "vendor"
+
+
+@cache
+def _font_faces() -> str:
+    """Geist, inlined as data URIs so the report stays one file with no external requests."""
+    faces = []
+    for family, name in (("Geist", "geist-latin-wght-normal.woff2"),
+                         ("Geist Mono", "geist-mono-latin-wght-normal.woff2")):
+        path = _FONTS / name
+        if path.is_file():  # missing font: the system stack in _CSS takes over
+            data = base64.b64encode(path.read_bytes()).decode()
+            faces.append(f'@font-face {{ font-family: "{family}"; font-weight: 100 900; '
+                         f'src: url(data:font/woff2;base64,{data}) format("woff2"); }}\n')
+    return "".join(faces)
 
 
 def _plural(n: int, word: str, plural: str = "") -> str:
@@ -426,7 +488,7 @@ def render_html(proof: Proof, evidence_dir: Path) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ProofMerge {e(proof.run_id)} — {proof.verdict.decision}</title>
-<style>{_CSS}</style>
+<style>{_font_faces()}{_CSS}</style>
 </head>
 <body>
 <main>

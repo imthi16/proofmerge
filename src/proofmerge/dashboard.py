@@ -1,9 +1,9 @@
 """`proofmerge dashboard`: a local view of every evidence run under one folder.
 
-The server binds to 127.0.0.1 and only reads files, with one exception: with `--repo`,
-POST /api/verify (or /api/v1/verifications) starts `proofmerge verify` on a pull
-request (dashboard_prs.py). That request needs the per-server token from the session
-endpoint, a JSON body and a same-origin Origin header, and every request must name
+The server binds to 127.0.0.1. The browser app (/app) can start CLI actions;
+with a project selected, both APIs can start PR verification. Every POST and GET
+that reveals local folders or job output needs the per-server session token; POSTs need
+a JSON body and a same-origin Origin header, and every request must name
 this server in its Host header, so another website or a DNS-rebinding page cannot
 read data or start a run.
 
@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from pydantic import BaseModel, ValidationError
 
 from proofmerge.dashboard_events import sse_stream
+from proofmerge.dashboard_jobs import JobError, Jobs, branches, browse, git_project
 from proofmerge.dashboard_models import ApiError, VerificationRequest
 from proofmerge.dashboard_prs import PrError, PullRequests
 from proofmerge.evidence import Proof
@@ -42,6 +43,7 @@ MAX_LOG = 6000  # characters kept from the end of each execution's stdout and st
 # The id of a run whose proof.json sits in the dashboard folder itself. Not ".", which
 # URLs normalise away (/runs/. is /runs/). A subfolder with this exact name wins.
 ROOT_RUN = "(root)"
+MAX_BODY = 64_000
 MAX_STREAMS = 8  # concurrent server-sent event streams; each holds a thread
 # Control Center routes: the server answers them with the app shell, whose router
 # reads the path. /legacy keeps the previous dashboard reachable during the migration.
@@ -53,7 +55,7 @@ _HEADERS = {
     "Cache-Control": "no-store",
 }
 # report.html is self-contained: an inline <style> and no scripts, so it needs no 'self'.
-_REPORT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+_REPORT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; "
                "frame-ancestors 'none'; base-uri 'none'")
 
 
@@ -265,6 +267,9 @@ def _detail(run_id: str, run_dir: Path) -> dict[str, Any]:
 class _Handler(BaseHTTPRequestHandler):
     root: Path
     prs: PullRequests | None
+    jobs: Jobs
+    pinned_repo: bool
+    action_lock: Any
     token: str
     runner: Any
     streams: threading.BoundedSemaphore
@@ -311,13 +316,31 @@ class _Handler(BaseHTTPRequestHandler):
             return
         url = urlsplit(self.path)
         query = parse_qs(url.query)
-        if url.path.startswith("/api/v1/"):
+        if url.path in ("/api/health", "/api/browse", "/api/branches", "/api/job"):
+            if not secrets.compare_digest(self.headers.get("X-ProofMerge-Token", ""), self.token):
+                self._json({"error": "refused: open the dashboard page and try again"},
+                           HTTPStatus.FORBIDDEN)
+                return
+            try:
+                if url.path == "/api/health":
+                    self._json(self.jobs.health())
+                elif url.path == "/api/browse":
+                    self._json(browse(query.get("path", [""])[0]))
+                elif url.path == "/api/branches":
+                    project = git_project(query.get("project", [""])[0], self.runner)
+                    self._json(branches(project, self.runner))
+                else:
+                    self._json({"job": self.jobs.progress()})
+            except JobError as error:
+                self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        elif url.path.startswith("/api/v1/"):
             self._v1_get(url.path.removeprefix("/api/v1"), query)
         elif url.path == "/api/ids":
             # Cheap check for new runs: a scan without hashing or parsing.
             self._json(sorted(scan(self.root)))
         elif url.path == "/api/session":
-            self._json({"token": self.token, "prs": self.prs is not None})
+            self._json({"token": self.token, "prs": self.prs is not None,
+                        "settings": self.jobs.settings()})
         elif url.path == "/api/prs":
             if self.prs is None:
                 self._json({"error": "start the dashboard with --repo to list pull requests"},
@@ -363,7 +386,7 @@ class _Handler(BaseHTTPRequestHandler):
         app = "app/index.html" if "app/index.html" in files else "legacy/index.html"
         if path.startswith("/static/"):
             name = path.removeprefix("/static/")
-        elif path in ("/legacy", "/legacy/"):
+        elif path in ("/legacy", "/legacy/", "/app", "/app/"):
             name = "legacy/index.html"
         elif path == "/" or any(path == r or path.startswith(r + "/") for r in APP_ROUTES):
             name = app  # a Control Center route; the app's router reads the path
@@ -464,39 +487,75 @@ class _Handler(BaseHTTPRequestHandler):
             return False
         return True
 
-    def _read_number(self) -> int | None:
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 1024:
-                raise ValueError
-            return VerificationRequest.model_validate_json(self.rfile.read(length)).number
-        except (ValueError, ValidationError):
-            self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
-            return None
-
     def do_POST(self) -> None:
+        with self.action_lock:
+            self._post()
+
+    def _post(self) -> None:
         if not self._host_ok():
             return
         path = urlsplit(self.path).path
-        if path not in ("/api/verify", "/api/v1/verifications") or self.prs is None:
+        routes = ("/api/v1/verifications", "/api/verify", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit")
+        if path not in routes or (path in ("/api/verify", "/api/v1/verifications") and self.prs is None):
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         if not self._post_allowed():
             return
-        number = self._read_number()
-        if number is None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= (1024 if path in ("/api/verify", "/api/v1/verifications") else MAX_BODY):
+                raise ValueError
+            body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise TypeError
+        except (ValueError, TypeError):
+            self._json({"error": "send a JSON object"}, HTTPStatus.BAD_REQUEST)
+            return
+        if path in ("/api/verify", "/api/v1/verifications"):
+            try:
+                number = VerificationRequest.model_validate(body).number
+            except ValidationError:
+                self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
+                return
+            if self.jobs.job and self.jobs.job["status"] == "running":
+                self._json({"error": "Another action is still running."}, HTTPStatus.CONFLICT)
+                return
+            try:
+                job = self.prs.start(number)
+                if path == "/api/verify":
+                    self._json(job, HTTPStatus.ACCEPTED)
+                else:
+                    from proofmerge import dashboard_api as api
+                    self._model(api.job_model(self.prs), HTTPStatus.ACCEPTED)
+            except PrError as error:
+                self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             return
         try:
-            job = self.prs.start(number)
-        except PrError as error:
-            self._json({"error": str(error)}, HTTPStatus.CONFLICT)
-            return
-        if path == "/api/verify":
-            self._json(job, HTTPStatus.ACCEPTED)
-        else:
-            from proofmerge import dashboard_api as api
-
-            self._model(api.job_model(self.prs), HTTPStatus.ACCEPTED)
+            if path == "/api/jobs":
+                if self.prs and self.prs.job and self.prs.job["status"] == "running":
+                    raise JobError("A pull request is still being verified.")
+                self.jobs.start(body, scan(self.root))
+                self._json({"job": self.jobs.progress()}, HTTPStatus.ACCEPTED)
+            elif path == "/api/jobs/stop":
+                self.jobs.cancel()
+                self._json({"job": self.jobs.progress()})
+            elif path == "/api/settings":
+                if "key" in body:
+                    self.jobs.set_key(body["key"])
+                if "project" in body:
+                    if self.prs and self.prs.job and self.prs.job["status"] == "running":
+                        raise JobError("A pull request is still being verified.")
+                    project = git_project(str(body["project"]), self.runner)
+                    self.jobs.project = str(project)
+                    # Pull requests follow the chosen project unless --repo pinned one.
+                    if not self.pinned_repo:
+                        type(self).prs = PullRequests(project, self.root, self.runner, self.jobs.environment)
+                self._json({"settings": self.jobs.settings(), "prs": self.prs is not None})
+            else:  # /api/quit: the app has no terminal to press Ctrl+C in
+                self._json({"bye": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+        except JobError as error:
+            self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
 
     def _refuse(self) -> None:
         self._json({"error": "not allowed"}, HTTPStatus.METHOD_NOT_ALLOWED)
@@ -518,10 +577,14 @@ def _last_event_id(header: str | None, query: dict[str, list[str]]) -> int:
 
 def make_server(root: Path, port: int, repo: Path | None = None,
                 runner: Any = subprocess.run, *, heartbeat: float = 15.0) -> ThreadingHTTPServer:
-    prs = PullRequests(repo, root, runner) if repo is not None else None
+    jobs = Jobs(root, runner)
+    prs = PullRequests(repo, root, runner, jobs.environment) if repo is not None else None
+    if repo is not None:
+        jobs.project = str(repo.resolve())
     handler = type("Handler", (_Handler,), {
-        "root": root.resolve(), "prs": prs, "token": secrets.token_urlsafe(32),
-        "runner": staticmethod(runner), "streams": threading.BoundedSemaphore(MAX_STREAMS),
-        "heartbeat": heartbeat,
+        "root": root.resolve(), "prs": prs, "jobs": jobs, "runner": staticmethod(runner),
+        "action_lock": threading.Lock(), "pinned_repo": repo is not None,
+        "token": secrets.token_urlsafe(32),
+        "streams": threading.BoundedSemaphore(MAX_STREAMS), "heartbeat": heartbeat,
     })
     return ThreadingHTTPServer(("127.0.0.1", port), handler)

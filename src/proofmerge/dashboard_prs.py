@@ -47,10 +47,12 @@ def _valid_branch(repo: Path, name: str, runner: Runner) -> bool:
 
 
 class PullRequests:
-    def __init__(self, repo: Path, evidence_root: Path, runner: Runner = subprocess.run) -> None:
+    def __init__(self, repo: Path, evidence_root: Path, runner: Runner = subprocess.run,
+                 environment: Callable[[], dict[str, str]] | None = None) -> None:
         self.repo = repo.resolve()
         self.root = evidence_root.resolve()
         self._run = runner
+        self._environment = environment or (lambda: dict(os.environ))
         self._cache: tuple[float, list[dict[str, Any]]] | None = None
         self._remote: tuple[str, str] | None = None  # (nameWithOwner, clone url) of what gh lists
         self._lock = threading.Lock()
@@ -189,7 +191,7 @@ class PullRequests:
                         sys.executable, "-m", "proofmerge.cli", "verify", str(self.repo),
                         "--base", base, "--head", head, "--intent-file", str(intent),
                         "--evidence-dir", str(self.root / run_id), "--events-file", str(events),
-                    ], VERIFY_TIMEOUT, {**os.environ, "PROOFMERGE_JOB_ID": run_id})
+                    ], VERIFY_TIMEOUT, {**self._environment(), "PROOFMERGE_JOB_ID": run_id})
                 finally:
                     stop.set()
                     tailer.join(10)

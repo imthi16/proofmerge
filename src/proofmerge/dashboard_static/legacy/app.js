@@ -18,11 +18,11 @@
 
   function readHash() {
     const params = new URLSearchParams(location.hash.slice(1));
-    return { tab: params.get("tab") || "runs", run: params.get("run") || "", pr: params.get("pr") || "" };
+    return { tab: params.get("tab") || "home", run: params.get("run") || "", pr: params.get("pr") || "" };
   }
   function writeHash(state) {
     const params = new URLSearchParams();
-    if (state.tab !== "runs") params.set("tab", state.tab);
+    if (state.tab !== "home") params.set("tab", state.tab);
     if (state.run) params.set("run", state.run);
     if (state.pr) params.set("pr", state.pr);
     history.replaceState(null, "", "#" + params.toString());
@@ -34,6 +34,51 @@
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return data;
   }
+
+  // The session token guards everything that starts work or shows local folders.
+  let TOKEN = "";
+  const authGet = (url) => fetch(url, { cache: "no-store", headers: { "X-ProofMerge-Token": TOKEN } })
+    .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); return d; });
+  const post = (url, body) => fetch(url, { method: "POST", body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", "X-ProofMerge-Token": TOKEN } })
+    .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); return d; });
+
+  // One stroke icon set, drawn here so every icon shares weight and caps.
+  const ICONS = {
+    home: ["M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"],
+    shield: ["M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z", "M9 12l2 2 4-4"],
+    list: ["M9 6h11M9 12h11M9 18h11", "M4 6h.01M4 12h.01M4 18h.01"],
+    pull: ["M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M6 7v10M18 17V9a3 3 0 0 0-3-3h-4", "M13 4l-2 2 2 2"],
+    chart: ["M4 20V11M10 20V5M16 20v-6M21 20H3"],
+    sliders: ["M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1", "M15 4v4M9 10v4M17 16v4"],
+    folder: ["M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"],
+    branch: ["M6 3v12", "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 9a9 9 0 0 1-9 9"],
+    play: ["M7 4.5v15l12-7.5z"],
+    stop: ["M7 7h10v10H7z"],
+    check: ["M5 12.5l4.5 4.5L19 7.5"],
+    x: ["M6 6l12 12M18 6L6 18"],
+    alert: ["M12 4 2.5 20h19z", "M12 10v4M12 17h.01"],
+    power: ["M12 3v8", "M6.3 6.8a8 8 0 1 0 11.4 0"],
+    up: ["M12 19V5M6 11l6-6 6 6"],
+    file: ["M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z", "M14 3v5h5"],
+    download: ["M12 4v11M7 10l5 5 5-5M5 20h14"],
+    refresh: ["M20 12a8 8 0 1 1-2.3-5.7", "M20 4v5h-5"],
+    spark: ["M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"],
+    box: ["M12 3l8 4.5v9L12 21l-8-4.5v-9z", "M4 7.5l8 4.5 8-4.5M12 12v9"],
+    scale: ["M12 4v16M7 20h10M5 7h14", "M5 7l-2.5 6a2.5 2.5 0 0 0 5 0zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0z"],
+    eye: ["M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z", "M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"],
+    key: ["M14.5 13a4.5 4.5 0 1 0-4.2-2.9L3 17.4V21h3.6v-2.4H9v-2.4h2.4l1.7-1.7a4.5 4.5 0 0 0 1.4.5z", "M16 8h.01"],
+    sun: ["M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"],
+    git: ["M12 3l9 9-9 9-9-9z", "M12 8v8M12 8l3 3"],
+    terminal: ["M4 5h16v14H4z", "M8 10l2.5 2L8 14M13 14h3"],
+  };
+  function Icon({ name, size = 18 }) {
+    return html`<svg class="icon" width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      ${(ICONS[name] || []).map((d, i) => html`<path key=${i} d=${d} />`)}</svg>`;
+  }
+  const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const lastLine = (text) => (text || "").trim().split("\n").filter(Boolean).pop() || "";
 
   const short = (sha) => (sha || "").slice(0, 7);
   // A benchmark label disagrees when a faulty change is not blocked or a safe one is.
@@ -62,11 +107,12 @@
     const unreadable = runs.filter((r) => r.error).length;
     return html`<section class="dist" aria-label="Verdicts">
       <div class=${"dist-bar" + (filter ? " filtered" : "")}>
-        ${DECISIONS.filter((d) => counts[d]).map((d) => html`
-          <button key=${d} type="button" class=${"seg " + d.toLowerCase()} style=${{ flexGrow: counts[d] }}
+        ${DECISIONS.filter((d) => counts[d]).map((d, i) => html`
+          <button key=${d} type="button" class=${"seg " + d.toLowerCase()} style=${{ flexGrow: counts[d], "--i": i }}
             aria-pressed=${filter === d} onClick=${() => setFilter(filter === d ? "" : d)}
             title=${filter === d ? "Show every verdict" : `Show only ${d}`}>
             <span class="k">${d}</span><span class="n">${counts[d]}</span>
+            <span class="pct">${Math.round((counts[d] / total) * 100)}%</span>
           </button>`)}
       </div>
       <div class="dist-legend muted">
@@ -134,14 +180,15 @@
     const attempts = [...new Set(experiment.executions.map((e) => e.attempt))].sort((a, b) => a - b).slice(0, 3);
     return html`<div class="grid" role="group" aria-label="Probe outcomes per attempt">
       <span></span>${attempts.map((a) => html`<span key=${a} class="muted" style=${{ fontSize: ".78rem", textAlign: "center" }}>attempt ${a}</span>`)}
-      ${["base", "head"].map((revision) => {
+      ${["base", "head"].map((revision, row) => {
         const runs = experiment.executions.filter((e) => e.revision === revision);
         return html`<${React.Fragment} key=${revision}>
           <span class="rev">${revision} <code>${short(runs[0]?.commit_sha)}</code></span>
-          ${attempts.map((a) => {
+          ${attempts.map((a, col) => {
             const outcome = runs.find((e) => e.attempt === a)?.outcome || "—";
             const key = `${revision}:${a}`;
             return html`<button key=${a} type="button" class=${"cell " + outcome} aria-pressed=${open === key}
+              style=${{ "--i": row * attempts.length + col }}
               onClick=${() => onOpen(open === key ? "" : key)} aria-label=${`${revision} attempt ${a}: ${outcome}. Show its log`}>${outcome}</button>`;
           })}
         </${React.Fragment}>`;
@@ -184,7 +231,10 @@
     </article>`;
   }
 
+  const AppCtx = React.createContext(null);
+
   function Detail({ id }) {
+    const ctx = React.useContext(AppCtx);
     const [state, setState] = useState({ loading: true });
     useEffect(() => {
       if (!id) return;
@@ -224,9 +274,16 @@
       </dl>
       ${summary.integrity.status === "changed" ? html`<ul class="reasons">${summary.integrity.problems.map((p, i) => html`<li key=${i} class="disagree">${p}</li>`)}</ul>` : null}
       <div class="actions">
-        ${summary.has_report ? html`<a class="ghost" href=${"/report?id=" + encodeURIComponent(id)} target="_blank" rel="noopener">Open full report</a>` : null}
-        <span class="ghost" style=${{ cursor: "default" }}><code>${replay}</code> <${Copy} text=${replay} label="replay command" /></span>
+        ${summary.has_report ? html`<a class="primary" href=${"/report?id=" + encodeURIComponent(id)} target="_blank" rel="noopener"><${Icon} name="file" />Open full report</a>
+          <a class="ghost" href=${"/report?id=" + encodeURIComponent(id)} download=${(proof.run_id || "proofmerge") + "-report.html"}><${Icon} name="download" />Download</a>` : null}
+        <button class="ghost" type="button" disabled=${ctx.busy} onClick=${() => ctx.start({ command: "replay", run: id })}
+          title="Checks every file of this run against its sealed hashes"><${Icon} name="shield" />Check evidence</button>
+        <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => ctx.start({ command: "rerun", run: id, project: ctx.settings.project })}
+          title=${ctx.settings.project ? "Runs the recorded probes again in the sandbox" : "Choose the project on Home first"}><${Icon} name="refresh" />Run the tests again</button>
       </div>
+      <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
+        <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
       <h2>Hypotheses and probes</h2>
       ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
         <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}} />`)
@@ -292,8 +349,8 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
     if (!index.runs.length) {
-      return html`<div class="panel empty"><strong>No runs in this folder yet</strong>
-        Run <code>proofmerge verify … --evidence-dir ${index.root}/my-run</code>, then press Refresh.</div>`;
+      return html`<div class="panel empty"><strong>No checks yet</strong>
+        Check a change on Home and its result shows up here, with all its evidence.</div>`;
     }
     return html`
       <${Distribution} runs=${index.runs} filter=${filter} setFilter=${setFilter} />
@@ -315,7 +372,7 @@
       <div class="split">
         ${runs.length ? html`<${RunsTable} runs=${runs} selected=${selected} onSelect=${pick} sort=${sort} setSort=${setSort} />`
           : html`<div class="panel empty"><strong>No run matches</strong>Change the search or filters.</div>`}
-        <${Detail} id=${selected} />
+        <${Detail} key=${selected} id=${selected} />
       </div>`;
   }
 
@@ -444,7 +501,7 @@
     }, [data, tick]);
     if (error && !data) {
       return html`<div class="panel empty"><strong>Pull requests are not available</strong>${error}
-        <div class="muted" style=${{ marginTop: ".5rem" }}>Start with <code>proofmerge dashboard ${index.root} --repo path/to/repo</code>.</div></div>`;
+        <div class="muted" style=${{ marginTop: ".5rem" }}>Pull requests come from GitHub through the GitHub CLI (gh), signed in. Setup shows whether it is installed.</div></div>`;
     }
     if (!data) return html`<p class="boot">Loading pull requests…</p>`;
     const verdictOf = (id) => index.runs.find((r) => r.id === id)?.decision;
@@ -522,14 +579,367 @@
       ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}`;
   }
 
+  // ---------------------------------------------------------------- the app shell
+  const VERDICT_JOBS = ["verify", "probe", "hypotheses"];
+  const JOB_TITLE = {
+    verify: "Checking the change", probe: "Writing and running tests", hypotheses: "Listing what could break",
+    replay: "Checking the evidence", rerun: "Running the tests again", smoke: "Testing the model connection",
+    setup: "Building the sandbox image",
+  };
+  const MODES = [
+    ["verify", "Full check", "Writes tests that try to break the change, runs them in the sandbox and gives PASS, REVIEW or BLOCK."],
+    ["hypotheses", "Only list risks", "Lists what could break and why, without running anything. Two model calls."],
+    ["probe", "Tests, no verdict", "Writes the tests and runs them on both branches, but stops before the verdict."],
+  ];
+  const STATIONS = [
+    ["eye", "Read the change", "The diff and your description"],
+    ["spark", "Muse Spark looks for risks", "Each risk becomes a test"],
+    ["box", "Tests run in the sandbox", "On both branches, three times"],
+    ["scale", "Muse Wonder checks the evidence", "Does each test prove its claim"],
+    ["shield", "Verdict", "PASS, REVIEW or BLOCK"],
+  ];
+
+  function FolderPicker({ start, onPick, onClose }) {
+    const [data, setData] = useState(null);
+    const [error, setError] = useState("");
+    const [typed, setTyped] = useState("");
+    const open = (path) => authGet("/api/browse?path=" + encodeURIComponent(path || ""))
+      .then((d) => { setData(d); setTyped(d.path); setError(""); }).catch((e) => setError(e.message));
+    useEffect(() => { open(start); }, []);
+    useEffect(() => {
+      const onKey = (event) => { if (event.key === "Escape") onClose(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onClose()}>
+      <div class="dialog picker panel" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+        <header class="picker-head">
+          <h3 id="picker-title">Choose your project folder</h3>
+          <button class="icon-btn" type="button" onClick=${onClose} aria-label="Close"><${Icon} name="x" /></button>
+        </header>
+        <p class="muted">Pick the folder that holds your code. Folders marked Git project can be checked.</p>
+        <div class="places">${(data?.places || []).map((p) => html`<button key=${p.path} type="button" class="chip"
+          onClick=${() => open(p.path)}>${p.name}</button>`)}</div>
+        <form class="path-bar" onSubmit=${(e) => { e.preventDefault(); open(typed); }}>
+          <button class="icon-btn" type="button" disabled=${!data?.parent} onClick=${() => open(data.parent)} aria-label="Up one folder"><${Icon} name="up" /></button>
+          <input class="search" value=${typed} onInput=${(e) => setTyped(e.target.value)} aria-label="Folder path" spellcheck="false" />
+          <button class="ghost" type="submit">Go</button>
+        </form>
+        ${error ? html`<p class="error-box">${error}</p>` : null}
+        <ul class="dirs" role="list">
+          ${data && !data.dirs.length ? html`<li class="muted dir-empty">No folders inside this one.</li>` : null}
+          ${(data?.dirs || []).map((d) => html`<li key=${d.path}>
+            <button type="button" class="dir" onClick=${() => open(d.path)}>
+              <${Icon} name=${d.git ? "git" : "folder"} /><span>${d.name}</span>
+              ${d.git ? html`<span class="tag">Git project</span>` : null}</button>
+            ${d.git ? html`<button type="button" class="ghost small" onClick=${() => onPick(d.path)}>Use</button>` : null}
+          </li>`)}
+        </ul>
+        <footer class="picker-foot">
+          <span class="muted mono">${data?.path || ""}</span>
+          <button class="primary" type="button" disabled=${!data?.git} onClick=${() => onPick(data.path)}
+            title=${data?.git ? "" : "This folder is not a Git project"}>Use this folder</button>
+        </footer>
+      </div>
+    </div>`;
+  }
+
+  function Composer() {
+    const ctx = React.useContext(AppCtx);
+    const { settings, health } = ctx;
+    const [picking, setPicking] = useState(false);
+    const [info, setInfo] = useState(null);
+    const [error, setError] = useState("");
+    const [base, setBase] = useState("");
+    const [head, setHead] = useState("");
+    const [intent, setIntent] = useState(() => store.get("pm-intent", ""));
+    const [mode, setMode] = useState("verify");
+    useEffect(() => { store.set("pm-intent", intent); }, [intent]);
+    useEffect(() => {
+      if (!settings.project) return;
+      authGet("/api/branches?project=" + encodeURIComponent(settings.project))
+        .then((d) => { setInfo(d); setBase(d.base); setHead(d.head); setError(""); })
+        .catch((e) => { setInfo(null); setError(e.message); });
+    }, [settings.project]);
+    const pick = (path) => { setPicking(false); ctx.saveSettings({ project: path }).catch((e) => setError(e.message)); };
+    const needsSandbox = mode !== "hypotheses";
+    const blocker = !settings.project ? "Choose your project folder first."
+      : !info ? "" : info.branches.length < 2 ? "This project needs at least two branches."
+      : !head || !base ? "Pick both branches." : head === base ? "Pick two different branches."
+      : health && !health.model_key ? "Add your model key in Setup."
+      : health && needsSandbox && !health.docker_running ? "Start Docker Desktop, then check again in Setup."
+      : ctx.busy ? "Another action is running." : "";
+    const fixable = /Setup/.test(blocker);
+    const submit = (event) => {
+      event.preventDefault();
+      if (!blocker) ctx.start({ command: mode, project: settings.project, base, head, intent });
+    };
+    const options = (info?.branches || []).map((b) => html`<option key=${b.name} value=${b.name}>${b.name}</option>`);
+    const headInfo = info?.branches.find((b) => b.name === head);
+    return html`<form class="composer panel" onSubmit=${submit}>
+      <button type="button" class="project" onClick=${() => setPicking(true)}>
+        <span class="project-icon"><${Icon} name="folder" size=${20} /></span>
+        <span class="project-text">
+          <strong>${info?.name || (settings.project ? settings.project.split(/[\\/]/).pop() : "Choose your project folder")}</strong>
+          <span class="muted mono">${settings.project || "The folder that holds your code"}</span>
+        </span>
+        <span class="chip">${settings.project ? "Change" : "Browse"}</span>
+      </button>
+      ${error ? html`<p class="error-box">${error}</p>` : null}
+      <div class="sentence">
+        <span>Check</span>
+        <label class="select-wrap"><${Icon} name="branch" size=${16} />
+          <select value=${head} onChange=${(e) => setHead(e.target.value)} aria-label="Branch with the change" disabled=${!info}>
+            ${options}</select></label>
+        <span>before it goes into</span>
+        <label class="select-wrap"><${Icon} name="branch" size=${16} />
+          <select value=${base} onChange=${(e) => setBase(e.target.value)} aria-label="Branch it merges into" disabled=${!info}>
+            ${options}</select></label>
+      </div>
+      ${headInfo ? html`<p class="hint muted">Latest on ${head}: ${headInfo.subject || "no message"}, ${headInfo.when}.</p>` : null}
+      <label class="intent">
+        <span class="sr-only">What the change should do</span>
+        <textarea rows="4" value=${intent} onInput=${(e) => setIntent(e.target.value)}
+          placeholder="What should this change do? Paste the pull request description. ProofMerge checks the change against it, and without it the result is more cautious."></textarea>
+      </label>
+      <footer class="composer-foot">
+        <div class="modes" role="radiogroup" aria-label="What to do">
+          ${MODES.map(([key, label]) => html`<button key=${key} type="button" role="radio" aria-checked=${mode === key}
+            onClick=${() => setMode(key)}>${label}</button>`)}
+        </div>
+        <p class="mode-note muted">${MODES.find((m) => m[0] === mode)[2]}</p>
+        <div class="go">
+          ${blocker ? html`<span class="blocker">${blocker}${fixable ? html` <button type="button" class="link" onClick=${() => ctx.go({ tab: "setup" })}>Open Setup</button>` : null}</span>` : null}
+          <button class="primary big" type="submit" disabled=${!!blocker}><${Icon} name="play" />${MODES.find((m) => m[0] === mode)[1] === "Full check" ? "Check this change" : MODES.find((m) => m[0] === mode)[1]}</button>
+        </div>
+      </footer>
+      ${picking ? html`<${FolderPicker} start=${settings.project} onPick=${pick} onClose=${() => setPicking(false)} />` : null}
+    </form>`;
+  }
+
+  function Pipeline({ job }) {
+    const ctx = React.useContext(AppCtx);
+    const [now, setNow] = useState(Date.now() / 1000);
+    const running = job.status === "running";
+    useEffect(() => {
+      if (!running) return;
+      const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
+      return () => clearInterval(timer);
+    }, [running]);
+    const elapsed = Math.max(0, (job.finished || now) - job.started);
+    const failed = !running && job.status !== "done";
+    const active = job.status === "done" ? 5 : [0, 1, 2, 2, 3, 5][job.stage] ?? 0;
+    const stations = job.command === "hypotheses" ? STATIONS.slice(0, 2) : job.command === "probe" ? STATIONS.slice(0, 3) : STATIONS;
+    const shown = Math.min(active, stations.length);
+    // A finished verify ticks only the steps whose files exist; the rest did not run.
+    const skipped = (i) => !running && !failed && job.command === "verify" && job.seen && !job.seen[i];
+    const anySkipped = stations.some((_, i) => skipped(i));
+    const title = running ? JOB_TITLE[job.command] : failed ? (job.status === "failed" ? "The check could not finish" : `The check was ${job.status}`) : `Finished in ${clock(elapsed)}`;
+    return html`<section class=${"live panel" + (failed ? " is-failed" : "")} aria-live="polite">
+      <header class="live-head">
+        <div>
+          <h2>${title}</h2>
+          <p class="muted">${running ? "This can take a few minutes. You can leave this page; the check keeps going." : failed ? "Nothing was merged or changed in your project."
+            : anySkipped ? "Some steps did not run. The verdict below says why." : "Every step ran."}</p>
+        </div>
+        <span class="timer mono" aria-label="Time taken">${clock(elapsed)}</span>
+        ${running ? html`<button class="ghost" type="button" onClick=${ctx.stop}><${Icon} name="stop" />Stop</button>` : null}
+      </header>
+      <ol class=${"track n" + stations.length} style=${{ "--fill": anySkipped ? 0 : stations.length > 1 ? Math.min(shown, stations.length - 1) / (stations.length - 1) : 0 }}>
+        ${stations.map(([icon, name, note], i) => {
+          const state = skipped(i) ? "skipped" : i < shown ? "done" : i === shown && running ? "active" : i === shown && failed ? "failed" : "todo";
+          return html`<li key=${name} class=${"station " + state} style=${{ "--i": i }}>
+            <span class="node"><${Icon} name=${state === "done" ? "check" : state === "failed" ? "x" : icon} /></span>
+            <span class="station-text"><strong>${name}</strong><span class="muted">${state === "skipped" ? "Did not run" : note}</span></span>
+          </li>`;
+        })}
+      </ol>
+      <p class="hint muted">Progress comes from the files this run has written so far.</p>
+      <details class="log-live" open=${failed}><summary>${failed ? "What went wrong" : "Show what is happening"}</summary>
+        <pre>${job.output || "Starting…"}</pre></details>
+      ${failed ? html`<div class="actions">
+        <button class="primary" type="button" onClick=${ctx.dismiss}>Try again</button>
+        <button class="ghost" type="button" onClick=${() => ctx.go({ tab: "setup" })}>Check Setup</button></div>` : null}
+    </section>`;
+  }
+
+  function VerdictReveal({ job }) {
+    const ctx = React.useContext(AppCtx);
+    const [data, setData] = useState(null);
+    useEffect(() => { getJSON("/api/run?id=" + encodeURIComponent(job.run)).then(setData).catch(() => setData(false)); }, [job.run]);
+    if (data === null) return null;
+    if (data === false) return html`<p class="muted">The run finished, but its proof could not be read. Open Runs to look at it.</p>`;
+    const decision = data.proof.verdict.decision;
+    return html`<section class=${"reveal panel " + decision}>
+      <p class=${"decision " + decision}>${decision}</p>
+      <p class="reveal-head">${HEADLINE[decision]}</p>
+      <ul class="reasons">${data.proof.verdict.reasons.map((r, i) => html`<li key=${i} style=${{ "--i": i }}>${r}</li>`)}</ul>
+      <div class="actions">
+        ${data.summary.has_report ? html`<a class="primary" href=${"/report?id=" + encodeURIComponent(job.run)} target="_blank" rel="noopener"><${Icon} name="file" />Open the report</a>` : null}
+        <button class="ghost" type="button" onClick=${() => ctx.go({ tab: "runs", run: job.run })}><${Icon} name="list" />See every detail</button>
+        <button class="ghost" type="button" onClick=${ctx.dismiss}><${Icon} name="play" />Check another change</button>
+      </div>
+    </section>`;
+  }
+
+  function Risks({ job }) {
+    const ctx = React.useContext(AppCtx);
+    const text = job.output || "";
+    let found = null;
+    try { found = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)); } catch { found = null; }
+    return html`<section class="reveal panel">
+      ${found ? html`<h2>What could break</h2>
+        ${found.hypotheses.hypotheses.length ? html`<ol class="risk-list">${found.hypotheses.hypotheses.map((h, i) => html`<li key=${h.id} style=${{ "--i": i }}>
+          <h3><code>${h.id}</code> ${h.title}</h3>
+          <p class="meta">risk: ${h.risk_category}, cites <code>${h.claim_id}</code></p>
+          <p>${h.suspected_behavior}</p></li>`)}</ol>`
+          : html`<p class="muted">Muse Spark found nothing it could test.</p>`}
+        <h3 class="sub">What the change claims</h3>
+        <ul class="reasons">${found.intent.claims.map((c) => html`<li key=${c.id}><code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span> ${c.statement}</li>`)}</ul>`
+        : html`<h2>Done</h2><pre>${text}</pre>`}
+      <div class="actions"><button class="primary" type="button" onClick=${ctx.dismiss}>Check another change</button></div>
+    </section>`;
+  }
+
+  function Home({ index }) {
+    const ctx = React.useContext(AppCtx);
+    const job = ctx.job;
+    const showJob = job && VERDICT_JOBS.includes(job.command) && ctx.dismissed !== job.started;
+    const recent = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
+    const missing = ctx.health ? [!ctx.health.docker_running && "Docker", !ctx.health.runner_image && "sandbox image",
+      !ctx.health.model_key && "model key"].filter(Boolean) : [];
+    return html`
+      <section class="hero">
+        <h1>Check a change before you merge it</h1>
+        <p class="lede">Pick your project and the branch with the change. ProofMerge writes tests that try to break it,
+          runs them in a sealed sandbox, and tells you whether it is safe to merge, with the evidence to show why.</p>
+      </section>
+      ${missing.length && !showJob ? html`<div class="setup-nudge panel">
+        <${Icon} name="alert" />
+        <span>Before your first check, set up: <strong>${missing.join(", ")}</strong>.</span>
+        <button class="ghost" type="button" onClick=${() => ctx.go({ tab: "setup" })}>Open Setup</button></div>` : null}
+      ${showJob ? html`
+        <${Pipeline} job=${job} />
+        ${job.status === "done" && job.command === "verify" ? html`<${VerdictReveal} job=${job} />` : null}
+        ${job.status === "done" && job.command === "hypotheses" ? html`<${Risks} job=${job} />` : null}
+        ${job.status === "done" && job.command === "probe" ? html`<section class="reveal panel"><h2>Tests ran on both branches</h2>
+          <pre>${job.output}</pre><div class="actions"><button class="primary" type="button" onClick=${ctx.dismiss}>Check another change</button></div></section>` : null}`
+        : html`<${Composer} />`}
+      ${recent.length ? html`<section class="recent">
+        <div class="section-head"><h2>Recent checks</h2>
+          <button class="link" type="button" onClick=${() => ctx.go({ tab: "runs" })}>See all ${index.runs.length}</button></div>
+        <ul class="recent-list">${recent.map((r) => html`<li key=${r.id}>
+          <button type="button" onClick=${() => ctx.go({ tab: "runs", run: r.id })}>
+            <span class=${"pill " + r.decision}>${r.decision}</span>
+            <span class="run-name">${r.id}</span>
+            <span class="muted mono">${short(r.base_sha)} → ${short(r.head_sha)}</span>
+          </button></li>`)}</ul>
+      </section>` : null}`;
+  }
+
+  function SetupRow({ ok, optional, icon, title, children, action }) {
+    return html`<li class=${"setup-row " + (ok ? "ok" : optional ? "optional" : "todo")}>
+      <span class="status-dot" aria-label=${ok ? "Ready" : optional ? "Optional" : "Needs setup"}><${Icon} name=${ok ? "check" : icon} size=${16} /></span>
+      <div class="setup-text"><strong>${title}</strong><div class="muted">${children}</div></div>
+      <div class="setup-action">${action}</div>
+    </li>`;
+  }
+
+  function SetupView() {
+    const ctx = React.useContext(AppCtx);
+    const h = ctx.health;
+    const [key, setKey] = useState("");
+    const [saved, setSaved] = useState("");
+    if (!h) return html`<p class="boot">Checking this computer…</p>`;
+    const saveKey = (event) => {
+      event.preventDefault();
+      ctx.saveSettings({ key }).then(() => { setKey(""); setSaved("Saved for this session."); ctx.reloadHealth(); })
+        .catch((e) => setSaved(e.message));
+    };
+    const ready = h.git && h.docker_running && h.runner_image && h.model_key;
+    return html`
+      <section class="hero small">
+        <h1>${ready ? "Ready to check changes" : "Set up ProofMerge"}</h1>
+        <p class="lede">${ready ? "Everything ProofMerge needs is in place." : "A few things need to be in place before the first check. Do them in order; each one shows a tick when it works."}</p>
+      </section>
+      <ol class="setup-list panel">
+        <${SetupRow} ok=${h.git} icon="git" title="Git"
+          action=${h.git ? null : html`<a class="ghost" href="https://git-scm.com/downloads" target="_blank" rel="noopener noreferrer">Get Git</a>`}>
+          ${h.git ? "Installed." : "ProofMerge reads your branches with Git. Install it, then press Check again."}</${SetupRow}>
+        <${SetupRow} ok=${h.docker_running} icon="box" title="Docker Desktop"
+          action=${h.docker_installed ? null : html`<a class="ghost" href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener noreferrer">Get Docker Desktop</a>`}>
+          ${h.docker_running ? "Running. The tests run inside it, away from your files."
+            : h.docker_installed ? "Installed but not running. Open Docker Desktop and wait until it says it is running, then press Check again."
+            : "The tests run inside Docker, so the change never touches your computer directly."}</${SetupRow}>
+        <${SetupRow} ok=${h.runner_image} icon="box" title="Sandbox image"
+          action=${h.runner_image ? null : html`<button class="primary" type="button" disabled=${!h.docker_running || ctx.busy}
+            onClick=${() => ctx.start({ command: "setup" })}>Build it</button>`}>
+          ${h.runner_image ? "Built." : "A one-time build of the sealed test environment. It takes a few minutes and needs Docker running."}</${SetupRow}>
+        <${SetupRow} ok=${h.model_key} icon="key" title="Model key"
+          action=${h.model_key ? html`<button class="ghost" type="button" disabled=${ctx.busy} onClick=${() => ctx.start({ command: "smoke" })}>Test connection</button>` : null}>
+          ${ctx.settings.key_in_env ? "Found in your environment." : ctx.settings.key_set ? "Saved for this session." : "ProofMerge uses Meta's Muse models. Paste your key; it stays in memory until you close ProofMerge and is never saved to disk."}
+          ${!ctx.settings.key_in_env ? html`<form class="key-form" onSubmit=${saveKey}>
+            <input class="search" type="password" autocomplete="off" spellcheck="false" placeholder=${ctx.settings.key_set ? "Replace the key" : "Paste your MODEL_API_KEY"}
+              value=${key} onInput=${(e) => setKey(e.target.value)} aria-label="Model API key" />
+            <button class="ghost" type="submit" disabled=${!key.trim()}>Save</button>
+            ${saved ? html`<span class="muted">${saved}</span>` : null}</form>` : null}</${SetupRow}>
+        <${SetupRow} ok=${h.gh} optional=${true} icon="pull" title="GitHub CLI (optional)"
+          action=${h.gh ? null : html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get gh</a>`}>
+          ${h.gh ? "Installed. Pull requests of your project show up under Pull requests." : "Only needed to list and check pull requests from GitHub. Sign in with it once after installing."}</${SetupRow}>
+      </ol>
+      <div class="actions"><button class="ghost" type="button" onClick=${ctx.reloadHealth}><${Icon} name="refresh" />Check again</button></div>
+      <dl class="facts about">
+        <dt>version</dt><dd>ProofMerge ${h.version}, Python ${h.python}</dd>
+        <dt>runs are saved in</dt><dd><code>${h.runs_folder}</code></dd>
+        <dt>project</dt><dd>${ctx.settings.project ? html`<code>${ctx.settings.project}</code>` : "not chosen yet"}</dd>
+      </dl>`;
+  }
+
+  function JobDock() {
+    const ctx = React.useContext(AppCtx);
+    const job = ctx.job;
+    if (!job || ctx.dismissed === job.started) return null;
+    if (VERDICT_JOBS.includes(job.command) && ctx.tab === "home") return null;
+    const running = job.status === "running";
+    const ok = job.status === "done";
+    return html`<aside class=${"dock panel " + (running ? "running" : ok ? "ok" : "bad")} role="status" aria-live="polite">
+      <div class="dock-head">
+        <span class="dock-icon">${running ? html`<span class="spinner" aria-hidden="true"></span>` : html`<${Icon} name=${ok ? "check" : "alert"} />`}</span>
+        <strong>${running ? JOB_TITLE[job.command] : ok ? JOB_TITLE[job.command] + ": done" : JOB_TITLE[job.command] + ": " + (job.status === "failed" ? "failed" : job.status)}</strong>
+        ${running ? html`<button class="ghost small" type="button" onClick=${ctx.stop}>Stop</button>`
+          : html`<button class="icon-btn" type="button" onClick=${ctx.dismiss} aria-label="Dismiss"><${Icon} name="x" size=${16} /></button>`}
+      </div>
+      ${running ? html`<div class="bar" aria-hidden="true"><span></span></div>` : null}
+      <p class="dock-line mono">${(job.output || "").match(/^(verdict: .*|evidence intact.*|built runner image.*)$/m)?.[0]
+        || lastLine(job.output) || "Starting…"}</p>
+      ${VERDICT_JOBS.includes(job.command) ? html`<button class="link" type="button" onClick=${() => ctx.go({ tab: "home" })}>${running ? "Show progress" : "Show the result"}</button>` : null}
+      <details><summary>Full output</summary><pre>${job.output || "(nothing yet)"}</pre></details>
+    </aside>`;
+  }
+
+  const NAV = [["home", "Home", "home"], ["runs", "Runs", "list"], ["prs", "Pull requests", "pull"],
+    ["bench", "Benchmarks", "chart"], ["setup", "Setup", "sliders"]];
+
   function App() {
     const [route, setRoute] = useState(readHash);
     const [index, setIndex] = useState(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [theme, setTheme] = useState(() => store.get("pm-theme", "auto"));
-    const [session, setSession] = useState({ token: "", prs: false });
-    useEffect(() => { getJSON("/api/session").then(setSession).catch(() => {}); }, []);
+    const [session, setSession] = useState({ token: "", prs: false, settings: {} });
+    const [health, setHealth] = useState(null);
+    const [job, setJob] = useState(null);
+    const [dismissed, setDismissed] = useState(() => Number(store.get("pm-dismissed", "0")));
+    const [notice, setNotice] = useState("");
+    const [quitArmed, setQuitArmed] = useState(false);
+    const [quit, setQuit] = useState(false);
+    const reloadHealth = useCallback(() => authGet("/api/health").then(setHealth).catch(() => {}), []);
+    useEffect(() => {
+      getJSON("/api/session").then((s) => {
+        TOKEN = s.token; setSession(s); reloadHealth();
+        authGet("/api/job").then((d) => setJob(d.job)).catch(() => {});
+      }).catch((e) => setError(e.message));
+    }, []);
     useEffect(() => {
       if (theme === "auto") document.documentElement.removeAttribute("data-theme");
       else document.documentElement.setAttribute("data-theme", theme);
@@ -552,40 +962,92 @@
       setFresh(0);
       return () => clearInterval(timer);
     }, [index]);
+    // While a job runs, follow it; when it ends, pick up the new run and any new setup state.
+    const wasRunning = useRef(false);
+    useEffect(() => {
+      const running = job?.status === "running";
+      if (wasRunning.current && !running) { load(); reloadHealth(); }
+      wasRunning.current = running;
+      if (!running) return;
+      let active = true;
+      let timer;
+      const poll = () => authGet("/api/job").then((d) => { if (active) setJob(d.job); })
+        .catch(() => { if (active) timer = setTimeout(poll, 1200); });
+      timer = setTimeout(poll, 1200);
+      return () => { active = false; clearTimeout(timer); };
+    }, [job]);
     useEffect(() => {
       const onHash = () => setRoute(readHash());
       addEventListener("hashchange", onHash);
       return () => removeEventListener("hashchange", onHash);
     }, []);
-    const go = (next) => { const state = { ...route, ...next }; setRoute(state); writeHash(state); };
+    const go = (next) => { const state = { ...route, ...next }; setRoute(state); writeHash(state); scrollTo({ top: 0 }); };
     useEffect(() => {
-      if (index && !route.run && index.runs.length) go({ run: [...index.runs].sort(SORTS.verdict)[0].id });
-    }, [index]);
+      if (index && route.tab === "runs" && !route.run && index.runs.length) go({ run: [...index.runs].sort(SORTS.verdict)[0].id });
+    }, [index, route.tab]);
+    useEffect(() => { if (!quitArmed) return; const t = setTimeout(() => setQuitArmed(false), 3000); return () => clearTimeout(t); }, [quitArmed]);
+    const start = (body) => post("/api/jobs", body).then((d) => { setJob(d.job); setNotice(""); })
+      .catch((e) => setNotice(e.message));
+    const stop = () => post("/api/jobs/stop", {}).then((d) => setJob(d.job)).catch((e) => setNotice(e.message));
+    const saveSettings = (body) => post("/api/settings", body).then((d) => {
+      setSession((s) => ({ ...s, settings: d.settings, prs: d.prs })); return d;
+    });
+    const dismiss = () => { if (job) { setDismissed(job.started); store.set("pm-dismissed", String(job.started)); } };
+    const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, stop, go,
+      saveSettings, reloadHealth, dismiss, dismissed, tab: route.tab };
     const nextTheme = { auto: "light", light: "dark", dark: "auto" }[theme];
-    return html`
-      <header class="top">
-        <div class="brand">ProofMerge<span>${index ? index.root : ""}</span></div>
-        <nav class="tabs" role="tablist">
-          ${[["runs", "Runs"], ["prs", "Pull requests"], ["bench", "Benchmarks"]].map(([key, label]) => html`
-            <button key=${key} class="tab" role="tab" type="button" aria-selected=${route.tab === key}
-              onClick=${() => go({ tab: key })}>${label}</button>`)}
-        </nav>
-        <span class="spacer"></span>
-        <button class="ghost" type="button" onClick=${load} disabled=${loading}>${loading ? "Scanning…" : "Refresh"}</button>
-        <button class="ghost" type="button" onClick=${() => setTheme(nextTheme)} aria-label=${"Theme: " + theme + ". Switch to " + nextTheme}>
-          Theme: ${theme}</button>
-      </header>
-      <main>
-        ${fresh ? html`<div class="banner" role="status">${fresh} new run${fresh === 1 ? "" : "s"} in this folder.
-          <button class="primary" type="button" onClick=${load}>Show them</button></div>` : null}
-        ${error ? html`<div class="error-box">Could not read runs: ${error}. Is <code>proofmerge dashboard</code> still running?</div>` : null}
-        ${!index && !error ? html`<p class="boot">Scanning runs…</p>` : null}
-        ${index && route.tab === "runs" ? html`<${RunsView} index=${index} selected=${route.run} onSelect=${(run) => go({ run })} />` : null}
-        ${index && route.tab === "bench" ? html`<${BenchmarksView} index=${index} onOpenRun=${(run) => go({ tab: "runs", run })} />` : null}
-        ${index && route.tab === "prs" ? html`<${PullsView} index=${index} token=${session.token} selected=${route.pr}
-          onSelect=${(pr) => go({ pr: String(pr) })} onOpenRun=${(run) => { load(); go({ tab: "runs", run }); }}
-          onRunsChanged=${load} />` : null}
-      </main>`;
+    if (quit) {
+      return html`<div class="quit"><${Icon} name="power" size=${28} /><h1>ProofMerge has stopped</h1>
+        <p class="muted">You can close this tab. Open ProofMerge again from its shortcut when you need it.</p></div>`;
+    }
+    return html`<${AppCtx.Provider} value=${ctx}>
+      <div class="shell">
+        <aside class="side">
+          <div class="brand">
+            <svg class="mark" viewBox="0 0 24 24" aria-hidden="true" fill="none">
+              <rect x="2.5" y="2.5" width="12" height="12" rx="3" stroke="var(--muted)" stroke-width="1.5" />
+              <rect x="9.5" y="9.5" width="12" height="12" rx="3" fill="var(--brand)" />
+              <path d="M12.6 15.6l2.1 2.1 4-4.2" stroke="var(--brand-ink)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>ProofMerge</div>
+          <nav class="nav" aria-label="Sections">
+            ${NAV.map(([key, label, icon]) => html`<button key=${key} type="button" class="nav-item"
+              aria-current=${route.tab === key ? "page" : undefined} onClick=${() => go({ tab: key })}>
+              <${Icon} name=${icon} /><span>${label}</span>
+              ${key === "setup" && health && !(health.docker_running && health.runner_image && health.model_key) ? html`<span class="badge" aria-label="needs setup"></span>` : null}
+              ${key === "home" && job?.status === "running" ? html`<span class="spinner small" aria-label="running"></span>` : null}
+            </button>`)}
+          </nav>
+          <div class="side-foot">
+            <button class="nav-item" type="button" onClick=${() => setTheme(nextTheme)} aria-label=${"Theme: " + theme + ". Switch to " + nextTheme}>
+              <${Icon} name="sun" /><span>Theme: ${theme}</span></button>
+            <button class=${"nav-item" + (quitArmed ? " armed" : "")} type="button"
+              onClick=${() => quitArmed ? post("/api/quit", {}).finally(() => setQuit(true)) : setQuitArmed(true)}>
+              <${Icon} name="power" /><span>${quitArmed ? "Click again to quit" : "Quit ProofMerge"}</span></button>
+          </div>
+        </aside>
+        <main class="page" key=${route.tab}>
+          ${notice ? html`<div class="error-box notice" role="alert">${notice}<button class="icon-btn" type="button" onClick=${() => setNotice("")} aria-label="Dismiss"><${Icon} name="x" size=${16} /></button></div>` : null}
+          ${fresh ? html`<div class="banner" role="status">${fresh} new run${fresh === 1 ? "" : "s"} in this folder.
+            <button class="primary" type="button" onClick=${load}>Show them</button></div>` : null}
+          ${error ? html`<div class="error-box">Could not reach ProofMerge: ${error}. If you closed it, open it again from its shortcut.</div>` : null}
+          ${route.tab === "home" ? html`<${Home} index=${index} />` : null}
+          ${route.tab === "setup" ? html`<${SetupView} />` : null}
+          ${!index && !error && !["home", "setup"].includes(route.tab) ? html`<p class="boot">Loading runs…</p>` : null}
+          ${index && route.tab === "runs" ? html`<div class="page-head"><h1>Runs</h1>
+              <button class="ghost" type="button" onClick=${load} disabled=${loading}><${Icon} name="refresh" />${loading ? "Scanning…" : "Refresh"}</button></div>
+            <${RunsView} index=${index} selected=${route.run} onSelect=${(run) => go({ run })} />` : null}
+          ${index && route.tab === "bench" ? html`<${BenchmarksView} index=${index} onOpenRun=${(run) => go({ tab: "runs", run })} />` : null}
+          ${index && route.tab === "prs" ? (session.prs
+            ? html`<div class="page-head"><h1>Pull requests</h1></div><${PullsView} index=${index} token=${session.token} selected=${route.pr}
+              onSelect=${(pr) => go({ pr: String(pr) })} onOpenRun=${(run) => { load(); go({ tab: "runs", run }); }}
+              onRunsChanged=${load} />`
+            : html`<div class="page-head"><h1>Pull requests</h1></div><div class="panel empty"><strong>Choose a project first</strong>
+              Pick your project on Home. Its GitHub pull requests show up here, ready to check with one click.
+              <div class="actions center"><button class="primary" type="button" onClick=${() => go({ tab: "home" })}>Go to Home</button></div></div>`) : null}
+        </main>
+        <${JobDock} />
+      </div>
+    </${AppCtx.Provider}>`;
   }
 
   ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);

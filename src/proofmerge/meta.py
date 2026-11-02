@@ -53,7 +53,10 @@ class MetaClient:
         elif backend == "api":
             key = os.environ.get("MODEL_API_KEY")
             if not key:
-                raise MetaError("MODEL_API_KEY is not set; export it in your shell first")
+                raise MetaError(
+                    "MODEL_API_KEY is not set; add it on the Setup page of `proofmerge app`"
+                    " or export it in your shell"
+                )
             base_url = os.environ.get("PROOFMERGE_BASE_URL") or BASE_URL
             # No SDK retries, so every HTTP attempt counts against the call budget.
             # shortcut: a 429/5xx fails the call; add budgeted retries if live runs flake.

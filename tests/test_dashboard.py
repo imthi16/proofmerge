@@ -111,7 +111,7 @@ def test_server_is_local_and_read_only(server) -> None:
 
     csp = fetch(base + "/report?id=tenant-cache-take2")[1]["Content-Security-Policy"]
     assert "default-src 'none'" in csp and "style-src 'unsafe-inline'" in csp
-    assert "script-src" not in csp
+    assert "script-src" not in csp and "font-src data:" in csp
     assert fetch(base + "/api/index", "POST")[0] == 404  # no --repo: nothing accepts a POST
     assert fetch(base + "/api/index", "DELETE")[0] == 405
     assert fetch(base + "/api/run?id=../../etc")[0] == 404

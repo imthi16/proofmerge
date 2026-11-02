@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 proofmerge = "proofmerge.cli:app"
+proofmerge-app = "proofmerge.cli:run_app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/proofmerge"]

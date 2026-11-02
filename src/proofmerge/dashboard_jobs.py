@@ -8,8 +8,11 @@ the server, so a client never picks a path to write.
 
 The model key typed into the page lives only in this process's memory and in the
 environment of the jobs it starts; it is never written to disk or sent back to the page.
+The model choice (Meta, a Claude plan through Claude Code, or another OpenAI-compatible
+API) holds no secret, so it is saved to a settings file when one is given.
 """
 
+import json
 import os
 import re
 import string
@@ -22,6 +25,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from proofmerge import __version__
 
@@ -33,6 +37,9 @@ CHECK_TIMEOUT = 15
 COMMANDS = ("verify", "probe", "hypotheses", "replay", "rerun", "smoke", "setup")
 REF = re.compile(r"[A-Za-z0-9._/@{}^~-]{1,200}")
 KEY = re.compile(r"[\x21-\x7e]{8,512}")
+MODEL_NAME = re.compile(r"[A-Za-z0-9._:/@+-]{1,100}")
+PROVIDERS = ("meta", "claude", "openai")
+NO_MODEL = {"provider": "", "base_url": "", "spark_model": "", "wonder_model": ""}  # follow the environment
 Spawn = Callable[..., Any]
 Runner = Callable[..., Any]
 
@@ -129,7 +136,7 @@ def browse(path: str) -> dict[str, Any]:
 
 class Jobs:
     def __init__(self, root: Path, runner: Runner = subprocess.run,
-                 spawn: Spawn = subprocess.Popen) -> None:
+                 spawn: Spawn = subprocess.Popen, settings_file: Path | None = None) -> None:
         self.root = root.resolve()
         self._run = runner
         self._spawn = spawn
@@ -138,12 +145,54 @@ class Jobs:
         self._key = ""  # MODEL_API_KEY typed into the page; memory only
         self.project = ""
         self.job: dict[str, Any] | None = None
+        self._settings_file = settings_file
+        self.model = dict(NO_MODEL)
+        try:
+            saved = json.loads(settings_file.read_text())["model"] if settings_file else None
+            if saved:
+                self.set_model(saved, save=False)
+        except (OSError, ValueError, KeyError, TypeError, JobError):
+            pass  # a missing or hand-edited file falls back to the environment
 
     # Settings ---------------------------------------------------------------------------
     def settings(self) -> dict[str, Any]:
         return {"project": self.project, "key_set": bool(self._key),
                 "key_in_env": bool(os.environ.get("MODEL_API_KEY")),
-                "backend": os.environ.get("PROOFMERGE_BACKEND", "api")}
+                "backend": os.environ.get("PROOFMERGE_BACKEND", "api"),
+                "model": self.model | {"provider": self.provider()}}
+
+    def provider(self) -> str:
+        """The model provider jobs use: the page's choice, else what the environment says."""
+        if self.model["provider"]:
+            return self.model["provider"]
+        if os.environ.get("PROOFMERGE_BACKEND") == "claude-cli":
+            return "claude"
+        return "openai" if os.environ.get("PROOFMERGE_BASE_URL") else "meta"
+
+    def set_model(self, value: Any, *, save: bool = True) -> None:
+        if not isinstance(value, dict) or value.get("provider") not in PROVIDERS:
+            raise JobError("Choose Meta Muse, a Claude plan or another API.")
+        model = dict(NO_MODEL, provider=value["provider"])
+        if model["provider"] == "openai":
+            url = str(value.get("base_url", "")).strip()
+            parts = urlsplit(url)
+            local = parts.hostname in ("localhost", "127.0.0.1", "::1")
+            if (len(url) > 300 or not parts.hostname or parts.username or parts.password
+                    or not (parts.scheme == "https" or (parts.scheme == "http" and local))):
+                raise JobError("Use the provider's https:// address, or http://localhost for a model on this computer.")
+            model["base_url"] = url
+        for role in ("spark_model", "wonder_model"):
+            name = str(value.get(role) or "").strip()
+            if name and not MODEL_NAME.fullmatch(name):
+                raise JobError("A model name has characters a model name never has.")
+            if not name and model["provider"] == "openai":
+                raise JobError("Give the model names your provider lists, for both roles.")
+            if model["provider"] != "meta":  # Meta always uses Muse Spark and Muse Wonder
+                model[role] = name
+        self.model = model
+        if save and self._settings_file:
+            self._settings_file.parent.mkdir(parents=True, exist_ok=True)
+            self._settings_file.write_text(json.dumps({"model": model}, indent=2))
 
     def set_key(self, key: str) -> None:
         if key == "":
@@ -157,6 +206,13 @@ class Jobs:
         env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         if self._key:
             env["MODEL_API_KEY"] = self._key
+        provider = self.model["provider"]
+        if provider:
+            # Empty values make meta.py fall back to its defaults (Meta endpoint, Muse models).
+            env |= {"PROOFMERGE_BACKEND": "claude-cli" if provider == "claude" else "api",
+                    "PROOFMERGE_BASE_URL": self.model["base_url"],
+                    "PROOFMERGE_SPARK_MODEL": self.model["spark_model"],
+                    "PROOFMERGE_WONDER_MODEL": self.model["wonder_model"]}
         return env
 
     def health(self) -> dict[str, Any]:
@@ -167,6 +223,8 @@ class Jobs:
             from proofmerge.sandbox import RUNNER_IMAGE
             image = _which(self._run, ["docker", "image", "inspect", "--format", "{{.Id}}", RUNNER_IMAGE])
         gh = _which(self._run, ["gh", "--version"])
+        provider = self.provider()
+        claude = _which(self._run, ["claude", "--version"]) if provider == "claude" else None
         return {
             "version": __version__,
             "python": sys.version.split()[0],
@@ -176,8 +234,11 @@ class Jobs:
             "docker_running": docker is not None and docker.returncode == 0,
             "runner_image": image is not None and image.returncode == 0,
             "gh": gh is not None and gh.returncode == 0,
-            "model_key": bool(self._key or os.environ.get("MODEL_API_KEY"))
-            or os.environ.get("PROOFMERGE_BACKEND", "api") != "api",
+            # The model is ready: a key for an API, or a Claude Code CLI for a Claude plan.
+            "model_key": (claude is not None and claude.returncode == 0) if provider == "claude"
+            else bool(self._key or os.environ.get("MODEL_API_KEY")),
+            "provider": provider,
+            "claude_cli": claude is not None and claude.returncode == 0,
             "runs_folder": str(self.root),
         }
 

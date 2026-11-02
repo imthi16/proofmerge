@@ -23,6 +23,7 @@ from proofmerge.evidence import Experiment
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import IntentContract
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
+from proofmerge.node_project import PROBE_NOTE, is_auto
 from proofmerge.project_config import ProjectConfig, PythonProject
 from proofmerge.python_layout import layout_prompt_note
 from proofmerge.sandbox import (
@@ -123,12 +124,13 @@ def _probe_prompt(
     if config is None:
         note = layout_prompt_note(python_project)
         return PROMPT if not note else PROMPT + "\n" + note
-    return (
+    prompt = (
         GENERIC_PROMPT.replace("{language}", config.language)
         .replace("{probe_path}", config.probe_path)
         .replace("{test_command}", shlex.join(config.test_command))
         .replace("{assertion_failure}", config.assertion_failure)
     )
+    return prompt + PROBE_NOTE if is_auto(config) else prompt
 
 
 def write_probe(

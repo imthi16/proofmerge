@@ -23,6 +23,7 @@ from importlib import resources
 from pathlib import Path
 
 from proofmerge.evidence import Execution, Experiment, Outcome
+from proofmerge.node_project import base_configs, is_auto, pin_configs
 from proofmerge.project_config import ProjectConfig, PythonProject
 from proofmerge.python_layout import (
     LayoutError,
@@ -626,10 +627,17 @@ def run_config_experiment(
     suffix = Path(config.probe_path).suffix or ""
     probe_name = f"test_{hypothesis_id.lower()}{suffix}"
     _, log_dir = _write_probe(evidence_dir, hypothesis_id, probe_name, probe_source, conftest=False)
+    configs = base_configs(repo, base_sha) if is_auto(config) else None
+
+    def run_once(code_dir: Path) -> tuple[int | None, bytes, bytes]:
+        if configs is not None:
+            pin_configs(code_dir, configs)  # both revisions run with the base TypeScript setup
+        return runner(pinned, code_dir, probe_source, timeout)
+
     executions = _run_revisions(
         repo, _revisions(base_sha, head_sha), hypothesis_id, log_dir,
         attempts=attempts, command_argv=list(config.test_command), digest=digest,
-        run_once=lambda code_dir: runner(pinned, code_dir, probe_source, timeout),
+        run_once=run_once,
         outcome_of=lambda exit_code, stdout, stderr: outcome_for_config(
             exit_code, config, stdout, stderr
         ),

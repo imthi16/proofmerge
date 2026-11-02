@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from pydantic import BaseModel, ValidationError
 
 from proofmerge.dashboard_events import sse_stream
+from proofmerge.dashboard_github import GitHub, GitHubError
 from proofmerge.dashboard_jobs import JobError, Jobs, branches, browse, git_project
 from proofmerge.dashboard_models import ApiError, VerificationRequest
 from proofmerge.dashboard_prs import PrError, PullRequests
@@ -47,7 +48,9 @@ MAX_BODY = 64_000
 MAX_STREAMS = 8  # concurrent server-sent event streams; each holds a thread
 # Control Center routes: the server answers them with the app shell, whose router
 # reads the path. /legacy keeps the previous dashboard reachable during the migration.
-APP_ROUTES = ("/pull-requests", "/verifications", "/runs", "/benchmarks", "/diagnostics")
+GITHUB_ACTIONS = {"/api/github/login": "start_login", "/api/github/login/cancel": "cancel_login",
+                  "/api/github/logout": "logout", "/api/github/clone": "start_clone"}
+APP_ROUTES = ("/pull-requests","/verifications", "/runs", "/benchmarks", "/diagnostics")
 _HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'",
     "X-Content-Type-Options": "nosniff",
@@ -316,13 +319,18 @@ class _Handler(BaseHTTPRequestHandler):
             return
         url = urlsplit(self.path)
         query = parse_qs(url.query)
-        if url.path in ("/api/health", "/api/browse", "/api/branches", "/api/job"):
+        if url.path in ("/api/health", "/api/browse", "/api/branches", "/api/job",
+                        "/api/github", "/api/github/repos"):
             if not secrets.compare_digest(self.headers.get("X-ProofMerge-Token", ""), self.token):
                 self._json({"error": "refused: open the dashboard page and try again"},
                            HTTPStatus.FORBIDDEN)
                 return
             try:
-                if url.path == "/api/health":
+                if url.path == "/api/github":
+                    self._json(self.github.status())
+                elif url.path == "/api/github/repos":
+                    self._json({"repos": self.github.repos()})
+                elif url.path == "/api/health":
                     self._json(self.jobs.health())
                 elif url.path == "/api/browse":
                     self._json(browse(query.get("path", [""])[0]))
@@ -331,7 +339,7 @@ class _Handler(BaseHTTPRequestHandler):
                     self._json(branches(project, self.runner))
                 else:
                     self._json({"job": self.jobs.progress()})
-            except JobError as error:
+            except (JobError, GitHubError) as error:
                 self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         elif url.path.startswith("/api/v1/"):
             self._v1_get(url.path.removeprefix("/api/v1"), query)
@@ -495,7 +503,8 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return
         path = urlsplit(self.path).path
-        routes = ("/api/v1/verifications", "/api/verify", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit")
+        routes = ("/api/v1/verifications", "/api/verify", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit",
+                  *GITHUB_ACTIONS)
         if path not in routes or (path in ("/api/verify", "/api/v1/verifications") and self.prs is None):
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -529,6 +538,18 @@ class _Handler(BaseHTTPRequestHandler):
                     self._model(api.job_model(self.prs), HTTPStatus.ACCEPTED)
             except PrError as error:
                 self._json({"error": str(error)}, HTTPStatus.CONFLICT)
+            return
+        if path in GITHUB_ACTIONS:
+            try:
+                if path == "/api/github/clone":
+                    self.github.start_clone(body.get("repo"))
+                else:
+                    getattr(self.github, GITHUB_ACTIONS[path])()
+            except GitHubError as error:
+                self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+                return
+            started = path in ("/api/github/login", "/api/github/clone")
+            self._json(self.github.status(), HTTPStatus.ACCEPTED if started else HTTPStatus.OK)
             return
         try:
             if path == "/api/jobs":
@@ -576,13 +597,16 @@ def _last_event_id(header: str | None, query: dict[str, list[str]]) -> int:
 
 
 def make_server(root: Path, port: int, repo: Path | None = None,
-                runner: Any = subprocess.run, *, heartbeat: float = 15.0) -> ThreadingHTTPServer:
+                runner: Any = subprocess.run, *, heartbeat: float = 15.0,
+                github: GitHub | None = None) -> ThreadingHTTPServer:
     jobs = Jobs(root, runner)
+    github = github or GitHub(Path.home() / "ProofMerge" / "repos")
     prs = PullRequests(repo, root, runner, jobs.environment) if repo is not None else None
     if repo is not None:
         jobs.project = str(repo.resolve())
     handler = type("Handler", (_Handler,), {
-        "root": root.resolve(), "prs": prs, "jobs": jobs, "runner": staticmethod(runner),
+        "root": root.resolve(), "prs": prs, "jobs": jobs, "github": github,
+        "runner": staticmethod(runner),
         "action_lock": threading.Lock(), "pinned_repo": repo is not None,
         "token": secrets.token_urlsafe(32),
         "streams": threading.BoundedSemaphore(MAX_STREAMS), "heartbeat": heartbeat,

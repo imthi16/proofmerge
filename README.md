@@ -263,6 +263,14 @@ until you quit and is never written to disk. Runs are saved in
 tests without a verdict, re-checks a run's evidence hashes, re-runs its tests,
 and verifies open pull requests through the GitHub CLI.
 
+**Pull requests from GitHub, without a terminal:** on Setup, press **Sign in to
+GitHub**. The page shows a one-time code; enter it at github.com/login/device and
+press Authorize. Then **Pull requests** lists your repositories (or takes any
+`owner/name`), downloads the one you pick to `~/ProofMerge/repos/<owner>/<name>`,
+and lists its pull requests, each one a click away from a check. The GitHub CLI
+keeps the sign-in in the system credential store; ProofMerge never sees the token,
+and downloading a repository never runs its code (only the sandbox does).
+
 Installing `pip install` or `uv tool install` puts a `proofmerge-app` launcher in
 the Python Scripts folder; on Windows that is a `.exe` you can pin to the Start
 menu. Keep its window open while you use the app, or press **Quit ProofMerge**.
@@ -271,8 +279,8 @@ menu. Keep its window open while you use the app, or press **Quit ProofMerge**.
 [installer/windows/Install-ProofMerge.cmd](installer/windows/Install-ProofMerge.cmd),
 press **Download raw file**, and double-click the downloaded file. If Windows
 says it protected your PC, choose **More info**, then **Run anyway**. The
-installer finds or offers to install Python 3.11+, Git and Docker Desktop through
-winget (you accept each license yourself), installs ProofMerge for your user only
+installer finds or offers to install Python 3.11+, Git, the GitHub CLI (optional,
+for signing in to GitHub) and Docker Desktop through winget (you accept each license yourself), installs ProofMerge for your user only
 in `%LOCALAPPDATA%\ProofMerge`, adds ProofMerge and Uninstall ProofMerge to the
 Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
 Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.

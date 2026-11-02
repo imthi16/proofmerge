@@ -174,7 +174,7 @@ class PullRequests:
             journal.append("job.fetch_started", status="running",
                            message="Fetching the PR and its base into refs/proofmerge/")
             # gh's sign-in also lets git fetch private repositories, without touching git config.
-            fetched = self._step(["git", *GH_CREDENTIALS, "-C", str(self.repo), "fetch", "--no-tags",
+            fetched = self._step(["git", "-C", str(self.repo), *GH_CREDENTIALS, "fetch", "--no-tags",
                                   f"{self._repository()[1]}.git",
                                   f"+refs/pull/{n}/head:{head}", f"+refs/heads/{pr['base']}:{base}"], 300)
             if fetched.returncode != 0:

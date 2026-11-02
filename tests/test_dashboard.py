@@ -235,7 +235,7 @@ def test_verify_fetches_into_proofmerge_refs_and_runs_verify(pr_server, runs: Pa
 
     fetch_call = next(c for c in runner.calls if "fetch" in c)
     # gh's sign-in reaches private repositories for this one command only.
-    assert fetch_call[:10] == ["git", *GH_CREDENTIALS, "-C", str(repo.resolve()), "fetch", "--no-tags",
+    assert fetch_call[:10] == ["git", "-C", str(repo.resolve()), *GH_CREDENTIALS, "fetch", "--no-tags",
                                "https://github.com/o/r.git"]
     assert "origin" not in fetch_call
     assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[3:5] == ["--repo", "o/r"]

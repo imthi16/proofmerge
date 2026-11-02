@@ -172,7 +172,7 @@ def test_clone_into_the_repos_folder_then_fetch_on_the_next_pick(tmp_path: Path)
     (target / ".git").mkdir(parents=True)
     github.start_clone("octocat/hello")
     settle(lambda: github.clone["state"] != "running")
-    assert gh.calls[-1] == ["git", *GH_CREDENTIALS, "-C", str(target), "fetch", "--prune", "origin"]
+    assert gh.calls[-1] == ["git", "-C", str(target), *GH_CREDENTIALS, "fetch", "--prune", "origin"]
 
 
 def test_clone_failures_are_generic_and_never_overwrite_a_folder(tmp_path: Path) -> None:

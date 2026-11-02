@@ -27,7 +27,7 @@ $ProgressPreference = 'SilentlyContinue'
 $Repo = 'https://github.com/imthi16/proofmerge'
 $Ref = if ($env:PROOFMERGE_REF) { $env:PROOFMERGE_REF } else { 'main' }
 # The ref goes into a pip requirement; allow only branch, tag and commit characters.
-if ($Ref -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$' -or $Ref -match '\.\.') {
+if ($Ref -notmatch '\A[A-Za-z0-9][A-Za-z0-9._/-]{0,199}\z' -or $Ref -match '\.\.') {
     Write-Host "    PROOFMERGE_REF '$Ref' is not a branch, tag or commit name." -ForegroundColor Red
     exit 1
 }
@@ -65,16 +65,17 @@ function Install-WithWinget($id, $name) {
     return ($code -eq 0)
 }
 
-function Invoke-Quietly([string]$exe, [string[]]$arguments) {
-    # Windows PowerShell 5.1 turns a program's redirected stderr into a terminating error
-    # under 'Stop'; these calls may print "not found" and that is fine.
-    $ErrorActionPreference = 'Continue'
-    & $exe @arguments 2>&1 | Out-Null
-}
-
 function Stop-App {
-    # A running app locks proofmerge-app.exe, so pip cannot replace it and rmdir cannot delete it.
-    Invoke-Quietly "$env:SystemRoot\System32\taskkill.exe" @('/f', '/t', '/im', 'proofmerge-app.exe')
+    # A running app locks proofmerge-app.exe, so pip cannot replace it. Stop only processes
+    # started from this venv (the launcher and its Python), never another copy on the machine,
+    # and wait until they have exited.
+    $ErrorActionPreference = 'Continue'
+    $mine = @(Get-Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith($Venv + '\', [StringComparison]::OrdinalIgnoreCase) })
+    if ($mine.Count) {
+        $mine | Stop-Process -Force -ErrorAction SilentlyContinue
+        $mine | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    }
 }
 
 function Find-Python {
@@ -141,10 +142,13 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the Python environment.' }
     }
     Stop-App
-    # Same version number, new code: pip would keep the old copy, so remove it first.
-    Invoke-Quietly $VenvPython @('-m', 'pip', 'uninstall', '--yes', '--quiet', 'proofmerge')
     Say "Downloading ProofMerge ($Ref) from $Repo. This takes a minute."
-    & $VenvPython -m pip install --disable-pip-version-check "proofmerge @ git+$Repo@$Ref"
+    # Same version number, new code: pip keeps an installed copy unless forced. Forcing only
+    # this package replaces the old copy after the new one has downloaded and built, so a
+    # failed download leaves the working install in place. The second call adds any new
+    # dependencies.
+    & $VenvPython -m pip install --disable-pip-version-check --force-reinstall --no-deps "proofmerge @ git+$Repo@$Ref"
+    if ($LASTEXITCODE -eq 0) { & $VenvPython -m pip install --disable-pip-version-check "proofmerge @ git+$Repo@$Ref" }
     if ($LASTEXITCODE -ne 0) { throw 'ProofMerge could not be installed. Check the internet connection and try again.' }
     if (-not (Test-Path $AppExe)) { throw "The ProofMerge launcher is missing: $AppExe" }
     Ok ('Installed ' + (& (Join-Path $Venv 'Scripts\proofmerge.exe') version))
@@ -165,6 +169,11 @@ try {
 
     Step 'Step 5 of 6: Shortcuts'
     $uninstaller = Join-Path $InstallDir 'Uninstall ProofMerge.cmd'
+    # Run by the uninstaller: stop only this install's processes (they lock the files), wait,
+    # then remove the shortcuts from folders looked up at that moment.
+    $UnlinkCommand = @'
+$own = (Join-Path $env:LOCALAPPDATA 'ProofMerge') + '\'; Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($own, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -PassThru -ErrorAction SilentlyContinue | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue; foreach ($f in 'Programs','Desktop') { Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath($f)) 'ProofMerge.lnk') -ErrorAction SilentlyContinue }; Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Uninstall ProofMerge.lnk') -ErrorAction SilentlyContinue
+'@
     # The uninstaller holds no paths of its own: folders are looked up when it runs, so a
     # non-ASCII user or desktop folder cannot be garbled by the batch file's code page.
     $lines = @(
@@ -172,10 +181,7 @@ try {
         'title Uninstall ProofMerge',
         'cd /d "%TEMP%"',
         'echo Removing ProofMerge. Your checks in %USERPROFILE%\ProofMerge stay where they are.',
-        '"%SystemRoot%\System32\taskkill.exe" /f /t /im proofmerge-app.exe >nul 2>&1',
-        ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "' +
-         "foreach (`$f in 'Programs','Desktop') { Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath(`$f)) 'ProofMerge.lnk') -ErrorAction SilentlyContinue }; " +
-         "Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Uninstall ProofMerge.lnk') -ErrorAction SilentlyContinue" + '"'),
+        ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "' + $UnlinkCommand + '"'),
         'rmdir /s /q "%LOCALAPPDATA%\ProofMerge\venv"',
         'echo Done.',
         'pause',
@@ -188,7 +194,7 @@ try {
     Ok 'Added ProofMerge to the Start menu and the desktop.'
 
     Step 'Step 6 of 6: Open ProofMerge'
-    Start-Process -FilePath $AppExe -WorkingDirectory $InstallDir
+    Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP
     Ok 'ProofMerge is opening in your browser. Its small window must stay open while you use it.'
     Say 'Next time, open it from the Start menu or the desktop.'
     exit 0

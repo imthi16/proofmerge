@@ -50,17 +50,28 @@ def test_system_programs_are_called_by_full_path() -> None:
     assert "\npowershell " not in script and "\r\npowershell " not in script
 
 
-def test_rerun_replaces_the_code_even_when_the_version_number_is_the_same() -> None:
+def test_rerun_replaces_the_code_and_a_failed_download_keeps_the_old_copy() -> None:
     script = text()
-    stop, uninstall, install = (script.index(s) for s in (
-        "    Stop-App\r\n", "'pip', 'uninstall'", 'pip install --disable-pip-version-check "proofmerge @'))
-    assert stop < uninstall < install
+    stop = script.index("    Stop-App\r\n")
+    force = script.index("--force-reinstall --no-deps \"proofmerge @")
+    deps = script.index('if ($LASTEXITCODE -eq 0) { & $VenvPython -m pip install --disable-pip-version-check "proofmerge @')
+    assert stop < force < deps
+    # Uninstalling first would leave no app when the download fails.
+    assert "'pip', 'uninstall'" not in script and "pip uninstall" not in script
     assert "--quiet --disable-pip-version-check --upgrade" not in script  # progress stays visible
+
+
+def test_only_this_installs_processes_are_stopped() -> None:
+    script = text()
+    assert "taskkill" not in script  # `/im` would stop every proofmerge-app.exe on the machine
+    assert "$_.Path.StartsWith($Venv + '\\'" in script
+    assert "Wait-Process" in script
 
 
 def test_ref_is_checked_before_it_reaches_pip() -> None:
     script = text()
-    assert script.index("$Ref -notmatch") < script.index("git+$Repo@$Ref")
+    assert script.index("$Ref -notmatch '\\A") < script.index("git+$Repo@$Ref")
+    assert "{0,199}\\z'" in script  # `$` would let a trailing newline through
 
 
 def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
@@ -71,6 +82,9 @@ def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
     assert "rmdir /s /q \"%USERPROFILE%" not in uninstall
     # Leaves the folder it deletes, stops the app that locks it, and looks folders up at run
     # time instead of baking in paths that an ASCII file could garble.
-    assert uninstall.index("cd /d \"%TEMP%\"") < uninstall.index("taskkill.exe") < uninstall.index("rmdir")
-    assert "GetFolderPath" in uninstall and "$Desktop" not in uninstall
+    assert uninstall.index("cd /d \"%TEMP%\"") < uninstall.index("$UnlinkCommand") < uninstall.index("rmdir")
+    unlink = script[script.index("$UnlinkCommand = @'"):script.index("$lines = @(")]
+    assert "Stop-Process" in unlink and "GetFolderPath" in unlink and '"' not in unlink
+    assert "$Desktop" not in uninstall
     assert "$link.WorkingDirectory = $env:TEMP" in script
+    assert "Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP" in script

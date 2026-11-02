@@ -1,0 +1,531 @@
+{
+  "proofmerge_version": "0.1.0",
+  "run_id": "expense-totals-refactor",
+  "base_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+  "head_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+  "diff_sha256": "970d59ba96193a7438d1ad9adc1c289d4503f52597a09e042a8c882e2808bee3",
+  "language": "typescript",
+  "intent": {
+    "claims": [
+      {
+        "id": "C0",
+        "kind": "PRESERVE",
+        "statement": "Behavior that the intent does not describe must not change.",
+        "source_quote": null
+      },
+      {
+        "id": "C1",
+        "kind": "CHANGE",
+        "statement": "The code filters the payable expenses before summing.",
+        "source_quote": "filter the payable expenses first"
+      },
+      {
+        "id": "C2",
+        "kind": "CHANGE",
+        "statement": "The code sums the payable expenses per category.",
+        "source_quote": "then add them up per category"
+      },
+      {
+        "id": "C3",
+        "kind": "PRESERVE",
+        "statement": "The returned totals do not change.",
+        "source_quote": "totals and errors must not change"
+      },
+      {
+        "id": "C4",
+        "kind": "PRESERVE",
+        "statement": "The returned errors do not change.",
+        "source_quote": "errors must not change"
+      }
+    ],
+    "rejected": []
+  },
+  "hypotheses": {
+    "hypotheses": [
+      {
+        "claim_id": "C3",
+        "title": "Per-category cap replaces per-expense cap",
+        "changed_locations": [
+          "src/expenses/totals.ts::reimbursableCents"
+        ],
+        "suspected_behavior": "Head caps the summed category total instead of capping each expense: two submitted expenses in same category each with amountCents=CAP returns 2*CAP on base but CAP on head.",
+        "expected_base": "2*CAP (sum of per-expense mins, e.g. two submitted expenses at exactly CAP each returns 2*CAP)",
+        "expected_head": "1*CAP (per-category sum capped once, i.e. min(2*CAP,CAP)=CAP)",
+        "test_intent": "Import reimbursableCents and CATEGORY_CAP_CENTS, pick any category CAP, call with two submitted expenses same category each amountCents=CAP, compare base vs head totals.",
+        "risk_category": "logic",
+        "falsification_criteria": "Head returns the same total as base (2*CAP) for two same-category submitted/approved expenses each at CAP.",
+        "possibly_intended": false,
+        "id": "H1"
+      },
+      {
+        "claim_id": "C3",
+        "title": "Draft expenses now counted as payable",
+        "changed_locations": [
+          "src/expenses/totals.ts::reimbursableCents"
+        ],
+        "suspected_behavior": "Head uses status!=='rejected' so a draft expense with amountCents=1 is counted, while base skipped all non-submitted/approved so returned 0.",
+        "expected_base": "0 (draft is skipped)",
+        "expected_head": "1 (or min(1,CAP) >0, draft is counted as payable)",
+        "test_intent": "Call reimbursableCents with single draft expense amountCents=1 in any category and check returned total on base vs head.",
+        "risk_category": "state",
+        "falsification_criteria": "Head returns 0 for a lone draft expense, same as base.",
+        "possibly_intended": false,
+        "id": "H2"
+      },
+      {
+        "claim_id": "C4",
+        "title": "Negative draft now throws instead of ignored",
+        "changed_locations": [
+          "src/expenses/totals.ts::reimbursableCents"
+        ],
+        "suspected_behavior": "Head validates negatives for all non-rejected including draft, so a draft with amountCents=-5 throws, while base ignored draft negatives.",
+        "expected_base": "returns 0 with no throw (negative draft ignored)",
+        "expected_head": "throws RangeError for the draft id",
+        "test_intent": "Call reimbursableCents with single draft expense amountCents negative and observe return vs RangeError throw on base vs head.",
+        "risk_category": "error-handling",
+        "falsification_criteria": "Head does not throw for a negative-amount draft expense, matching base.",
+        "possibly_intended": false,
+        "id": "H3"
+      }
+    ],
+    "rejected": []
+  },
+  "experiments": [
+    {
+      "hypothesis_id": "H1",
+      "test_source_path": "probes/test_h1.ts",
+      "test_source_sha256": "607e3bac25381ab9d0d64192a5f0299e0194ef49d6717fce891d78140e74d905",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 804,
+          "stdout_path": "H1/base-1.stdout",
+          "stderr_path": "H1/base-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 805,
+          "stdout_path": "H1/base-2.stdout",
+          "stderr_path": "H1/base-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 805,
+          "stdout_path": "H1/base-3.stdout",
+          "stderr_path": "H1/base-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 804,
+          "stdout_path": "H1/head-1.stdout",
+          "stderr_path": "H1/head-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 806,
+          "stdout_path": "H1/head-2.stdout",
+          "stderr_path": "H1/head-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 806,
+          "stdout_path": "H1/head-3.stdout",
+          "stderr_path": "H1/head-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "H2",
+      "test_source_path": "probes/test_h2.ts",
+      "test_source_sha256": "86a47b58f9862257c0cb1a394eee3bfb1389dc799e5e998327ec9cec3e2c1daa",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 804,
+          "stdout_path": "H2/base-1.stdout",
+          "stderr_path": "H2/base-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 905,
+          "stdout_path": "H2/base-2.stdout",
+          "stderr_path": "H2/base-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 805,
+          "stdout_path": "H2/base-3.stdout",
+          "stderr_path": "H2/base-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 804,
+          "stdout_path": "H2/head-1.stdout",
+          "stderr_path": "H2/head-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 806,
+          "stdout_path": "H2/head-2.stdout",
+          "stderr_path": "H2/head-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 806,
+          "stdout_path": "H2/head-3.stdout",
+          "stderr_path": "H2/head-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        }
+      ]
+    },
+    {
+      "hypothesis_id": "H3",
+      "test_source_path": "probes/test_h3.ts",
+      "test_source_sha256": "3375f98e3580afe1992e3741c5c1cbb5acee4c8be3acf802d19867b8450e199a",
+      "timeout_seconds": 60,
+      "executions": [
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 803,
+          "stdout_path": "H3/base-1.stdout",
+          "stderr_path": "H3/base-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 805,
+          "stdout_path": "H3/base-2.stdout",
+          "stderr_path": "H3/base-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "base",
+          "commit_sha": "1c0677efaf202ec4d5a4b27fb811019460818aa2",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 0,
+          "outcome": "PASS",
+          "duration_ms": 806,
+          "stdout_path": "H3/base-3.stdout",
+          "stderr_path": "H3/base-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 1,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 904,
+          "stdout_path": "H3/head-1.stdout",
+          "stderr_path": "H3/head-1.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 2,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 804,
+          "stdout_path": "H3/head-2.stdout",
+          "stderr_path": "H3/head-2.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        },
+        {
+          "revision": "head",
+          "commit_sha": "23e755ffd66b8153960509aa990c3290a7d65033",
+          "attempt": 3,
+          "command_argv": [
+            "node",
+            "--import",
+            "tsx",
+            "--test",
+            "proofmerge_probe.test.ts"
+          ],
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "duration_ms": 804,
+          "stdout_path": "H3/head-3.stdout",
+          "stderr_path": "H3/head-3.stderr",
+          "runner_image_digest": "sha256:13ca0da069ecf4c1c14313ff9cca0360826c5f8400049fdec1e654bfd221a418",
+          "setup_failure": false
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "hypothesis_id": "H1",
+      "claim_id": "C3",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-demo-ts/expense-totals-refactor/proof.json"
+    },
+    {
+      "hypothesis_id": "H2",
+      "claim_id": "C3",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-demo-ts/expense-totals-refactor/proof.json"
+    },
+    {
+      "hypothesis_id": "H3",
+      "claim_id": "C4",
+      "classification": "REGRESSION",
+      "verified": true,
+      "reproducer_command": "proofmerge replay /tmp/proofmerge-demo-ts/expense-totals-refactor/proof.json"
+    }
+  ],
+  "tamper_findings": [],
+  "verdict": {
+    "decision": "BLOCK",
+    "reasons": [
+      "H2 needs review because its probe may not test its hypothesis.",
+      "H3 needs review because its probe may not test its hypothesis.",
+      "H1 is a verified regression against uncontested PRESERVE claim C3 with intent present."
+    ],
+    "unresolved_risks": [],
+    "scope_limitations": [
+      "PASS means no regression was found within the tested scope; it does not prove the change correct.",
+      "Only the hypotheses listed in this proof were tested.",
+      "Test-tamper guard is not available for typescript; changed tests were not re-run."
+    ]
+  },
+  "model_usage": {
+    "calls": 7,
+    "prompt_tokens": 8626,
+    "completion_tokens": 10203,
+    "endpoint": "https://api.meta.ai/v1",
+    "models": {
+      "spark": "muse-spark-1.3",
+      "wonder": "muse-wonder-1.0"
+    },
+    "contributor_allowed": false
+  },
+  "contested_claim_ids": [],
+  "mismatched_probe_ids": [
+    "H2",
+    "H3"
+  ],
+  "explained_probe_ids": [],
+  "explained_probe_claim_ids": {},
+  "orchestration": {
+    "engine": "legacy",
+    "langgraph_version": null,
+    "nodes": [],
+    "retries": []
+  },
+  "verdict_inputs": {
+    "errors": [],
+    "intent_established": true,
+    "intent_given": true,
+    "wonder_checked": true,
+    "tamper_guard_language": "typescript",
+    "layout_scope_limitations": []
+  }
+}

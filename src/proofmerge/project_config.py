@@ -207,10 +207,17 @@ def _read_base_toml(repo: Path, base_sha: str) -> dict | None:
 
 
 def load_setup(repo: Path, base_sha: str) -> tuple[ProjectConfig | None, PythonProject | None]:
-    """Read `.proofmerge.toml` from `base_sha`. Missing file is `(None, None)`."""
+    """Read `.proofmerge.toml` from `base_sha`.
+
+    Without the file, a Node project (package.json and package-lock.json at the root, no
+    Python project files) gets a runner config ProofMerge sets up itself; anything else
+    is `(None, None)`, the Python runner.
+    """
     data = _read_base_toml(repo, base_sha)
     if data is None:
-        return None, None
+        from proofmerge.node_project import detect  # it imports this module
+
+        return detect(repo, base_sha), None
     try:
         return parse_config_document(data)
     except ValueError as exc:

@@ -1,0 +1,2 @@
+# Windows batch files need CRLF, or cmd mis-reads labels and the PowerShell block.
+*.cmd text eol=crlf

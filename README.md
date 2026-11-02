@@ -264,6 +264,16 @@ Installing `pip install` or `uv tool install` puts a `proofmerge-app` launcher i
 the Python Scripts folder; on Windows that is a `.exe` you can pin to the Start
 menu. Keep its window open while you use the app, or press **Quit ProofMerge**.
 
+**On Windows, with no terminal at all:** open
+[installer/windows/Install-ProofMerge.cmd](installer/windows/Install-ProofMerge.cmd),
+press **Download raw file**, and double-click the downloaded file. If Windows
+says it protected your PC, choose **More info**, then **Run anyway**. The
+installer finds or offers to install Python 3.11+, Git and Docker Desktop through
+winget (you accept each license yourself), installs ProofMerge for your user only
+in `%LOCALAPPDATA%\ProofMerge`, adds ProofMerge and Uninstall ProofMerge to the
+Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
+Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.
+
 ### On every pull request
 
 Add the workflow from [docs/github-action.md](docs/github-action.md). It runs
@@ -367,6 +377,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
 | `proofmerge dashboard`: runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | `proofmerge app`: every command from the browser (verify, risks only, probes only, evidence check, re-run, setup, model check) | Built and tested offline with fakes; a real `verify` on the demo shop was started and finished from the page in headless Chrome with the model endpoint pointed at a closed local port (REVIEW, as expected); not yet run with a real key from the page, and not yet run on Windows |
+| Windows installer (`installer/windows/Install-ProofMerge.cmd`) | Built; its structure and safety rules are checked by tests on Linux; not yet run on a Windows machine |
 | Agent Skill for coding agents | Built; commands and options checked offline against the CLI; not yet used by an agent on a real task |
 
 Each row has a dated entry with its real check results in

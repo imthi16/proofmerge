@@ -22,16 +22,18 @@ class FakeGh:
         self.user, self.installed = user, installed
         self.offline = self.revoked = False
         self.calls: list[list[str]] = []
+        self.dirs: list[str | None] = []
         self.answers: dict[str, SimpleNamespace] = {}
         self.lines: queue.Queue = queue.Queue()
         self.exit = 0
         self.killed = threading.Event()
         self.spawned: tuple[list[str], dict] | None = None
 
-    def run(self, argv: list[str], **_: object) -> SimpleNamespace:
+    def run(self, argv: list[str], **kwargs: object) -> SimpleNamespace:
         if not self.installed:
             raise FileNotFoundError(argv[0])
         self.calls.append(argv)
+        self.dirs.append(kwargs.get("cwd"))
         if argv[:3] == ["gh", "api", "user"]:
             if self.offline:
                 return SimpleNamespace(returncode=1, stdout="", stderr="error connecting to api.github.com")
@@ -166,13 +168,16 @@ def test_clone_into_the_repos_folder_then_fetch_on_the_next_pick(tmp_path: Path)
     github.start_clone("octocat/hello")
     settle(lambda: github.clone["state"] != "running")
     target = tmp_path / "octocat" / "hello"
-    assert gh.calls[-1] == ["gh", "repo", "clone", "octocat/hello", str(target)]
+    assert gh.calls[-2] == ["gh", "repo", "clone", "octocat/hello", str(target)]
+    assert gh.calls[-1] == ["gh", "repo", "set-default", "octocat/hello"]
+    assert gh.dirs[-1] == str(target)
     assert github.clone == {"repo": "octocat/hello", "state": "done", "path": str(target), "error": None}
 
     (target / ".git").mkdir(parents=True)
     github.start_clone("octocat/hello")
     settle(lambda: github.clone["state"] != "running")
-    assert gh.calls[-1] == ["git", "-C", str(target), *GH_CREDENTIALS, "fetch", "--prune", "origin"]
+    assert gh.calls[-2] == ["git", "-C", str(target), *GH_CREDENTIALS, "fetch", "--prune", "origin"]
+    assert gh.calls[-1] == ["gh", "repo", "set-default", "octocat/hello"]
 
 
 def test_clone_failures_are_generic_and_never_overwrite_a_folder(tmp_path: Path) -> None:
@@ -188,6 +193,16 @@ def test_clone_failures_are_generic_and_never_overwrite_a_folder(tmp_path: Path)
     settle(lambda: github.clone["state"] != "running")
     assert "is not a Git repository" in github.clone["error"]
     assert not any(c[:3] == ["gh", "repo", "clone"] and c[3] == "octocat/notes" for c in gh.calls)
+
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory")
+    stuck = GitHub(blocked, FakeGh("octocat").run)
+    stuck.start_clone("octocat/hello")
+    settle(lambda: stuck.clone["state"] != "running")
+    assert stuck.clone["state"] == "failed"
+    stuck.start_clone("octocat/other")
+    settle(lambda: stuck.clone["repo"] == "octocat/other" and stuck.clone["state"] != "running")
+    assert stuck.clone["state"] == "failed"
 
 
 def call(url: str, method: str = "GET", headers: dict | None = None, body: bytes | None = None):

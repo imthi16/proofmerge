@@ -175,18 +175,26 @@ class GitHub:
     def _clone(self, name: str, clone: dict[str, Any]) -> None:
         owner, repo = name.split("/")
         target = self.root / owner / repo
-        if (target / ".git").is_dir():
-            argv = ["git", "-C", str(target), *GH_CREDENTIALS, "fetch", "--prune", "origin"]
-        elif target.exists():
-            clone.update(state="failed", error=f"{target} exists and is not a Git repository.")
-            return
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            argv = ["gh", "repo", "clone", name, str(target)]
         try:
+            if (target / ".git").is_dir():
+                argv = ["git", "-C", str(target), *GH_CREDENTIALS, "fetch", "--prune", "origin"]
+            elif target.exists():
+                clone.update(state="failed", error=f"{target} exists and is not a Git repository.")
+                return
+            else:
+                # A file at the repos root raises here; that must fail the clone, not leave it running.
+                target.parent.mkdir(parents=True, exist_ok=True)
+                argv = ["gh", "repo", "clone", name, str(target)]
             result = self._run(argv, capture_output=True, text=True, encoding="utf-8",
                                errors="replace", timeout=CLONE_SECONDS, env=_env())
             ok = result.returncode == 0
+            if ok:
+                # A fork's parent becomes gh's default remote. Pin the repo the user picked.
+                # --no-upstream does this on newer gh only; set-default works on 2.46 too.
+                pinned = self._run(["gh", "repo", "set-default", name], cwd=str(target),
+                                   capture_output=True, text=True, encoding="utf-8",
+                                   errors="replace", timeout=30, env=_env())
+                ok = pinned.returncode == 0
         except (OSError, subprocess.TimeoutExpired):
             ok = False
         if ok:

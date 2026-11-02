@@ -275,3 +275,38 @@ def test_pr_and_home_start_requests_share_one_lock(tmp_path: Path) -> None:
             second.join(2)
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_control_center_and_browser_app_keep_separate_entrypoints(tmp_path: Path) -> None:
+    httpd = make_server(tmp_path, 0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        for path, expected in [("/", b"/static/app/assets/"),
+                               ("/app/", b"/static/legacy/app.js"),
+                               ("/legacy/", b"/static/legacy/app.js")]:
+            with urllib.request.urlopen(base + path) as response:
+                assert expected in response.read()
+        with urllib.request.urlopen(base + "/static/legacy/vendor/geist-latin-wght-normal.woff2") as response:
+            assert response.status == 200
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+@pytest.mark.parametrize("route", ["/api/verify", "/api/v1/verifications"])
+def test_both_pr_apis_refuse_to_overlap_home_job(tmp_path: Path, route: str) -> None:
+    from types import SimpleNamespace
+    httpd = make_server(tmp_path, 0)
+    handler = httpd.RequestHandlerClass
+    handler.jobs.job = {"status": "running"}
+    handler.prs = SimpleNamespace(job=None)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    headers = {"Origin": base, "Content-Type": "application/json",
+               "X-ProofMerge-Token": handler.token}
+    try:
+        assert fetch(base + route, "POST", headers, b'{"number": 7}')[0] == 409
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

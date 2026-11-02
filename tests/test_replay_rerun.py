@@ -24,9 +24,14 @@ def snapshot(directory):
     return {p.relative_to(directory): p.read_bytes() for p in directory.rglob("*") if p.is_file()}
 
 
-def rewrite(proof_path, change):
+def rewrite(proof_path, change, *, legacy=False):
+    """Edit proof.json and reseal it. `legacy` drops the verdict inputs, as in proofs
+    written before they were recorded: there replay cannot recompute the verdict, so
+    the --rerun record checks are what stop an edited proof."""
     data = json.loads(proof_path.read_text())
     change(data)
+    if legacy:
+        data["verdict_inputs"] = None
     proof_path.write_text(json.dumps(data))
     write_manifest(proof_path.parent)
 
@@ -129,7 +134,7 @@ def test_recorded_count_timeout_and_attempt_order_are_preserved(bundle, runs):
             e for e in experiment["executions"] if e["attempt"] <= 2
         ]))
 
-    rewrite(path, change)
+    rewrite(path, change, legacy=True)
     result = invoke(path, repo)
     assert result.exit_code == 0, result.output
     assert "H1 base PP head FF: reproduced" in result.stdout
@@ -232,7 +237,32 @@ def test_repo_required_only_for_rerun(bundle, runs):
     result = invoke(path, rerun=False)
     assert result.exit_code == 0
     assert result.stdout.startswith("evidence intact:")
-    assert result.stdout.count("\n") == 1
+    assert result.stdout.splitlines()[1] == "verdict recomputed from the evidence: BLOCK"
+    assert result.stdout.count("\n") == 2
+    assert runs[0] == []
+
+
+@pytest.mark.parametrize("bad", ["no-experiments", "no-base", "unequal", "duplicate"])
+def test_edited_records_fail_the_verdict_recomputation(bundle, runs, bad):
+    path, _, _ = bundle
+
+    def change(data):
+        experiment = data["experiments"][0]
+        if bad == "no-experiments":
+            data["experiments"] = []
+        elif bad == "no-base":
+            experiment["executions"] = [
+                e for e in experiment["executions"] if e["revision"] == "head"
+            ]
+        elif bad == "unequal":
+            experiment["executions"].pop()
+        else:
+            data["experiments"].append(experiment)
+
+    rewrite(path, change)
+    result = invoke(path, rerun=False)
+    assert result.exit_code == 1, result.output
+    assert "Findings do not follow from the recorded executions" in result.output
     assert runs[0] == []
 
 
@@ -262,7 +292,7 @@ def test_malformed_records_fail_before_any_run(bundle, runs, bad):
         else:
             data["experiments"].append(experiment)
 
-    rewrite(path, change)
+    rewrite(path, change, legacy=True)
     result = invoke(path, repo)
     assert result.exit_code == 1, result.output
     assert "replay failed:" in result.output
@@ -277,7 +307,7 @@ def test_docker_exit_125_matching_error_outcomes_are_not_reproduced(bundle, monk
             execution["outcome"] = "ERROR"
             execution["exit_code"] = 2
 
-    rewrite(path, all_error)
+    rewrite(path, all_error, legacy=True)
     proof = Proof.model_validate_json(path.read_text())
     experiment = proof.experiments[0]
 

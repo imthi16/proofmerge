@@ -122,9 +122,12 @@ def test_server_is_local_and_read_only(server) -> None:
 
 def test_server_serves_the_app_reports_and_run_detail(server) -> None:
     base, _ = server
-    status, _, body = fetch(base + "/")
-    assert status == 200 and b"/static/app.js" in body
-    assert fetch(base + "/static/vendor/react.production.min.js")[0] == 200
+    status, headers, body = fetch(base + "/")
+    assert status == 200 and headers["Content-Type"].startswith("text/html")
+    # The previous dashboard stays reachable at /legacy during the migration.
+    status, _, body = fetch(base + "/legacy/")
+    assert status == 200 and b"/static/legacy/app.js" in body
+    assert fetch(base + "/static/legacy/vendor/react.production.min.js")[0] == 200
 
     status, headers, body = fetch(base + "/report?id=tenant-cache-take2")
     assert status == 200 and headers["Content-Type"].startswith("text/html") and b"BLOCK" in body

@@ -8,7 +8,8 @@ from pathlib import Path, PurePosixPath
 
 from proofmerge.context import ContextError, GitContext, _git
 from proofmerge.evidence import Experiment, Outcome, TamperFinding, TamperKind
-from proofmerge.sandbox import Runner, SandboxError, docker_runner, run_experiment
+from proofmerge.project_config import PythonProject
+from proofmerge.sandbox import ATTEMPTS, Runner, SandboxError, docker_runner, run_experiment
 
 
 class TamperError(Exception):
@@ -192,6 +193,21 @@ def find_tamper(repo_path: str | Path, context: GitContext) -> list[TamperFindin
     return findings
 
 
+def head_outcome(experiment: Experiment) -> Outcome:
+    """The base test's outcome on head, from its recorded runs: the one rule for verify and replay.
+
+    PASS when head passed every attempt; FAIL only when base passed and head failed every
+    attempt (a reproducible break); anything else is ERROR.
+    """
+    base = [e.outcome for e in experiment.executions if e.revision == "base"]
+    head = [e.outcome for e in experiment.executions if e.revision == "head"]
+    if head == ["PASS"] * ATTEMPTS:
+        return "PASS"
+    if base == ["PASS"] * ATTEMPTS and head == ["FAIL"] * ATTEMPTS:
+        return "FAIL"
+    return "ERROR"
+
+
 def run_base_tests_on_head(
     repo: Path,
     context: GitContext,
@@ -199,14 +215,19 @@ def run_base_tests_on_head(
     evidence_dir: Path,
     runner: Runner = docker_runner,
     digest: str | None = None,
+    python_project: PythonProject | None = None,
 ) -> tuple[list[TamperFinding], list[Experiment]]:
     """Run each affected file's committed base tests on both revisions, without a verdict."""
     experiments: list[Experiment] = []
     outcomes: dict[str, Outcome] = {}
+    ran: dict[str, str] = {}  # test path -> id of the experiment that ran its base tests
 
     def stamped() -> list[TamperFinding]:
         return [
-            finding.model_copy(update={"base_test_on_head_outcome": outcomes[finding.test_path]})
+            finding.model_copy(update={
+                "base_test_on_head_outcome": outcomes[finding.test_path],
+                "experiment_id": ran.get(finding.test_path),
+            })
             if finding.test_path in outcomes
             else finding
             for finding in findings
@@ -241,15 +262,12 @@ def run_base_tests_on_head(
             experiment = run_experiment(
                 repo, context.base_sha, context.head_sha, f"T{len(experiments) + 1}",
                 "\n".join(lines),
-                evidence_dir, runner=runner, digest=digest, attempts=3,
+                evidence_dir, runner=runner, digest=digest, attempts=ATTEMPTS,
+                python_project=python_project,
             )
             experiments.append(experiment)
-            base = [e.outcome for e in experiment.executions if e.revision == "base"]
-            head = [e.outcome for e in experiment.executions if e.revision == "head"]
-            if head == ["PASS"] * 3:
-                outcomes[path] = "PASS"
-            elif base == ["PASS"] * 3 and head == ["FAIL"] * 3:
-                outcomes[path] = "FAIL"
+            ran[path] = experiment.hypothesis_id
+            outcomes[path] = head_outcome(experiment)
         except (TamperError, SandboxError, ContextError, OSError, ValueError) as error:
             # ponytail: partials ride on the exception; a result type if more callers need them
             error.completed = {"tamper": stamped(), "experiments": experiments}

@@ -20,6 +20,7 @@ from proofmerge.meta import WONDER_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
 from proofmerge.probes import MAX_BASE_RUNS
 from proofmerge.project_config import ProjectConfig, load_config
+from proofmerge.rederive import rederive
 from proofmerge.sandbox import SandboxError
 from proofmerge.tamper import TamperError
 
@@ -284,14 +285,40 @@ def test_later_tamper_run_keeps_earlier_fail(tmp_path, monkeypatch):
     assert_bundle(proof, evidence)
 
 
-def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatch):
+def tamper_fail(monkeypatch):
+    """A changed test whose base version passes on base and fails on head, every attempt.
+
+    Runs the real run_base_tests_on_head with git and the sandbox faked, so the FAIL comes
+    with the T1 experiment and probe file that replay recomputes it from.
+    """
+    import hashlib
+
+    from test_findings import experiment
+
+    from proofmerge import tamper as tamper_mod
+
     finding = TamperFinding(
-        test_path="test_calc.py", test_name=None, kind="MODIFIED",
-        base_test_on_head_outcome="FAIL",
+        test_path="test_calc.py", test_name=None, kind="MODIFIED", base_test_on_head_outcome=None,
     )
     monkeypatch.setattr(pipeline, "find_tamper", lambda *args: [finding])
-    monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *args, **kwargs: ([finding], []))
+    monkeypatch.setattr(tamper_mod, "_git",
+                        lambda repo, *args, error: b"blob\0" if args[0] == "ls-tree" else b"#\n")
+
+    def run_experiment(*args, **kwargs):
+        evidence, rel, data = args[5], "probes/test_t1.py", b"assert True\n"
+        (evidence / rel).parent.mkdir(parents=True, exist_ok=True)
+        (evidence / rel).write_bytes(data)
+        saved = experiment(["PASS"] * 3, ["FAIL"] * 3, hypothesis_id=args[3])
+        saved.test_source_path, saved.test_source_sha256 = rel, hashlib.sha256(data).hexdigest()
+        return saved
+
+    monkeypatch.setattr(tamper_mod, "run_experiment", run_experiment)
+
+
+def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatch):
+    tamper_fail(monkeypatch)
     proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=1))
+    assert proof.tamper_findings[0].base_test_on_head_outcome == "FAIL"
     assert proof.verdict.decision == "REVIEW"
     assert any("intent extraction failed" in reason for reason in proof.verdict.reasons)
     assert "scripted API unavailable" in proof.verdict.reasons
@@ -299,15 +326,11 @@ def test_intent_extraction_failure_does_not_block_on_tamper(tmp_path, monkeypatc
 
 
 def test_api_failure_keeps_tamper_fail_block(tmp_path, monkeypatch):
-    finding = TamperFinding(
-        test_path="test_calc.py", test_name=None, kind="MODIFIED",
-        base_test_on_head_outcome="FAIL",
-    )
-    monkeypatch.setattr(pipeline, "find_tamper", lambda *a: [finding])
-    monkeypatch.setattr(pipeline, "run_base_tests_on_head", lambda *a, **k: ([finding], []))
+    tamper_fail(monkeypatch)
     proof, evidence, _, _ = execute(tmp_path, replies=Replies(fail=2))
     assert proof.verdict.decision == "BLOCK"
-    assert proof.tamper_findings == [finding]
+    assert [(t.base_test_on_head_outcome, t.experiment_id) for t in proof.tamper_findings] == [
+        ("FAIL", "T1")]
     assert "scripted API unavailable" in proof.verdict.reasons
     assert_bundle(proof, evidence)
 
@@ -360,13 +383,14 @@ def arguments(repo, evidence, base="HEAD~1"):
 
 @pytest.mark.parametrize(("decision", "status"), [("PASS", 0), ("REVIEW", 0), ("BLOCK", 2)])
 def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, status):
+    monkeypatch.delenv("PROOFMERGE_ORCHESTRATOR", raising=False)
     repo, _ = make_repo(tmp_path)
     proof = Proof.model_validate_json((Path(__file__).parent / "fixtures/sample_proof_block.json").read_text())
     proof.verdict.decision = decision
     seen = {}
 
-    def run(*args):
-        seen["args"] = args
+    def run(*args, **kwargs):
+        seen["args"], seen["kwargs"] = args, kwargs
         return proof
 
     monkeypatch.setattr(cli, "MetaClient", lambda **kwargs: seen.setdefault("client", MetaClient(Replies(), **kwargs)))
@@ -382,6 +406,7 @@ def test_cli_verdict_exit_codes_and_usage(tmp_path, monkeypatch, decision, statu
     assert all(reason in result.output for reason in proof.verdict.reasons)
     assert "calls=0 tokens: prompt=0 completion=0" in result.output
     assert seen["args"][3] == INTENT
+    assert seen["kwargs"] == {"orchestrator": "legacy"}
     assert seen["client"].max_calls == 4 + MAX_HYPOTHESES * MAX_BASE_RUNS
 
 
@@ -390,7 +415,7 @@ def test_cli_could_not_run_exit_one(tmp_path, monkeypatch, error):
     repo, _ = make_repo(tmp_path)
     monkeypatch.setattr(cli, "MetaClient", lambda **k: MetaClient(Replies(), **k))
 
-    def fail(*a):
+    def fail(*a, **k):
         raise error
 
     monkeypatch.setattr(cli, "run_verify", fail)
@@ -764,6 +789,8 @@ def test_config_language_skips_tamper_and_adds_scope_limitation(tmp_path, monkey
     )
     assert proof.language == "go"
     assert proof.tamper_findings == []
+    assert proof.verdict_inputs.tamper_guard_language == "go"
+    assert rederive(proof) == []
     assert any(
         "Test-tamper guard is not available for go" in item
         for item in proof.verdict.scope_limitations

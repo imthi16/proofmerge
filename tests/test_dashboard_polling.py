@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-APP = Path(__file__).parents[1] / "src/proofmerge/dashboard_static/app.js"
+APP = Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js"
 
 
 def test_poll_retries_after_failure_and_cleanup_stops_retry() -> None:

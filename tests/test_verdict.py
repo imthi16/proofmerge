@@ -125,6 +125,12 @@ def test_rule_5_tamper_without_fail_needs_review(outcome):
     assert len(result.reasons) == 1
 
 
+def test_environment_setup_is_review_even_if_marked_verified():
+    result = decide(contract(), [], [finding(classification="ENVIRONMENT", verified=True)], [])
+    assert result.decision == "REVIEW"
+    assert any("environment setup" in reason for reason in result.reasons)
+
+
 @pytest.mark.parametrize(
     "classification", ["INCONCLUSIVE", "EXISTING_FAILURE", "POSSIBLE_FIX", "REGRESSION"]
 )

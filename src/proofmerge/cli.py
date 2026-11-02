@@ -198,12 +198,14 @@ def open_app(
 ) -> None:
     """Open ProofMerge in the browser: verify changes, read runs and set up, no terminal needed."""
     folder = folder or Path.home() / "ProofMerge" / "runs"
+    settings_file = Path.home() / "ProofMerge" / "settings.json"  # the model choice; never the key
     try:
         folder.mkdir(parents=True, exist_ok=True)
         try:
-            server = make_server(folder, port)
+            server = make_server(folder, port, settings_file=settings_file)
         except OSError:
-            server = make_server(folder, 0)  # the port is taken: let the system pick one
+            # the port is taken: let the system pick one
+            server = make_server(folder, 0, settings_file=settings_file)
     except OSError as error:
         typer.echo(f"app failed: {error}", err=True)
         raise typer.Exit(1) from None

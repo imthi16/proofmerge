@@ -563,6 +563,8 @@ class _Handler(BaseHTTPRequestHandler):
             elif path == "/api/settings":
                 if "key" in body:
                     self.jobs.set_key(body["key"])
+                if "model" in body:
+                    self.jobs.set_model(body["model"])
                 if "project" in body:
                     if self.prs and self.prs.job and self.prs.job["status"] == "running":
                         raise JobError("A pull request is still being verified.")
@@ -598,8 +600,8 @@ def _last_event_id(header: str | None, query: dict[str, list[str]]) -> int:
 
 def make_server(root: Path, port: int, repo: Path | None = None,
                 runner: Any = subprocess.run, *, heartbeat: float = 15.0,
-                github: GitHub | None = None) -> ThreadingHTTPServer:
-    jobs = Jobs(root, runner)
+                github: GitHub | None = None, settings_file: Path | None = None) -> ThreadingHTTPServer:
+    jobs = Jobs(root, runner, settings_file=settings_file)
     github = github or GitHub(Path.home() / "ProofMerge" / "repos")
     prs = PullRequests(repo, root, runner, jobs.environment) if repo is not None else None
     if repo is not None:

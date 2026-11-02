@@ -666,7 +666,7 @@
     const blocker = !settings.project ? "Choose your project folder first."
       : !info ? "" : info.branches.length < 2 ? "This project needs at least two branches."
       : !head || !base ? "Pick both branches." : head === base ? "Pick two different branches."
-      : health && !health.model_key ? "Add your model key in Setup."
+      : health && !health.model_key ? "Choose your AI model in Setup."
       : health && needsSandbox && !health.docker_running ? "Start Docker Desktop, then check again in Setup."
       : ctx.busy ? "Another action is running." : "";
     const fixable = /Setup/.test(blocker);
@@ -807,7 +807,7 @@
     const showJob = job && VERDICT_JOBS.includes(job.command) && ctx.dismissed !== job.started;
     const recent = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
     const missing = ctx.health ? [!ctx.health.docker_running && "Docker", !ctx.health.runner_image && "sandbox image",
-      !ctx.health.model_key && "model key"].filter(Boolean) : [];
+      !ctx.health.model_key && "AI model"].filter(Boolean) : [];
     return html`
       <section class="hero">
         <h1>Check a change before you merge it</h1>
@@ -1003,17 +1003,94 @@
     </li>`;
   }
 
+  // Which model writes and checks the tests. The choice is saved; a key never is.
+  const PROVIDERS = [["meta", "Meta Muse"], ["claude", "Claude plan"], ["openai", "Other API"]];
+
+  function ModelRow() {
+    const ctx = React.useContext(AppCtx);
+    const h = ctx.health;
+    const chosen = ctx.settings.model || {};
+    const [provider, setProvider] = useState(chosen.provider || h.provider || "meta");
+    const [form, setForm] = useState({ base_url: chosen.base_url || "", spark_model: chosen.spark_model || "",
+      wonder_model: chosen.wonder_model || "" });
+    const [key, setKey] = useState("");
+    const [note, setNote] = useState("");
+    const [saving, setSaving] = useState(false);
+    const field = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.value }));
+    const save = (body, done) => {
+      setSaving(true); setNote("");
+      return ctx.saveSettings(body).then(() => { setNote({ text: done }); ctx.reloadHealth(); })
+        .catch((e) => setNote({ text: e.message, bad: true })).finally(() => setSaving(false));
+    };
+    const choose = (next) => {
+      setProvider(next);
+      if (next !== "openai") save({ model: { provider: next } }, "Saved.");
+    };
+    const saveApi = (event) => {
+      event.preventDefault();
+      save({ model: { provider: "openai", ...form }, ...(key.trim() ? { key } : {}) },
+        "Saved. The key stays in memory until you close ProofMerge.").then(() => setKey(""));
+    };
+    const saveKey = (event) => {
+      event.preventDefault();
+      save({ key }, "Saved for this session.").then(() => setKey(""));
+    };
+    const live = h.provider === provider;
+    const ok = live && h.model_key;
+    const keyNote = ctx.settings.key_in_env ? "A key is set in your environment."
+      : ctx.settings.key_set ? "A key is saved for this session." : "";
+    const keyInput = html`<input class="search" type="password" autocomplete="off" spellcheck="false"
+      placeholder=${ctx.settings.key_set ? "Replace the key" : "Paste your API key"} value=${key}
+      onInput=${(e) => setKey(e.target.value)} aria-label="API key" />`;
+    let body;
+    if (provider === "meta") {
+      body = html`<p class="model-help">Meta's Muse Spark writes the tests and Muse Wonder checks them. The results in
+        this project were measured with them. Paste your Meta developer key; it stays in memory until you close
+        ProofMerge and is never saved to disk.</p>
+        ${keyNote ? html`<p class="model-help">${keyNote}</p>` : null}
+        ${!ctx.settings.key_in_env ? html`<form class="key-form" onSubmit=${saveKey}>${keyInput}
+          <button class="ghost" type="submit" disabled=${!key.trim() || saving}>Save</button></form>` : null}`;
+    } else if (provider === "claude") {
+      body = html`<p class="model-help">Uses the Claude plan (Pro or Max) that Claude Code is signed in to on this
+        computer. No API key needed. ProofMerge calls Claude Code with every tool switched off, so the model only
+        reads and answers.</p>
+        ${live && !h.claude_cli ? html`<p class="model-help warn">Claude Code is not installed here. Install it, open it
+          once to sign in, then press Check again. <a href="https://claude.com/claude-code" target="_blank"
+          rel="noopener noreferrer">Get Claude Code</a></p>` : null}`;
+    } else {
+      body = html`<p class="model-help">Any service with an OpenAI-compatible API, or a model running on this computer
+        (http://localhost). Your code and the change are sent to this address.</p>
+        <form class="model-form" onSubmit=${saveApi}>
+          <label>Address<input class="search" type="url" spellcheck="false" placeholder="https://api.example.com/v1"
+            value=${form.base_url} onInput=${field("base_url")} /></label>
+          <div class="model-pair">
+            <label>Model that writes the tests<input class="search" spellcheck="false" placeholder="model name"
+              value=${form.spark_model} onInput=${field("spark_model")} /></label>
+            <label>Model that checks them<input class="search" spellcheck="false" placeholder="model name"
+              value=${form.wonder_model} onInput=${field("wonder_model")} /></label>
+          </div>
+          <label>API key ${keyNote ? html`<span class="muted">(${keyNote.toLowerCase()})</span>` : null}${keyInput}</label>
+          <div><button class="primary" type="submit"
+            disabled=${saving || !form.base_url.trim() || !form.spark_model.trim() || !form.wonder_model.trim()}>Save</button></div>
+        </form>`;
+    }
+    return html`<${SetupRow} ok=${ok} icon="key" title="AI model"
+      action=${ok ? html`<button class="ghost" type="button" disabled=${ctx.busy} onClick=${() => ctx.start({ command: "smoke" })}>Test connection</button>` : null}>
+      <div class="modes model-modes" role="radiogroup" aria-label="AI model">
+        ${PROVIDERS.map(([value, label]) => html`<button key=${value} type="button" role="radio"
+          aria-checked=${provider === value} disabled=${saving} onClick=${() => choose(value)}>${label}</button>`)}
+      </div>
+      ${body}
+      ${note ? html`<p class=${"model-help" + (note.bad ? " bad" : "")} role=${note.bad ? "alert" : "status"}>${note.text}</p>` : null}
+      ${provider !== "meta" ? html`<p class="model-help faint">The verdict rules are the same for every model. How good the
+        tests are was measured with Meta Muse only.</p>` : null}
+    </${SetupRow}>`;
+  }
+
   function SetupView() {
     const ctx = React.useContext(AppCtx);
     const h = ctx.health;
-    const [key, setKey] = useState("");
-    const [saved, setSaved] = useState("");
     if (!h) return html`<p class="boot">Checking this computer…</p>`;
-    const saveKey = (event) => {
-      event.preventDefault();
-      ctx.saveSettings({ key }).then(() => { setKey(""); setSaved("Saved for this session."); ctx.reloadHealth(); })
-        .catch((e) => setSaved(e.message));
-    };
     const ready = h.git && h.docker_running && h.runner_image && h.model_key;
     return html`
       <section class="hero small">
@@ -1033,14 +1110,7 @@
           action=${h.runner_image ? null : html`<button class="primary" type="button" disabled=${!h.docker_running || ctx.busy}
             onClick=${() => ctx.start({ command: "setup" })}>Build it</button>`}>
           ${h.runner_image ? "Built." : "A one-time build of the sealed test environment. It takes a few minutes and needs Docker running."}</${SetupRow}>
-        <${SetupRow} ok=${h.model_key} icon="key" title="Model key"
-          action=${h.model_key ? html`<button class="ghost" type="button" disabled=${ctx.busy} onClick=${() => ctx.start({ command: "smoke" })}>Test connection</button>` : null}>
-          ${ctx.settings.key_in_env ? "Found in your environment." : ctx.settings.key_set ? "Saved for this session." : "ProofMerge uses Meta's Muse models. Paste your key; it stays in memory until you close ProofMerge and is never saved to disk."}
-          ${!ctx.settings.key_in_env ? html`<form class="key-form" onSubmit=${saveKey}>
-            <input class="search" type="password" autocomplete="off" spellcheck="false" placeholder=${ctx.settings.key_set ? "Replace the key" : "Paste your MODEL_API_KEY"}
-              value=${key} onInput=${(e) => setKey(e.target.value)} aria-label="Model API key" />
-            <button class="ghost" type="submit" disabled=${!key.trim()}>Save</button>
-            ${saved ? html`<span class="muted">${saved}</span>` : null}</form>` : null}</${SetupRow}>
+        <${ModelRow} />
         <${GitHubRow} />
       </ol>
       <div class="actions"><button class="ghost" type="button" onClick=${ctx.reloadHealth}><${Icon} name="refresh" />Check again</button></div>

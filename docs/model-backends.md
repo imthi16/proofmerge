@@ -12,6 +12,11 @@ Each `proof.json` records the endpoint and the model for each role under
 
 ## Settings
 
+In `proofmerge app`, the **AI model** row on the Setup page sets these for every job
+it starts (Meta Muse, a Claude plan through Claude Code, or another OpenAI-compatible
+API) and saves the choice, never the key, in `~/ProofMerge/settings.json`. In a
+terminal, set the variables below.
+
 | Variable | Meaning | Default |
 |---|---|---|
 | `PROOFMERGE_BACKEND` | `api`, or a CLI backend below | `api` |

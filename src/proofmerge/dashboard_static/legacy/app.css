@@ -585,6 +585,17 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .picker-head { flex-direction: column; }
   .device-code { font-size: 1.5rem; }
 }
+/* AI model choice */
+.model-modes { margin: .65rem 0 .2rem; }
+.model-help { margin: .55rem 0 0; font-size: .88rem; max-width: 40rem; color: var(--muted); }
+.model-help.warn { color: var(--review); }
+.model-help.bad { color: var(--block); font-weight: 500; }
+.model-help.faint { color: var(--faint); font-size: .82rem; }
+.model-form { display: grid; gap: .7rem; margin-top: .8rem; max-width: 40rem; }
+.model-form label { display: grid; gap: .3rem; font-size: .84rem; font-weight: 600; color: var(--fg); }
+.model-form .search { width: 100%; min-width: 0; font-weight: 400; }
+.model-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+@media (max-width: 40rem) { .model-pair { grid-template-columns: 1fr; } .model-modes { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

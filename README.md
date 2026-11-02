@@ -387,8 +387,22 @@ jobs:
 <summary><b>Without a Meta API key</b></summary>
 <br>
 
-ProofMerge can use another OpenAI-compatible endpoint, or a plan you are already
-signed in to through Claude Code (`PROOFMERGE_BACKEND=claude-cli`). See
+In the app, open **Setup** and choose the **AI model**:
+
+- **Meta Muse** (the default): Muse Spark and Muse Wonder with your Meta key.
+- **Claude plan**: the Pro or Max plan Claude Code is signed in to on your
+  computer; no API key. ProofMerge calls Claude Code with every tool switched
+  off.
+- **Other API**: any OpenAI-compatible address (or a model on your own computer
+  at `http://localhost`), a model for writing the tests, a model for checking
+  them, and that service's key.
+
+The choice is saved in `~/ProofMerge/settings.json`; the key never is. In a
+terminal the same choices are environment variables (`PROOFMERGE_BACKEND=claude-cli`,
+`PROOFMERGE_BASE_URL`, `PROOFMERGE_SPARK_MODEL`, `PROOFMERGE_WONDER_MODEL`). The
+verdict rules are the same for every model; the results above were measured with
+Meta Muse only. Codex plans are not offered: Codex's shell tool cannot be turned
+off, so text in a repository could make it read files on your computer. See
 [docs/model-backends.md](docs/model-backends.md) for the settings, the
 training-data warning for contributor models and which agent CLIs were checked.
 
@@ -467,7 +481,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Benchmark runner, three recorded runs and two baselines | Built; results above |
 | Other languages through `.proofmerge.toml` (Go demo) | Built and tested; one real `verify` on the synthetic Go demo gave BLOCK (Spark-written Go probe, base PASS 3/3, head FAIL 3/3), bundle in `demo/runs/2026-10-30-go`; no tamper guard for other languages; see [docs/languages.md](docs/languages.md) |
 | Python monorepo import paths and optional hashed installs | Built and tested offline. `[python]` in the base commit's `.proofmerge.toml` sets the import root; head config is ignored. Install is opt-in from the base lockfile. Import and install failures are REVIEW, never PASS or BLOCK. See [docs/python-projects.md](docs/python-projects.md) |
-| Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan | Built and tested offline; one real Claude Code call checked; no full `verify` run on them yet |
+| Other model backends: OpenAI-compatible endpoints, Claude Code CLI on a plan, chosen on the app's Setup page | Built and tested offline; one real Claude Code call checked; the Setup choice checked in a browser; no full `verify` run on them yet |
 | `proofmerge dashboard` (Control Center): runs, evidence integrity, benchmarks, pull requests | Built and tested offline; checked in a browser on `bench/results` at desktop, phone width and dark mode; PR list read from this repository with `gh`; verify-from-the-page tested with fakes only |
 | LangGraph orchestrator (`--orchestrator langgraph`): same stages, same plain-code verdict, retries of transient model failures only | Built and tested offline and with real Docker; parity with the default loop checked on nine scenarios; no real Meta API run on it yet; see [docs/orchestration.md](docs/orchestration.md) |
 | Agent Skill for coding agents, packaged as Claude Code and Codex plugins | Built; commands and options checked offline against the CLI; manifests pass `claude plugin validate`, and `codex plugin add` installed it into an isolated Codex home; not yet used by an agent on a real task |

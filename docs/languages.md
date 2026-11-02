@@ -12,10 +12,13 @@ files from the base commit and:
   builds; the network is used only for that build, never in a probe container, and
   each lockfile is built once;
 - has Spark write each probe as one Node test-runner file at the repository root
-  (`node:test` and `node:assert`), run with `node --import tsx --test`. The
-  repository's own Vite, Vitest or Jest config is never loaded, so it cannot change
-  how a probe runs. A probe that imports a test framework is an execution error,
-  never evidence.
+  (`node:test` and `node:assert`), run with `node --import <the image's tsx loader> --test`.
+  The loader is named by an absolute path in the image, so a `node_modules/tsx`
+  committed in the change cannot replace it. The repository's own Vite, Vitest or
+  Jest config is never loaded, so it cannot change how a probe runs. A probe that
+  imports a test framework is an execution error, never evidence;
+- runs both revisions with the base commit's `tsconfig*.json` and `jsconfig*.json`
+  files, so a change cannot redirect its own imports through `paths`.
 
 The language is `typescript` when the base commit has `tsconfig.json` or depends on
 `typescript`, otherwise `javascript`. Only npm lockfiles are read; for yarn or pnpm,

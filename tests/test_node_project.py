@@ -1,6 +1,7 @@
 """Node and TypeScript repositories without a .proofmerge.toml: detection, image, probe prompt."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,16 @@ from types import SimpleNamespace
 import pytest
 
 from proofmerge import node_project
-from proofmerge.node_project import DOCKERFILE, PROBE_NOTE, detect, ensure_image, is_auto
+from proofmerge.node_project import (
+    DOCKERFILE,
+    PROBE_NOTE,
+    TSX_LOADER,
+    base_configs,
+    detect,
+    ensure_image,
+    is_auto,
+    pin_configs,
+)
 from proofmerge.probes import _probe_prompt
 from proofmerge.project_config import ProjectConfig
 
@@ -54,7 +64,7 @@ def test_typescript_project_gets_a_node_test_runner_config(tmp_path: Path) -> No
     git = FakeGit({"package.json": PACKAGE, "package-lock.json": b'{"v": 1}', "tsconfig.json": b"{}"})
     config = detect(tmp_path, "abc", git)
     assert config.language == "typescript" and config.probe_path == "proofmerge_probe.test.ts"
-    assert config.test_command == ["node", "--import", "tsx", "--test", "proofmerge_probe.test.ts"]
+    assert config.test_command == ["node", "--import", TSX_LOADER, "--test", "proofmerge_probe.test.ts"]
     assert config.image.startswith("proofmerge-node:") and is_auto(config)
     # Repository scripts never run while the image builds.
     assert git.built == [DOCKERFILE] and "npm ci --ignore-scripts" in DOCKERFILE
@@ -80,7 +90,7 @@ def test_a_failed_npm_ci_is_reported(tmp_path: Path) -> None:
 
 def test_only_the_auto_config_tells_spark_to_use_node_test() -> None:
     auto = ProjectConfig(language="typescript", image="proofmerge-node:abc", probe_path="p.test.ts",
-                         test_command=["node", "--import", "tsx", "--test", "p.test.ts"],
+                         test_command=["node", "--import", TSX_LOADER, "--test", "p.test.ts"],
                          assertion_failure="AssertionError")
     go = ProjectConfig(language="go", image="golang:1.23-alpine", probe_path="x_test.go",
                        test_command=["go", "test"], assertion_failure="FAIL")
@@ -88,10 +98,40 @@ def test_only_the_auto_config_tells_spark_to_use_node_test() -> None:
     assert "node:test" not in _probe_prompt(go)
 
 
+def test_both_revisions_run_with_the_base_typescript_configs(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "packages" / "a").mkdir(parents=True)
+    (repo / "tsconfig.json").write_text('{"compilerOptions": {"paths": {}}}')
+    (repo / "packages" / "a" / "tsconfig.build.json").write_text("{}")
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+    git("init", "-q")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    base = git("rev-parse", "HEAD").stdout.decode().strip()
+    configs = base_configs(repo, base)
+    assert set(configs) == {"tsconfig.json", "packages/a/tsconfig.build.json"}
+
+    head = tmp_path / "head"  # what the change exported: an edited config, a new one, a symlinked one
+    (head / "packages" / "a").mkdir(parents=True)
+    (head / "tsconfig.json").write_text('{"compilerOptions": {"paths": {"./src/*": ["./evil/*"]}}}')
+    (head / "jsconfig.json").write_text("{}")
+    (head / "packages" / "a" / "tsconfig.build.json").symlink_to(head / "tsconfig.json")
+    (head / "src.ts").write_text("export {};")
+    pin_configs(head, configs)
+    assert (head / "tsconfig.json").read_bytes() == configs["tsconfig.json"]
+    assert not (head / "jsconfig.json").exists() and (head / "src.ts").exists()
+    built = head / "packages" / "a" / "tsconfig.build.json"
+    assert not built.is_symlink() and built.read_text() == "{}"
+
+
 def _docker_works() -> bool:
     if shutil.which("docker") is None:
         return False
     return subprocess.run(["docker", "info"], check=False, capture_output=True).returncode == 0
+
+
+if os.environ.get("PROOFMERGE_REQUIRE_DOCKER") == "1" and not _docker_works():
+    raise RuntimeError("PROOFMERGE_REQUIRE_DOCKER=1 but docker is not available")
 
 
 @pytest.mark.skipif(not _docker_works(), reason="docker not available")
@@ -121,6 +161,18 @@ def test_demo_probe_passes_on_base_and_fails_on_head_in_docker(tmp_path: Path) -
         "});\n"
     )
     found = run_config_experiment(repo, base, head, "H1", probe, config, tmp_path / "ev", attempts=1, timeout=120)
+    assert [(e.revision, e.outcome) for e in found.executions] == [("base", "PASS"), ("head", "FAIL")]
+    # A change that ships its own node_modules/tsx cannot swap the loader and pass.
+    hijack = repo / "node_modules" / "tsx"
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", "candidate/expense-totals-refactor"], check=True)
+    (hijack / "dist").mkdir(parents=True)
+    (hijack / "package.json").write_text('{"name": "tsx", "type": "module", "exports": {".": "./dist/loader.mjs"}}')
+    (hijack / "dist" / "loader.mjs").write_text("process.exit(0);\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-f", "node_modules"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "tsx"],
+                   check=True)
+    found = run_config_experiment(repo, base, rev("HEAD"), "H3", probe, config, tmp_path / "ev",
+                                  attempts=1, timeout=120)
     assert [(e.revision, e.outcome) for e in found.executions] == [("base", "PASS"), ("head", "FAIL")]
     framework = probe.replace('import { test } from "node:test";', 'import { test } from "vitest";')
     found = run_config_experiment(repo, base, head, "H2", framework, config, tmp_path / "ev", attempts=1, timeout=120)

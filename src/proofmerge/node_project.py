@@ -8,8 +8,11 @@ Python project files, ProofMerge sets up the generic runner itself:
   network is used only while the image builds, never in a probe container. The tag is
   a hash of the Dockerfile and both files, so each lockfile is built once.
 - A probe is one Node test-runner file (`node:test`, `node:assert`) run with
-  `node --import tsx --test`. The repository's own Vite, Vitest or Jest config is
-  never loaded, so it cannot change how the probe runs.
+  `node --import <the image's tsx loader> --test`. The loader is named by an absolute
+  path outside the repository, so a `node_modules/tsx` committed in the change cannot
+  replace it. The repository's own Vite, Vitest or Jest config is never loaded.
+- Every `tsconfig*.json` and `jsconfig*.json` in the tested tree is replaced by the
+  base commit's copy, so a change cannot redirect imports (`paths`) for its own test.
 
 Like the base commit's `.proofmerge.toml`, everything here is read from the base
 commit, so a pull request cannot change how it is tested.
@@ -17,6 +20,7 @@ commit, so a pull request cannot change how it is tested.
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -28,6 +32,9 @@ from proofmerge.project_config import ProjectConfig
 PYTHON_MARKERS = {"pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"}
 BASE_IMAGE = "node:22-slim"
 TSX = "tsx@4.19.2"
+# Absolute: a bare "tsx" would resolve /work/node_modules/tsx first, which the change controls.
+TSX_LOADER = "file:///node_modules/tsx/dist/loader.mjs"
+CONFIG_FILE = re.compile(r"(?:^|/)[tj]sconfig[^/]*\.json$")
 DOCKERFILE = f"""FROM {BASE_IMAGE}
 WORKDIR /
 COPY package.json package-lock.json /
@@ -77,7 +84,7 @@ def detect(repo: Path, base_sha: str, runner: Runner = subprocess.run) -> Projec
         language="typescript" if typescript else "javascript",
         image=tag,
         probe_path=probe,
-        test_command=["node", "--import", "tsx", "--test", probe],
+        test_command=["node", "--import", TSX_LOADER, "--test", probe],
         assertion_failure=r"\bAssertionError\b",
         env={"HOME": "/tmp", "NO_COLOR": "1"},
     )
@@ -103,4 +110,26 @@ def ensure_image(tag: str, package: bytes, lock: bytes, runner: Runner = subproc
 
 def is_auto(config: ProjectConfig | None) -> bool:
     return config is not None and config.image.startswith("proofmerge-node:") and \
-        config.test_command[:3] == ["node", "--import", "tsx"]
+        config.test_command[:3] == ["node", "--import", TSX_LOADER]
+
+
+def base_configs(repo: Path, base_sha: str, runner: Runner = subprocess.run) -> dict[str, bytes]:
+    """Every tsconfig*.json and jsconfig*.json in the base commit, by path."""
+    listed = _git(repo, runner, "ls-tree", "-r", "-z", "--name-only", base_sha)
+    if listed.returncode != 0:
+        raise ValueError(f"could not list the files of {base_sha}")
+    names = [n for n in listed.stdout.decode(errors="replace").split("\0") if CONFIG_FILE.search(n)]
+    return {n: _git(repo, runner, "show", f"{base_sha}:{n}").stdout for n in names}
+
+
+def pin_configs(code_dir: Path, configs: dict[str, bytes]) -> None:
+    """Make an exported tree use the base commit's TypeScript configs and no others."""
+    # shortcut: a config `extends` target with another name is not pinned; pin it too if one shows up.
+    for path in list(code_dir.rglob("*")):
+        rel = path.relative_to(code_dir).as_posix()
+        if CONFIG_FILE.search(rel) and (path.is_symlink() or path.is_file()):
+            path.unlink()
+    for rel, data in configs.items():
+        target = code_dir / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)

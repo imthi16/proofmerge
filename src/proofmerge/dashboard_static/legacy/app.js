@@ -1047,9 +1047,14 @@
       body = html`<p class="model-help">Meta's Muse Spark writes the tests and Muse Wonder checks them. The results in
         this project were measured with them. Paste your Meta developer key; it stays in memory until you close
         ProofMerge and is never saved to disk.</p>
-        ${keyNote ? html`<p class="model-help">${keyNote}</p>` : null}
-        ${!ctx.settings.key_in_env ? html`<form class="key-form" onSubmit=${saveKey}>${keyInput}
-          <button class="ghost" type="submit" disabled=${!key.trim() || saving}>Save</button></form>` : null}`;
+        ${ctx.settings.key_in_env && ctx.settings.key_set
+          ? html`<p class="model-help">A key saved for this session is used instead of the one in your environment.</p>`
+          : keyNote ? html`<p class="model-help">${keyNote}</p>` : null}
+        ${!ctx.settings.key_in_env || ctx.settings.key_set ? html`<form class="key-form" onSubmit=${saveKey}>${keyInput}
+          <button class="ghost" type="submit" disabled=${!key.trim() || saving}>Save</button>
+          ${ctx.settings.key_in_env ? html`<button class="ghost" type="button" disabled=${saving}
+            onClick=${() => save({ key: "" }, "Using the key from your environment.")}>Use my environment key</button>` : null}
+          </form>` : null}`;
     } else if (provider === "claude") {
       body = html`<p class="model-help">Uses the Claude plan (Pro or Max) that Claude Code is signed in to on this
         computer. No API key needed. ProofMerge calls Claude Code with every tool switched off, so the model only

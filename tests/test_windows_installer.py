@@ -88,3 +88,9 @@ def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
     assert "$Desktop" not in uninstall
     assert "$link.WorkingDirectory = $env:TEMP" in script
     assert "Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP" in script
+
+
+def test_winget_displays_output_and_returns_only_exit_status() -> None:
+    function = text().split("function Install-WithWinget", 1)[1].split("function Stop-App", 1)[0]
+    assert "winget install --exact --id $id | Out-Host\r\n    $code = $LASTEXITCODE" in function
+    assert "return ($code -eq 0)" in function

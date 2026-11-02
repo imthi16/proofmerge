@@ -57,7 +57,7 @@ function Install-WithWinget($id, $name) {
         return $false
     }
     Say "Installing $name. Windows may ask for permission; accept its license to continue."
-    winget install --exact --id $id
+    winget install --exact --id $id | Out-Host
     $code = $LASTEXITCODE
     Refresh-Path
     # Callers look for the tool again instead of trusting this code: winget also returns

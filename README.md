@@ -316,6 +316,11 @@ proofmerge verify demo/.build/demo-shop \
 
 ### In your coding agent: the Agent Skill
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/agent-skill-dark.png">
+  <img src="docs/assets/agent-skill-light.png" alt="The Agent Skill: what a coding agent does before it calls a change done. 1, commit the change on a branch. 2, write the intent first, never edited after. 3, run proofmerge verify with a new evidence folder. 4, report the verdict word for word. Beside it, the real command and output of the demo run: verdict BLOCK, its two reason lines, the report path, the call count and exit code 2. Below: on BLOCK, fix the code and run again, never edit tests, probes or evidence; on REVIEW, hand the reasons to the person word for word; on PASS, say no regression found within the tested scope, never proven." width="100%">
+</picture>
+
 [skills/proofmerge/SKILL.md](skills/proofmerge/SKILL.md) is an Agent Skill. It
 tells a coding agent to commit its change, write down what the change should do
 before it sees a verdict, run `proofmerge verify` on its own branch, and report

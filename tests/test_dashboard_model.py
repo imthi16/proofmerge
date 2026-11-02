@@ -79,6 +79,18 @@ def test_bad_choices_are_refused_and_change_nothing(tmp_path: Path, bad) -> None
     assert jobs.model["provider"] == "claude"
 
 
+def test_clearing_the_session_key_brings_back_the_environment_key(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MODEL_API_KEY", "sk-meta-env-12345678")
+    jobs = Jobs(tmp_path, runner(claude=False))
+    jobs.set_model({"provider": "openai", "base_url": "https://api.example.com/v1",
+                    "spark_model": "a", "wonder_model": "b"})
+    jobs.set_key("sk-other-12345678")
+    jobs.set_model({"provider": "meta"})
+    assert jobs.environment()["MODEL_API_KEY"] == "sk-other-12345678"  # the page offers to clear it
+    jobs.set_key("")
+    assert jobs.environment()["MODEL_API_KEY"] == "sk-meta-env-12345678"
+
+
 def test_meta_ignores_model_overrides_and_clears_the_endpoint(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("PROOFMERGE_BASE_URL", "https://elsewhere.example/v1")
     jobs = Jobs(tmp_path, runner(claude=False))

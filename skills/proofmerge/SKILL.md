@@ -38,8 +38,9 @@ Run these once per session and stop at the first failure:
    user to install it with
    `uv tool install git+https://github.com/imthi16/proofmerge`, then stop.
 2. `MODEL_API_KEY` is set in your environment (check that it is non-empty
-   without printing it). If it is missing, tell the user to set it in their
-   shell or on the Setup page of `proofmerge app`, then stop.
+   without printing it). If it is missing, tell the user to export it in the
+   shell that starts you, then restart you, and stop. A key saved on the Setup
+   page of `proofmerge app` stays inside the app and does not reach this command.
 3. Docker is running and the runner image exists. If `verify` reports a missing
    image, run `proofmerge setup` once; it builds the image.
 

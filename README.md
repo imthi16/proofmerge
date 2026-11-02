@@ -66,6 +66,24 @@ The app also lists risks without running anything, writes tests without a
 verdict, re-checks a run's evidence hashes and re-runs its tests. Runs are saved
 in `~/ProofMerge/runs`, repositories in `~/ProofMerge/repos`.
 
+### Walkthrough video
+
+<a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
+
+[Watch the full walkthrough](docs/assets/walkthrough.mp4) (4 min 20 s, no
+sound, captions on screen). It covers every use case in order: setup, GitHub
+sign-in, picking a repository, verifying a pull request, the evidence and the
+report, checking a local branch, runs and benchmarks, then the terminal
+(`verify`, `replay`) and the Agent Skill.
+
+> [!NOTE]
+> The walkthrough uses a simulated outside world, so it shows no real account or
+> key: the GitHub account, its repositories and pull requests, and the progress of
+> each check are faked, and no model is called. The verdicts, reports and evidence
+> are the real recorded demo run in `demo/runs/2026-10-29`, and the terminal
+> output is real. For real runs on GitHub, see the three pull requests in
+> [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr).
+
 ## What a run looks like
 
 ```bash

@@ -1,0 +1,3 @@
+# Stored byte-for-byte with CRLF: the raw GitHub download users double-click must be CRLF,
+# and an eol attribute only converts on checkout, not in the stored blob.
+*.cmd -text

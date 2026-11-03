@@ -70,3 +70,31 @@ def test_python_without_venv_is_skipped_for_one_that_has_it(tmp_path: Path) -> N
     result = run(tmp_path, PATH=str(bin_dir))
     assert result.returncode == 1 and "Git" in result.stderr
     assert "Found Python 3." in result.stdout and "venv module is missing" not in result.stderr
+
+
+def test_uninstaller_asks_first_and_keeps_the_checks(tmp_path: Path) -> None:
+    script = INSTALLER.read_text()
+    block = 'cat > "$INSTALL_DIR/uninstall.sh" <<EOF' + script.split('uninstall.sh" <<EOF', 1)[1]
+    block = block.split("\nEOF\n", 1)[0] + "\nEOF\n"
+    data = tmp_path / "data"
+    write = (
+        f'INSTALL_DIR="{data}/proofmerge"; VENV="$INSTALL_DIR/venv"; APPS="{data}/applications"\n'
+    )
+    checks = tmp_path / "ProofMerge" / "runs"
+    for answer, removed in (("\n\n", False), ("n\n\n", False), ("y\n\n", True)):
+        for folder in (data / "proofmerge" / "venv", data / "applications", checks):
+            folder.mkdir(parents=True, exist_ok=True)
+        (data / "applications" / "proofmerge.desktop").write_text("")
+        subprocess.run([SH, "-c", write + block], check=True)
+        result = subprocess.run(
+            [SH, str(data / "proofmerge" / "uninstall.sh")],
+            input=answer,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert (data / "proofmerge").exists() is not removed
+        assert (data / "applications" / "proofmerge.desktop").exists() is not removed
+        assert checks.exists()

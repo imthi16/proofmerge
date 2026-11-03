@@ -1037,16 +1037,23 @@
       body = "To open pull requests from GitHub, ProofMerge needs the GitHub CLI. Run the ProofMerge installer again and it can add it for you.";
       action = html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get GitHub CLI</a>`;
     } else if (gh.user) {
-      const others = (gh.accounts || []).filter((a) => !a.active);
-      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.
-        ${others.length ? html`<div class="gh-accounts" role="group" aria-label="Switch GitHub account">
-          <span class="muted">Switch to</span>
-          ${others.map((a) => html`<button key=${a.login} class="ghost btn-small" type="button" disabled=${pending}
-            onClick=${() => { setPending(true); setFail(""); act("/api/github/switch", { user: a.login }).catch((e) => setFail(e.message)).finally(() => setPending(false)); }}>@${a.login}</button>`)}
-        </div>
-        <p class="muted fix-note">Switching also changes the account the <code>gh</code> command uses in a terminal.</p>` : null}`;
-      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/add")}>Add another account</button>
-        <button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out @${gh.user}</button>`;
+      // Every account gh holds, the active one first. Without a list from gh, show the one we know.
+      const accounts = [...(gh.accounts?.length ? gh.accounts : [{ login: gh.user, active: true }])]
+        .sort((x, y) => Number(y.active) - Number(x.active) || x.login.localeCompare(y.login));
+      const switchTo = (user) => { setPending(true); setFail(""); act("/api/github/switch", { user }).catch((e) => setFail(e.message)).finally(() => setPending(false)); };
+      body = html`<div class="gh-block">
+        <p>ProofMerge uses the active account to list repositories and pull requests.</p>
+        <ul class="gh-list" aria-label="GitHub accounts">${accounts.map((a) => html`
+          <li key=${a.login} class=${"gh-acct" + (a.active ? " on" : "")} aria-current=${a.active ? "true" : undefined}>
+            <span class="gh-av" aria-hidden="true">${a.login.charAt(0).toUpperCase()}</span>
+            <span class="gh-id"><strong>@${a.login}</strong>${a.active ? html`<span class="gh-active">Active</span>` : null}</span>
+            ${a.active
+              ? html`<button class="ghost btn-small" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out</button>`
+              : html`<button class="ghost btn-small" type="button" disabled=${pending} onClick=${() => switchTo(a.login)}>Use this account</button>`}
+          </li>`)}</ul>
+        ${accounts.length > 1 ? html`<p class="gh-note">Changing the active account also changes the one the <code>gh</code> command uses in a terminal.</p>` : null}
+      </div>`;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/add")}>Add another account</button>`;
     } else if (login?.state === "waiting") {
       body = html`<div class="device" aria-live="polite">
         ${login.code

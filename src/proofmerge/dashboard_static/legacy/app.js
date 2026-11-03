@@ -263,6 +263,7 @@
     const ctx = React.useContext(AppCtx);
     const [state, setState] = useState({ loading: true });
     const [posting, setPosting] = useState(false);
+    const [approving, setApproving] = useState(false);
     const fixDone = ctx.job?.command === "fix" && ctx.job.status !== "running" ? ctx.job.finished : 0;
     useEffect(() => {
       if (!id) return;
@@ -322,6 +323,13 @@
           title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
       </div>` : null}
+      ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
+        <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
+          onClick=${() => setApproving(true)}
+          title=${ctx.settings.project ? "Approves the pull request on GitHub as you, after you confirm" : "Choose the project on Home first"}>
+          <${Icon} name="shield" />Approve PR #${prNumber}</button>
+        <span class="muted fix-note">PASS means no regression was found in the tested scope, not that the change is correct.</span>
+      </div>` : null}
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
@@ -343,6 +351,8 @@
         ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
       </div>`)}
     </section>
+    ${approving ? html`<${ConfirmApprove} pr=${prNumber} onCancel=${() => setApproving(false)}
+      onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
     ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} onCancel=${() => setPosting(false)}
       onConfirm=${(mode) => { setPosting(false); ctx.start({ command: "post", run: id, project: ctx.settings.project, pr: prNumber, mode }); }} />` : null}<//>`;
   }
@@ -384,6 +394,28 @@
             <span><strong>${label}</strong><span class="muted">${note}</span></span></label>`)}</div>
         <div class="actions">
           <button class="primary" type="button" onClick=${() => onConfirm(mode)}>Post to PR #${pr}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function ConfirmApprove({ pr, onConfirm, onCancel }) {
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+        <h3 id="approve-title">Approve PR #${pr}?</h3>
+        <p>ProofMerge approves the pull request as your GitHub account, on the commit it checked. If the pull request
+          has changed since this run, nothing is posted.</p>
+        <p class="note">PASS means no regression was found within the tested scope. It does not prove the change correct.</p>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${onConfirm}>Approve PR #${pr}</button>
           <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
         </div>
       </div>

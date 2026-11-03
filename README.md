@@ -96,6 +96,11 @@ are `proofmerge fix <proof.json> --repo <repo>` and
 `proofmerge post <proof.json> --pr <n> --repo <repo> --mode inline|overall`
 (`--dry-run` prints the review instead of posting it).
 
+A **PASS** run shows **Approve PR #n** instead. After you confirm, ProofMerge approves the pull request as your
+GitHub account, but only on the commit it checked: if the PR has new commits, nothing is posted. From a terminal:
+`proofmerge approve <proof.json> --pr <n> --repo <repo> [--dry-run]`. PASS means no regression was found within the
+tested scope; it does not prove the change correct.
+
 ### Walkthrough video
 
 <a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>

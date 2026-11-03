@@ -8,7 +8,14 @@ import pytest
 
 from proofmerge.evidence import Proof
 from proofmerge.fixes import FileFix, FixReport, FixResult
-from proofmerge.pr_review import ReviewError, build_review, changes, commentable_lines, post_review
+from proofmerge.pr_review import (
+    ReviewError,
+    build_approval,
+    build_review,
+    changes,
+    commentable_lines,
+    post_review,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HEAD = "CACHE = {}\n\ndef price(sku):\n    if sku in CACHE:\n        return CACHE[sku]\n    return PRICES[sku]\n"
@@ -95,3 +102,39 @@ def test_one_fix_shared_by_two_regressions_is_posted_once() -> None:
     review = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "inline")
     (comment,) = review["comments"]
     assert comment["body"].startswith("**H1, H2**") and review["body"].count("#### **H1, H2**") == 1
+
+
+def test_only_a_pass_run_can_approve() -> None:
+    block = proof()
+    with pytest.raises(ReviewError, match="only a PASS run"):
+        build_approval(block)
+    passed = block.model_copy(update={"verdict": block.verdict.model_copy(update={"decision": "PASS"})})
+    review = build_approval(passed)
+    assert review["event"] == "APPROVE" and review["commit_id"] == passed.head_sha
+    assert "ProofMerge: PASS" in review["body"] and "comments" not in review
+
+
+def test_approve_command_refuses_a_stale_or_closed_pr(monkeypatch, tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    from proofmerge import cli
+
+    block = proof()
+    passed = block.model_copy(update={"verdict": block.verdict.model_copy(update={"decision": "PASS"})})
+    (tmp_path / "proof.json").write_text(passed.model_dump_json())
+    monkeypatch.setattr(cli, "verify_manifest", lambda _dir: [])
+    monkeypatch.setattr(cli, "_checked_commits", lambda *_: None)
+    state = {"state": "OPEN", "headRefOid": passed.head_sha}
+
+    def gh(argv, **_):
+        out = "o/r" if argv[1] == "repo" else json.dumps(state)
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    monkeypatch.setattr(cli.subprocess, "run", gh)
+    args = ["approve", str(tmp_path / "proof.json"), "--pr", "7", "--repo", str(tmp_path), "--dry-run"]
+    ok = CliRunner().invoke(cli.app, args)
+    assert ok.exit_code == 0 and '"event": "APPROVE"' in ok.output
+    for change, text in (({"headRefOid": "f" * 40}, "changed since this run"), ({"state": "MERGED"}, "merged")):
+        state |= change
+        bad = CliRunner().invoke(cli.app, args)
+        assert bad.exit_code == 1 and text in bad.output

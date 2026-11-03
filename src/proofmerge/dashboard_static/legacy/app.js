@@ -367,6 +367,28 @@
     </section>`;
   }
 
+  function ConfirmPonyPost({ pr, count, account, accounts, onSetup, onConfirm, onCancel }) {
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="ponypost-title">
+        <h3 id="ponypost-title">Post ${count} finding${count === 1 ? "" : "s"} to PR #${pr.number}?</h3>
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge posts one review on the pull request. Each finding becomes a comment on its lines when GitHub's diff has them; the others go in the review summary.</p>
+        <p class="note">It is a comment only: it never approves or requests changes. If the pull request has new commits since the review, nothing is posted.</p>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${onConfirm}>Post to PR #${pr.number}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function ConfirmPost({ pr, fix, onConfirm, onCancel }) {
     const [mode, setMode] = useState("inline");
     const cancel = useRef(null);
@@ -603,11 +625,16 @@
     useEffect(() => { load(false); }, [load]);
     const job = data?.job;
     const pony = data?.ponytail_job;
+    const postJob = data?.ponytail_post_job;
     const [ponyGone, setPonyGone] = useState(0);
+    const [postGone, setPostGone] = useState(0);
+    const [postAsk, setPostAsk] = useState(false);
+    const { gh } = useGitHub();  // read with the other hooks: who the post would be made as
+    const goSetup = () => { location.hash = "tab=setup"; };
     useEffect(() => {
       if (lastStatus.current === "running" && job && job.status !== "running") onRunsChanged();
       lastStatus.current = job?.status;
-      if (job?.status !== "running" && pony?.status !== "running") return;
+      if (job?.status !== "running" && pony?.status !== "running" && postJob?.status !== "running") return;
       const timer = setTimeout(() => load(false), 2000);
       return () => clearTimeout(timer);
     }, [data, tick]);
@@ -630,6 +657,14 @@
     const running = job?.status === "running";
     const ponyRunning = pony?.status === "running";
     const ponyOnThis = ponyRunning && pr && pony.number === pr.number;
+    const postOnThis = postJob?.status === "running" && pr && postJob.number === pr.number;
+    const startPost = () => {
+      setPostAsk(false); setPosting("");
+      fetch("/api/ponytail/post", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
+        body: JSON.stringify({ number: pr.number }) })
+        .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
+        .then(() => load(false)).catch((e) => setPosting(e.message));
+    };
     const startPony = () => {
       setPosting("");
       fetch("/api/ponytail", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
@@ -685,7 +720,10 @@
           ${ponyOnThis ? html`<${PonyProgress} job=${pony} />` : null}
           ${pony?.status === "failed" && pony.number === pr.number && pony.error && ponyGone !== pony.created
             ? html`<${Alert} message=${"The Ponytail review did not finish. " + pony.error} seconds=${60} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
-          ${pr.ponytail && !ponyOnThis ? html`<${PonytailBlock} ponytail=${pr.ponytail} />` : null}
+          ${postJob?.status === "failed" && postJob.number === pr.number && postJob.error && postGone !== postJob.created
+            ? html`<${Alert} message=${"Nothing was posted. " + postJob.error} seconds=${60} onClose=${() => setPostGone(postJob.created)} style=${{ marginTop: ".75rem" }} />` : null}
+          ${pr.ponytail && !ponyOnThis ? html`<${PonytailBlock} ponytail=${pr.ponytail} pr=${pr} posting=${postOnThis}
+            account=${gh?.user || ""} onPost=${() => setPostAsk(true)} />` : null}
           ${pr.state !== "OPEN" ? html`<p class="muted" style=${{ fontSize: ".88rem" }}>This pull request is ${(STATE[pr.state] || pr.state).toLowerCase()}, so its base already contains it. Only open pull requests can be verified.</p>` : null}
           ${posting ? html`<${Alert} message=${posting} onClose=${() => setPosting("")} style=${{ marginTop: ".75rem" }} />` : null}
           <h2>ProofMerge runs at this commit</h2>
@@ -706,7 +744,9 @@
           <details><summary>Run it yourself</summary><pre>${command}</pre><${Copy} text=${command} label="commands" /></details>
         </aside>` : html`<aside class="panel detail empty"><strong>No pull requests</strong>The repository has none yet.</aside>`}
       </div>
-      ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}`;
+      ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}
+      ${postAsk && pr?.ponytail ? html`<${ConfirmPonyPost} pr=${pr} count=${pr.ponytail.findings.length} account=${gh?.user || ""}
+        accounts=${gh?.accounts?.length || 0} onSetup=${goSetup} onConfirm=${startPost} onCancel=${() => setPostAsk(false)} />` : null}`;
   }
 
   // ---------------------------------------------------------------- the app shell
@@ -934,7 +974,7 @@
   }
 
   // The Ponytail review of a pull request: what to delete or shorten. It reads the diff and changes no verdict.
-  function PonytailBlock({ ponytail }) {
+  function PonytailBlock({ ponytail, pr, posting, account, onPost }) {
     const n = ponytail.findings.length;
     return html`<section class="ponytail" aria-label="Ponytail review">
       <div class="pony-head">
@@ -951,6 +991,12 @@
         <p class="pony-instead"><span class="muted">${/^nothing\.?$/i.test(f.replacement.trim()) ? "Nothing replaces it." : "Instead:"}</span>${/^nothing\.?$/i.test(f.replacement.trim()) ? "" : " " + f.replacement}</p>
       </li>`)}</ol>` : null}
       ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long, so part of it was not reviewed.</p>` : null}
+      ${n && pr ? html`<div class="pony-post">${ponytail.posted_url
+        ? html`<span class="muted">Posted to the pull request.</span> <a href=${ponytail.posted_url} target="_blank" rel="noopener noreferrer">View the review on GitHub</a>`
+        : html`<button class="primary btn-small" type="button" disabled=${posting || pr.state !== "OPEN"} onClick=${onPost}
+            title="Posts these findings to the pull request as review comments, after you confirm.">
+            ${posting ? "Posting…" : n === 1 ? "Post as a review comment" : `Post ${n} findings as review comments`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
+          <span class="muted">Each finding goes on its lines when they are in the diff.</span>`}</div>` : null}
     </section>`;
   }
 

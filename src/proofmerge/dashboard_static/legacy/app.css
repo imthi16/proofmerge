@@ -728,3 +728,5 @@ pre.diff .hunk { color: var(--brand); }
 .pony-where code { overflow-wrap: anywhere; font-size: .82rem; }
 .pony-what { margin: .4rem 0 0; font-size: .9rem; line-height: 1.5; }
 .pony-instead { margin: .25rem 0 0; font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }
+.pony-post { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; margin-top: .9rem; padding-top: .85rem;
+  border-top: 1px solid var(--rule); font-size: .88rem; }

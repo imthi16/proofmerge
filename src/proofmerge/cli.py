@@ -459,6 +459,47 @@ def approve(
     typer.echo(f"approved {name}#{pr}: review {url}")
 
 
+@app.command("ponytail-post")
+def ponytail_post(
+    report_file: Annotated[Path, typer.Argument(help="A review written by ponytail-diff")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the review came from")],
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
+) -> None:
+    """Post a Ponytail review to the pull request as one GitHub review comment (never an approval)."""
+    from proofmerge.ponytail import load_report_file
+    from proofmerge.pr_review import ReviewError, build_ponytail_review, post_review
+
+    try:
+        report = load_report_file(report_file)
+        if report is None:
+            raise ReviewError("That review could not be read.")
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        diff = subprocess.run(["gh", "pr", "diff", str(pr), "--repo", name], cwd=repo,
+                              capture_output=True, text=True, timeout=60, check=False)
+        if not name or view.returncode or diff.returncode:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        current = json.loads(view.stdout)
+        if current["state"] != "OPEN":
+            raise ReviewError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to comment on.")
+        if current["headRefOid"] != report.head_sha:
+            raise ReviewError(f"PR #{pr} changed since this review (head {current['headRefOid'][:7]}, "
+                              f"reviewed {report.head_sha[:7]}). Review it again first.")
+        review = build_ponytail_review(report, diff.stdout)
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+        report_file.write_text(report.model_copy(update={"posted_url": url}).model_dump_json(indent=2), encoding="utf-8")
+    except (OSError, ValueError, KeyError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"post failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"posted to {name}#{pr}: {len(review.get('comments', []))} comment(s) on lines, review {url}")
+
+
 @app.command("ponytail-diff")
 def ponytail_diff(
     repo: Annotated[Path, typer.Argument(help="Git repository")],

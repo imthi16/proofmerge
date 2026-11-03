@@ -375,7 +375,8 @@ class _Handler(BaseHTTPRequestHandler):
 
             self._json({"prs": [p | {"runs": by_head.get(p["head_sha"], []), "older_runs": older(p),
                                      "ponytail": self.prs.ponytail_report(p)}
-                                for p in prs], "job": self.prs.job, "ponytail_job": self.prs.pony})
+                                for p in prs], "job": self.prs.job, "ponytail_job": self.prs.pony,
+                                "ponytail_post_job": self.prs.pony_post})
         elif url.path == "/api/index":
             runs = scan(self.root)
             self._json({"root": self.root.name, "runs": [_summary(k, v) for k, v in runs.items()],
@@ -509,22 +510,33 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return
         path = urlsplit(self.path).path
-        routes = ("/api/v1/verifications", "/api/verify", "/api/ponytail", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit",
+        routes = ("/api/v1/verifications", "/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit",
                   *GITHUB_ACTIONS)
-        if path not in routes or (path in ("/api/verify", "/api/ponytail", "/api/v1/verifications") and self.prs is None):
+        if path not in routes or (path in ("/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/v1/verifications") and self.prs is None):
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         if not self._post_allowed():
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= (1024 if path in ("/api/verify", "/api/ponytail", "/api/v1/verifications") else MAX_BODY):
+            if not 0 < length <= (1024 if path in ("/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/v1/verifications") else MAX_BODY):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise TypeError
         except (ValueError, TypeError):
             self._json({"error": "send a JSON object"}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/ponytail/post":
+            try:
+                number = VerificationRequest.model_validate(body).number
+            except ValidationError:
+                self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                self._json(self.prs.start_ponytail_post(number), HTTPStatus.ACCEPTED)
+            except PrError as error:
+                self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             return
         if path == "/api/ponytail":
             try:
@@ -562,7 +574,7 @@ class _Handler(BaseHTTPRequestHandler):
                     self.github.start_clone(body.get("repo"))
                 elif path == "/api/github/switch":
                     if (self.jobs.job and self.jobs.job["status"] == "running") or (
-                            self.prs and any(j and j["status"] == "running" for j in (self.prs.job, self.prs.pony))):
+                            self.prs and any(j and j["status"] == "running" for j in (self.prs.job, self.prs.pony, self.prs.pony_post))):
                         raise GitHubError("Wait for the running check to finish before switching accounts.")
                     self.github.switch_account(body.get("user"))
                     if self.prs:

@@ -61,6 +61,7 @@ class PullRequests:
         self.job: dict[str, Any] | None = None
         self.journals: dict[str, EventJournal] = {}  # job id -> events, oldest first
         self.pony: dict[str, Any] | None = None  # the Ponytail review's job, apart from verify's
+        self.pony_post: dict[str, Any] | None = None  # posting its findings to the PR
 
     def _repository(self) -> tuple[str, str]:
         """The repository gh lists PRs from; fetching from it keeps list and fetch in step."""
@@ -211,6 +212,41 @@ class PullRequests:
             finish("failed", f"Could not start: {type(error).__name__}", "Could not start the review.")
         except PrError as error:
             finish("failed", str(error), str(error))
+
+    def start_ponytail_post(self, number: int) -> dict[str, Any]:
+        """Post this PR's saved Ponytail findings to GitHub as one review comment."""
+        pr = next((p for p in self.pulls() if p["number"] == number), None)
+        if pr is None:
+            raise PrError(f"PR #{number} is not in the list.")
+        if pr["state"] != "OPEN":
+            raise PrError(f"PR #{number} is {pr['state'].lower()}; only open pull requests can be commented on.")
+        report = self.ponytail_report(pr)
+        if report is None or not report["findings"]:
+            raise PrError("Review the pull request first; there are no findings to post.")
+        if report.get("posted_url"):
+            raise PrError("These findings were already posted. Review the pull request again to post new ones.")
+        with self._lock:
+            if self.pony_post and self.pony_post["status"] == "running":
+                raise PrError("A post to GitHub is still running.")
+            self.pony_post = {"number": number, "status": "running", "step": "Posting to GitHub",
+                              "error": None, "created": time.time()}
+        threading.Thread(target=self._ponytail_post, args=(pr,), daemon=True).start()
+        return self.pony_post
+
+    def _ponytail_post(self, pr: dict[str, Any]) -> None:
+        job = self.pony_post
+        try:
+            done = self._step([sys.executable, "-m", "proofmerge.cli", "ponytail-post", str(self.ponytail_path(pr)),
+                               "--pr", str(pr["number"]), "--repo", str(self.repo)], 180, self._environment())
+            if done.returncode == 0:
+                job.update(status="done", step="Posted", error=None)
+            else:
+                tail = ((done.stderr or "") + (done.stdout or "")).strip()[-400:]
+                job.update(status="failed", step="Not posted", error=tail or "GitHub did not take the review.")
+        except subprocess.TimeoutExpired:
+            job.update(status="failed", step="Timed out", error="Posting took too long and was stopped.")
+        except OSError as error:
+            job.update(status="failed", step="Could not start", error=f"Could not start: {type(error).__name__}")
 
     def _step(self, argv: list[str], timeout: int, env: dict[str, str] | None = None) -> Any:
         extra = {} if env is None else {"env": env}

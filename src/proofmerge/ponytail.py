@@ -39,6 +39,7 @@ class PonytailReport(PonytailReview):
     endpoint: str | None = None
     calls: int = 0
     truncated: bool = False  # the diff was longer than the model was shown
+    posted_url: str | None = None  # the GitHub review made from these findings, once posted
 
 
 def ponytail_dir(evidence_dir: Path) -> Path:

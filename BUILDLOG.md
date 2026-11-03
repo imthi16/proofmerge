@@ -782,3 +782,7 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Cause: the closable-alert change put a `useState` in `RepoPicker` after its early `return`s, so once `gh` loaded React threw error #310 ("rendered more hooks than during the previous render") and the tab showed nothing. Reproduced in real Chrome (the prs tab: 0 characters of text, error #310); the hook now sits with the others at the top.
 - Re-checked in real Chrome: all five tabs (Home, Runs, Pull requests, Benchmarks, Setup) render with no page errors, and the Pull requests list with a repository (1 open PR row) renders with none. The earlier check had covered Home and Setup only.
 - `test_repo_picker_declares_every_hook_before_its_early_returns` keeps it from coming back.
+
+### 2026-11-03 — T84 README table, fresh install from GitHub (Claude)
+- Fresh install: the Linux installer from `main` was run with an empty `HOME` and `XDG_DATA_HOME`. It installed from GitHub, the menu entry's `Icon=` pointed at the copied `proofmerge.svg`, and the app started from the entry's command and answered 200 for `/app/`, `/`, `/static/legacy/icon.svg`, `/static/app/icon.svg` and `app.js`. Not checked: how the icon looks in a desktop's menu.
+- README "What works today" now has rows for Approve, Ponytail review and several GitHub accounts, each with what was and was not run, and the Linux installer row records this check.

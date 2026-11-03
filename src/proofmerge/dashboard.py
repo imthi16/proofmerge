@@ -51,7 +51,8 @@ MAX_STREAMS = 8  # concurrent server-sent event streams; each holds a thread
 # Control Center routes: the server answers them with the app shell, whose router
 # reads the path. /legacy keeps the previous dashboard reachable during the migration.
 GITHUB_ACTIONS = {"/api/github/login": "start_login", "/api/github/login/cancel": "cancel_login",
-                  "/api/github/logout": "logout", "/api/github/clone": "start_clone"}
+                  "/api/github/logout": "logout", "/api/github/clone": "start_clone",
+                  "/api/github/add": "add_account", "/api/github/switch": "switch_account"}
 APP_ROUTES = ("/pull-requests","/verifications", "/runs", "/benchmarks", "/diagnostics")
 _HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -547,12 +548,19 @@ class _Handler(BaseHTTPRequestHandler):
             try:
                 if path == "/api/github/clone":
                     self.github.start_clone(body.get("repo"))
+                elif path == "/api/github/switch":
+                    if (self.jobs.job and self.jobs.job["status"] == "running") or (
+                            self.prs and self.prs.job and self.prs.job["status"] == "running"):
+                        raise GitHubError("Wait for the running check to finish before switching accounts.")
+                    self.github.switch_account(body.get("user"))
+                    if self.prs:
+                        self.prs.forget()  # another account may see other repositories and pull requests
                 else:
                     getattr(self.github, GITHUB_ACTIONS[path])()
             except GitHubError as error:
                 self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
-            started = path in ("/api/github/login", "/api/github/clone")
+            started = path in ("/api/github/login", "/api/github/add", "/api/github/clone")
             self._json(self.github.status(), HTTPStatus.ACCEPTED if started else HTTPStatus.OK)
             return
         try:

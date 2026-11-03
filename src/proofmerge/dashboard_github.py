@@ -20,6 +20,7 @@ DEVICE_URL = "https://github.com/login/device"
 CODE = re.compile(r"one-time code: ([A-Z0-9]{4}-[A-Z0-9]{4})")
 REPO = re.compile(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}")
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")
+ACCOUNT = re.compile(r"Logged in to github\.com account ([A-Za-z0-9-]+) \([^)\n]*\)\s*\n\s*- Active account: (true|false)")
 LOGIN_SECONDS = 900  # GitHub device codes expire after 15 minutes
 CLONE_SECONDS = 900
 # The page polls status every 1.5 s while it waits; each `gh api user` costs about a second.
@@ -58,6 +59,7 @@ class GitHub:
         self.login: dict[str, Any] | None = None
         self.clone: dict[str, Any] | None = None
         self._signed_in: tuple[str, float] | None = None  # (login, when gh confirmed it)
+        self._accounts: tuple[list[dict[str, Any]], float] | None = None  # (signed-in accounts, when read)
 
     def _gh(self, *argv: str, timeout: int = 20) -> Any:
         return self._run(["gh", *argv], capture_output=True, text=True, encoding="utf-8",
@@ -86,6 +88,37 @@ class GitHub:
             return True, None
         raise GitHubError(UNREACHABLE)
 
+    def _read_accounts(self) -> list[dict[str, Any]]:
+        """Every account gh holds for github.com, as [{"login", "active"}], read without the network."""
+        try:
+            result = self._gh("auth", "status", "--hostname", "github.com", timeout=15)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return []
+        text = (result.stdout or "") + (result.stderr or "")  # older gh prints this on stderr
+        return [{"login": name, "active": active == "true"}
+                for name, active in ACCOUNT.findall(text) if LOGIN.fullmatch(name)]
+
+    def accounts(self) -> list[dict[str, Any]]:
+        cached = self._accounts
+        if cached is not None and time.monotonic() - cached[1] < WHO_SECONDS:
+            return cached[0]
+        found = self._read_accounts()
+        self._accounts = (found, time.monotonic())
+        return found
+
+    def _forget(self) -> None:
+        self._signed_in = self._accounts = None
+
+    def switch_account(self, user: Any) -> None:
+        """Make another account gh already holds the active one. It also changes gh in a terminal."""
+        self._forget()
+        if not isinstance(user, str) or user not in [a["login"] for a in self.accounts()]:
+            raise GitHubError("That account is not signed in here. Add it first.")
+        result = self._gh("auth", "switch", "--hostname", "github.com", "--user", user)
+        if result.returncode != 0:
+            raise GitHubError("Could not switch GitHub accounts.")
+        self._forget()
+
     def status(self) -> dict[str, Any]:
         waiting = self.login is not None and self.login["state"] == "waiting"
         error = None
@@ -93,18 +126,23 @@ class GitHub:
             installed, user = (True, None) if waiting else self._who()
         except GitHubError as problem:
             installed, user, error = True, None, str(problem)
+        accounts = self.accounts() if installed and user and not error else []
         return {"gh": installed, "user": user, "error": error, "login": self.login and dict(self.login),
-                "clone": self.clone and dict(self.clone)}
+                "clone": self.clone and dict(self.clone), "accounts": accounts}
 
     # Sign-in ----------------------------------------------------------------------------
-    def start_login(self) -> None:
+    def add_account(self) -> None:
+        """Sign in another account; gh keeps the ones already signed in."""
+        self.start_login(add=True)
+
+    def start_login(self, add: bool = False) -> None:
         with self._lock:
             if self.login is not None and self.login["state"] == "waiting":
                 raise GitHubError("Sign-in is already waiting for its code.")
             installed, user = self._who()
             if not installed:
                 raise GitHubError("Install the GitHub CLI first: https://cli.github.com/")
-            if user:
+            if user and not add:
                 raise GitHubError(f"Already signed in as {user}.")
             # Without a terminal gh skips its questions, prints the code and waits.
             process = self._spawn(
@@ -131,6 +169,7 @@ class GitHub:
             if login["state"] != "waiting":
                 return  # cancelled
             if code == 0:
+                self._forget()
                 login.update(state="done", code=None)
             else:
                 login.update(state="failed", code=None,
@@ -150,7 +189,7 @@ class GitHub:
         if result.returncode != 0:
             raise GitHubError("Could not sign out of GitHub.")
         self.login = None
-        self._signed_in = None
+        self._forget()
 
     # Repositories -----------------------------------------------------------------------
     def repos(self) -> list[dict[str, Any]]:

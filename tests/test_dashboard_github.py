@@ -44,7 +44,7 @@ class FakeGh:
         for prefix, answer in self.answers.items():
             if " ".join(argv).startswith(prefix):
                 return answer
-        return SimpleNamespace(returncode=0, stdout="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     def spawn(self, argv: list[str], **kwargs: object) -> SimpleNamespace:
         self.spawned = (argv, kwargs)
@@ -145,7 +145,7 @@ def test_a_network_problem_is_not_shown_as_signed_out(tmp_path: Path) -> None:
     assert gh.spawned is None and github.clone is None
     gh.offline, gh.revoked = False, True  # a revoked token means signed out, not offline
     assert GitHub(tmp_path, gh.run).status() == {
-        "gh": True, "user": None, "error": None, "login": None, "clone": None}
+        "gh": True, "user": None, "error": None, "login": None, "clone": None, "accounts": []}
 
 
 def test_repos_lists_valid_names_and_needs_sign_in(tmp_path: Path) -> None:
@@ -225,7 +225,7 @@ def test_http_routes_need_the_session_token(tmp_path: Path) -> None:
         assert call(base + "/api/github/repos")[0] == 403
         auth = {"X-ProofMerge-Token": token}
         assert call(base + "/api/github", headers=auth) == (
-            200, {"gh": True, "user": "octocat", "error": None, "login": None, "clone": None})
+            200, {"gh": True, "user": "octocat", "error": None, "login": None, "clone": None, "accounts": []})
         post = {"Content-Type": "application/json", "Origin": base}
         clone = json.dumps({"repo": "octocat/hello"}).encode()
         assert call(base + "/api/github/clone", "POST", post, clone)[0] == 403
@@ -253,3 +253,44 @@ def test_status_polls_reuse_a_signed_in_answer_but_never_a_signed_out_one(tmp_pa
     github.logout()
     gh.user = None
     assert github.status()["user"] is None and asks() == 4
+
+
+STATUS = """github.com
+  ✓ Logged in to github.com account mdimthi (keyring)
+  - Active account: false
+  - Git operations protocol: https
+
+  ✓ Logged in to github.com account octocat (keyring)
+  - Active account: true
+  - Git operations protocol: https
+"""
+
+
+def two_accounts() -> tuple[FakeGh, GitHub]:
+    gh = FakeGh("octocat")
+    gh.answers["gh auth status"] = SimpleNamespace(returncode=0, stdout=STATUS, stderr="")
+    return gh, GitHub(Path("."), gh.run, gh.spawn)
+
+
+def test_status_lists_every_signed_in_account_and_which_is_active() -> None:
+    _, github = two_accounts()
+    assert github.status()["accounts"] == [{"login": "mdimthi", "active": False}, {"login": "octocat", "active": True}]
+
+
+def test_switch_account_runs_gh_only_for_an_account_gh_holds() -> None:
+    gh, github = two_accounts()
+    for bad in ("stranger", "mdimthi; rm -rf ~", None, 7):
+        with pytest.raises(GitHubError, match="not signed in here"):
+            github.switch_account(bad)
+    assert not any(argv[:3] == ["gh", "auth", "switch"] for argv in gh.calls)
+    github.switch_account("mdimthi")
+    assert ["gh", "auth", "switch", "--hostname", "github.com", "--user", "mdimthi"] in gh.calls
+
+
+def test_add_account_signs_in_again_but_plain_sign_in_still_refuses() -> None:
+    gh, github = two_accounts()
+    with pytest.raises(GitHubError, match="Already signed in as octocat"):
+        github.start_login()
+    github.add_account()
+    assert gh.spawned[0][:3] == ["gh", "auth", "login"]
+    assert github.status()["login"]["state"] == "waiting"

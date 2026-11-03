@@ -703,3 +703,6 @@ pre.diff .hunk { color: var(--brand); }
 .ponytail { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
 .ponytail h4 { margin: 0 0 .4rem; font-size: .95rem; }
 .ponytail h4 .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }
+
+/* GitHub accounts on Setup: the other signed-in accounts as switch buttons. */
+.gh-accounts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .6rem; }

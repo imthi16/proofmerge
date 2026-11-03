@@ -1024,8 +1024,16 @@
       body = "To open pull requests from GitHub, ProofMerge needs the GitHub CLI. Run the ProofMerge installer again and it can add it for you.";
       action = html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get GitHub CLI</a>`;
     } else if (gh.user) {
-      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.`;
-      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out</button>`;
+      const others = (gh.accounts || []).filter((a) => !a.active);
+      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.
+        ${others.length ? html`<div class="gh-accounts" role="group" aria-label="Switch GitHub account">
+          <span class="muted">Switch to</span>
+          ${others.map((a) => html`<button key=${a.login} class="ghost btn-small" type="button" disabled=${pending}
+            onClick=${() => { setPending(true); setFail(""); act("/api/github/switch", { user: a.login }).catch((e) => setFail(e.message)).finally(() => setPending(false)); }}>@${a.login}</button>`)}
+        </div>
+        <p class="muted fix-note">Switching also changes the account the <code>gh</code> command uses in a terminal.</p>` : null}`;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/add")}>Add another account</button>
+        <button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out @${gh.user}</button>`;
     } else if (login?.state === "waiting") {
       body = html`<div class="device" aria-live="polite">
         ${login.code

@@ -83,6 +83,10 @@ class PullRequests:
         self._remote = (name, url)
         return self._remote
 
+    def forget(self) -> None:
+        """Drop what GitHub answered for the previous account."""
+        self._cache = self._remote = None
+
     def pulls(self, refresh: bool = False) -> list[dict[str, Any]]:
         if self._cache and not refresh and time.monotonic() - self._cache[0] < CACHE_SECONDS:
             return self._cache[1]

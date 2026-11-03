@@ -336,40 +336,24 @@ details.cli summary { display: inline-flex; align-items: center; gap: .4rem; }
 .quit { min-height: 100vh; display: grid; place-content: center; justify-items: center; text-align: center; gap: .5rem; color: var(--muted); }
 .quit h1 { color: var(--fg); font-size: 1.8rem; letter-spacing: -.04em; margin: .5rem 0 0; }
 
-/* Verdict ledger: the one loud element, and the main filter. */
-.dist { margin: 0 0 1.5rem; }
-.dist-bar { display: flex; gap: 6px; }
-.seg { position: relative; border: 1px solid var(--rule); border-radius: var(--r-md); min-width: 9rem;
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 1.6rem;
-  padding: .85rem 1rem .9rem; cursor: pointer; text-align: left; overflow: hidden; background: var(--surface);
-  transition: border-color .25s var(--ease), opacity .25s var(--ease), transform .25s var(--ease); }
-.seg::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; }
-.seg.block { background: linear-gradient(180deg, var(--block-bg), transparent 85%), var(--surface); }
-.seg.block::before { background: var(--block); }
-.seg.review { background: linear-gradient(180deg, var(--review-bg), transparent 85%), var(--surface); }
-.seg.review::before { background: var(--review); }
-.seg.pass { background: linear-gradient(180deg, var(--pass-bg), transparent 85%), var(--surface); }
-.seg.pass::before { background: var(--pass); }
-.seg .k { order: -1; display: inline-flex; align-items: center; gap: .45rem; font-size: .78rem; font-weight: 600;
-  letter-spacing: .02em; color: var(--muted); }
+/* Verdict filter: the counts are chips beside the search, not a headline. */
+.dist { margin: 0 0 .9rem; }
+.dist-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.seg { display: inline-flex; align-items: center; gap: .55rem; padding: .35rem .8rem .35rem .7rem; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); font-size: .84rem;
+  transition: border-color .2s var(--ease), opacity .2s var(--ease), background .2s var(--ease); }
+.seg .k { display: inline-flex; align-items: center; gap: .45rem; font-weight: 600; }
 .seg .k::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
 .seg.block .k { color: var(--block); }
 .seg.review .k { color: var(--review); }
 .seg.pass .k { color: var(--pass); }
-.seg .n { font-size: 2.75rem; font-weight: 600; line-height: .9; letter-spacing: -.05em;
-  font-variant-numeric: tabular-nums; }
-.seg .pct { position: absolute; right: 1rem; bottom: .95rem; font-family: var(--mono); font-size: .8rem;
-  color: var(--muted); font-variant-numeric: tabular-nums; }
-.seg:hover { border-color: var(--rule-strong); transform: translateY(-1px); }
-.seg[aria-pressed="true"] { border-color: currentColor; }
-.seg.block[aria-pressed="true"] { border-color: var(--block-line); }
-.seg.review[aria-pressed="true"] { border-color: var(--review-line); }
-.seg.pass[aria-pressed="true"] { border-color: var(--pass-line); }
-.dist-bar.filtered .seg:not([aria-pressed="true"]) { opacity: .4; }
-.dist-legend { display: flex; justify-content: space-between; gap: 1rem; margin-top: .55rem; font-size: .82rem; }
-/* One load moment: each segment opens in turn, left to right. */
-@keyframes seg-open { from { clip-path: inset(0 100% 0 0 round 12px); } to { clip-path: inset(0 0 0 0 round 12px); } }
-.seg { animation: seg-open .9s var(--ease) both; animation-delay: calc(var(--i, 0) * 120ms); }
+.seg .n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.seg:hover { border-color: var(--rule-strong); background: var(--raised); }
+.seg.block[aria-pressed="true"] { border-color: var(--block-line); background: var(--block-bg); }
+.seg.review[aria-pressed="true"] { border-color: var(--review-line); background: var(--review-bg); }
+.seg.pass[aria-pressed="true"] { border-color: var(--pass-line); background: var(--pass-bg); }
+.dist-bar.filtered .seg:not([aria-pressed="true"]) { opacity: .5; }
+.dist-note { margin-left: auto; font-size: .84rem; }
 
 .filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1rem; }
 .search { flex: 1 1 16rem; min-width: 12rem; border: 1px solid var(--rule); background: var(--surface);
@@ -540,9 +524,6 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 }
 @media (max-width: 40rem) {
   .page { padding: 1.25rem 1rem 3rem; }
-  .seg .pct { right: .75rem; bottom: .75rem; }
-  .seg { min-width: 0; flex-basis: 0; padding: .7rem .75rem; gap: 1rem; }
-  .seg .n { font-size: 2rem; }
   td.hide-sm, th.hide-sm { display: none; }
   .decision { font-size: 2.5rem; }
   .grid { grid-template-columns: 4.75rem repeat(3, minmax(0, 1fr)); }
@@ -643,25 +624,34 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 @media (min-width: 64.01rem) and (max-width: 110rem) { .pr-table .hide-sm, .col-shas { display: none; } }
 .pr-table td:last-child { white-space: nowrap; }
 
-/* Runs: the list and the chosen run's verdict share the left column, the evidence takes the
-   right. The verdict stays in view while the evidence scrolls, so neither side runs empty. */
-.runs-split { grid-template-columns: minmax(19rem, 26rem) minmax(0, 1fr);
-  grid-template-areas: "list evidence" "summary evidence"; grid-template-rows: auto 1fr; row-gap: 1rem; }
+/* Runs: the list is a rail. One run reads top to bottom beside it: its verdict with the facts next to
+   it, the actions, then the evidence. */
+.runs-split { grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  grid-template-areas: "list summary" "list evidence"; grid-template-rows: auto 1fr; gap: 1rem; align-items: start; }
 .runs-split > :first-child { grid-area: list; }
-.runs-split > .detail { grid-area: summary; position: sticky; top: 1.5rem; align-self: start;
-  max-height: calc(100vh - 3rem); overflow: auto; }
-.runs-split > .evidence { grid-area: evidence; padding: .4rem 1.75rem 1.6rem; min-width: 0; }
-/* The summary shows the SHAs and the call count, so the narrow list keeps verdict, name and regressions. */
-.runs-split .runs { position: static; max-height: 55vh; }
+.runs-split > .detail { grid-area: summary; }
+/* With room for it, the facts sit beside the verdict instead of under it. */
+@media (min-width: 88rem) {
+  .runs-split > .detail { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(15rem, 1fr); grid-template-rows: auto 1fr;
+    column-gap: 2.25rem; align-content: start; }
+  .runs-split > .detail > .detail-head, .runs-split > .detail > .reasons { grid-column: 1; }
+  .runs-split > .detail > .facts { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; padding-top: 0; border-top: 0; align-self: start; }
+  .runs-split > .detail > :not(.detail-head, .reasons, .facts) { grid-column: 1 / -1; }
+}
+.runs-split > .evidence { grid-area: evidence; padding: 1.6rem 1.75rem; min-width: 0; }
+/* The facts show the SHAs and the call count, so the narrow rail keeps verdict, name and regressions. */
+.runs-split .runs { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); }
 .runs-split .runs .hide-sm { display: none; }
+.runs-split .runs td, .runs-split .runs th { padding-left: .65rem; padding-right: .65rem; }
+.runs-split .runs td:nth-child(2) { overflow-wrap: anywhere; }
+.runs-split .runs .run-name { font-size: .88rem; line-height: 1.35; }
 .runs-split .detail .decision { font-size: 2.6rem; }
-.evidence > h2:first-child { border-top: 0; margin-top: 1.2rem; padding-top: 0; }
+.evidence > h2:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 @keyframes evidence-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .evidence { animation: evidence-in .5s var(--ease) .08s both; }
 @media (max-width: 64rem) {
   .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary" "evidence"; grid-template-rows: none; }
-  .runs-split > .detail { position: static; max-height: none; }
-  .runs-split .runs { max-height: none; }
+  .runs-split .runs { position: static; max-height: 40vh; }
 }
 /* Phones: the benchmark tables and the PR list fit the width instead of pushing the page sideways. */
 .bench { min-width: 0; overflow-x: auto; }

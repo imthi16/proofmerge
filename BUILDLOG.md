@@ -786,3 +786,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 ### 2026-11-03 — T84 README table, fresh install from GitHub (Claude)
 - Fresh install: the Linux installer from `main` was run with an empty `HOME` and `XDG_DATA_HOME`. It installed from GitHub, the menu entry's `Icon=` pointed at the copied `proofmerge.svg`, and the app started from the entry's command and answered 200 for `/app/`, `/`, `/static/legacy/icon.svg`, `/static/app/icon.svg` and `app.js`. Not checked: how the icon looks in a desktop's menu.
 - README "What works today" now has rows for Approve, Ponytail review and several GitHub accounts, each with what was and was not run, and the Linux installer row records this check.
+
+### 2026-11-03 — T86 Runs page: one reading column beside a list rail (Claude)
+- Problem (author's screenshot): the Runs list sat on top-left, the verdict card under it and the evidence on the right, so the eye zigzagged and the verdict was far from its evidence. The BLOCK/PASS tiles above (a big number with a small label) also took a fifth of the screen.
+- New structure in `legacy/app.js` and `app.css`: the list is a sticky rail on the left; on the right one run reads top to bottom: the verdict with its reasons (and, at 88rem and wider, the run's facts beside them), the actions, then the evidence. The verdict counts are now small filter chips on the search row. No sticky summary any more. Below 64rem it stacks: list, verdict, evidence.
+- Checked in real Chrome with the system Chrome on the committed demo runs: 1600, 1100 and 390 px wide in light mode (no horizontal overflow, no page errors), dark mode, and a verdict chip filtering the list. The Impeccable layout detector reported nothing.
+- Not checked: the Control Center (`/`) Runs page, which is separate code and unchanged, and the README's Runs screenshot (`docs/assets/app-runs.png`), which still shows the old layout.

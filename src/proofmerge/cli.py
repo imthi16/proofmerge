@@ -12,7 +12,7 @@ from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
 from proofmerge.dashboard import make_server
 from proofmerge.dashboard_events import JsonlEventSink
-from proofmerge.evidence import Experiment, Proof
+from proofmerge.evidence import Experiment, Proof, read_evidence
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.manifest import (
@@ -294,9 +294,8 @@ def _head_failures(proof: Proof, evidence_dir: Path) -> dict[str, str]:
         failed = next((e for e in experiment.executions if e.revision == "head" and e.outcome == "FAIL"), None)
         if failed is None:
             continue
-        try:
-            log = (evidence_dir / failed.stdout_path).read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        log = read_evidence(evidence_dir, failed.stdout_path)
+        if log is None:
             continue
         lines = [x for x in log.splitlines() if x.startswith("E ")] or log.splitlines()[-30:]
         failures[experiment.hypothesis_id] = "\n".join(lines[:60])

@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, Field
 
-from proofmerge.evidence import Experiment, Proof
+from proofmerge.evidence import Experiment, Proof, read_evidence
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
 from proofmerge.sandbox import HYPOTHESIS_ID, SHA
 
@@ -88,12 +88,16 @@ def regressions(proof: Proof) -> list[str]:
     """Hypotheses whose verified regression stands: the evidence behind a BLOCK.
 
     A probe Wonder doubted, or one that may show the intended change, gets no fix: fixing it
-    could undo what the pull request is meant to do."""
+    could undo what the pull request is meant to do. A regression against a claim Wonder contested
+    is a REVIEW matter, not a BLOCK one, so it gets no fix either."""
     doubted = set(proof.mismatched_probe_ids) | set(proof.explained_probe_ids)
     return [
         f.hypothesis_id
         for f in proof.findings
-        if f.verified and f.classification == "REGRESSION" and f.hypothesis_id not in doubted
+        if f.verified
+        and f.classification == "REGRESSION"
+        and f.hypothesis_id not in doubted
+        and f.claim_id not in proof.contested_claim_ids
     ][:MAX_FIXES]
 
 
@@ -244,7 +248,16 @@ def suggest_fixes(
         if not HYPOTHESIS_ID.fullmatch(hid) or hid not in experiments:
             continue
         experiment = experiments[hid]
-        probe = (evidence_dir / experiment.test_source_path).read_text(encoding="utf-8")
+        probe = read_evidence(evidence_dir, experiment.test_source_path)
+        if probe is None:
+            results.append(
+                FixResult(
+                    hypothesis_id=hid,
+                    explanation="",
+                    problem="The probe source is missing from the evidence, or its path leaves it.",
+                )
+            )
+            continue
         user = _user_message(proof, hid, probe, failures.get(hid, ""), allowed, diff_text)
         history: list[dict[str, str]] = []
         result = FixResult(hypothesis_id=hid, explanation="", problem="No fix was proposed.")

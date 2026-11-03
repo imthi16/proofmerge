@@ -750,3 +750,8 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - T81: Setup lists every account gh holds, switches between them (`gh auth switch`) and adds another (`gh auth login` keeps the existing ones). Switching is refused while a check runs and clears the pull request list cache. The account parser read both accounts of a real `gh` install; the sign-in itself was not exercised.
 - Not checked: the new buttons and dialogs were not exercised end to end in the browser by the author of this entry; `Approve` has never posted a real review.
 - `pytest -q --ignore=tests/test_docker_sandbox.py`: 897 passed, 1 skipped. `ruff check src tests`: all checks passed.
+### 2026-11-03 — T75 review fixes (Claude)
+- `fix` read `test_source_path` and `stdout_path` from `proof.json` without checking them, so a bundle with `../secret.txt`, an absolute path or a symlink could send a host file to the model, and `verify_manifest` would not have caught it. Both reads now go through `evidence.read_evidence`, which refuses a path that leaves the evidence directory; a hypothesis whose probe path leaves it gets a recorded problem and no model call.
+- A regression against a contested claim (a REVIEW matter in `verdict`) no longer gets a fix.
+- Two regressions that share one patch are still posted once, but each now carries its own probe status; before, one verified probe stood for the whole group.
+- Tests: `test_a_probe_path_that_leaves_the_evidence_is_never_read` (parent path, absolute path, symlink), `test_a_regression_against_a_contested_claim_gets_no_fix`, `test_a_shared_fix_keeps_each_probes_own_status`. `pytest -q --ignore=tests/test_docker_sandbox.py`: 893 passed, 1 skipped. `ruff check src tests`: clean.

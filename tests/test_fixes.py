@@ -166,3 +166,31 @@ def test_doubted_or_possibly_intended_probes_get_no_fix() -> None:
     assert regressions(proof) == ["H1"]
     assert regressions(proof.model_copy(update={"mismatched_probe_ids": ["H1"]})) == []
     assert regressions(proof.model_copy(update={"explained_probe_ids": ["H1"]})) == []
+
+
+def test_a_regression_against_a_contested_claim_gets_no_fix() -> None:
+    from proofmerge.fixes import regressions
+
+    proof = proof_for("a" * 40, "b" * 40)
+    claim = next(f.claim_id for f in proof.findings if f.hypothesis_id == "H1")
+    assert regressions(proof.model_copy(update={"contested_claim_ids": [claim]})) == []
+
+
+def test_a_probe_path_that_leaves_the_evidence_is_never_read(repo, tmp_path: Path) -> None:
+    from proofmerge.evidence import read_evidence
+
+    path, base, head = repo
+    proof = proof_for(base, head)
+    run = evidence(tmp_path, proof)
+    secret = run.parent / "secret.txt"
+    secret.write_text("PRIVATE HOST FILE")
+    (run / "link.txt").symlink_to(secret)
+    for leaving in ("../secret.txt", str(secret), "link.txt"):
+        assert read_evidence(run, leaving) is None
+        hostile = proof.model_copy(update={"experiments": [
+            proof.experiments[0].model_copy(update={"test_source_path": leaving})]})
+        client = FakeClient()
+        report = suggest_fixes(hostile, run, path, client, "diff", ["shop.py"],
+                               lambda *a: pytest.fail("no probe may run"), {})
+        assert client.calls == 0 and "leaves it" in report.fixes[0].problem
+    assert read_evidence(run, "probes/test_h1.py") is not None

@@ -138,3 +138,15 @@ def test_approve_command_refuses_a_stale_or_closed_pr(monkeypatch, tmp_path: Pat
         state |= change
         bad = CliRunner().invoke(cli.app, args)
         assert bad.exit_code == 1 and text in bad.output
+
+def test_a_shared_fix_keeps_each_probes_own_status() -> None:
+    shared = report()  # H1: verified, probe PPP -> PPP
+    shared.fixes.append(shared.fixes[0].model_copy(update={
+        "hypothesis_id": "H2", "verified": False, "fixed_outcomes": "FFF", "problem": "The probe still fails."}))
+    review = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "inline")
+    (comment,) = review["comments"]
+    for text in (comment["body"], review["body"]):
+        assert "**H1:** **Fix verified:**" in text
+        assert "**H2:** **Suggested fix, not verified:** The probe still fails." in text
+    overall = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "overall")["body"]
+    assert "**H2:** **Suggested fix, not verified:**" in overall

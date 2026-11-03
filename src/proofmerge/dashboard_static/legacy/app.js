@@ -163,7 +163,7 @@
       <table>
         <thead><tr>
           ${head("verdict", "Verdict")}${head("name", "Run")}
-          <th class="hide-sm">Base → head</th>
+          <th class="hide-sm col-shas">Base → head</th>
           ${head("regressions", "Regressions", "num")}${head("calls", "Calls", "num hide-sm")}
         </tr></thead>
         <tbody ref=${body} tabIndex="0" onKeyDown=${onKey} aria-label="Runs; use arrow keys to move">
@@ -179,7 +179,7 @@
                   ${run.error ? run.error : null}
                 </div>
               </td>
-              <td class="hide-sm mono">${short(run.base_sha)} → ${short(run.head_sha)}</td>
+              <td class="hide-sm mono col-shas">${short(run.base_sha)} → ${short(run.head_sha)}</td>
               <td class="num">${run.regressions ?? "—"}</td>
               <td class="num hide-sm">${run.calls ?? "—"}</td>
             </tr>`)}

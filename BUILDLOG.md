@@ -710,3 +710,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Tests: `test_dashboard_markdown.py` (runs `markdown.js` in Node: structure, and `javascript:`/`data:` links, images, raw HTML and comments staying inert) and `test_report_names_the_models_the_run_used`.
 - Review fix (Codex, #64): a description of thousands of backticks made the inline pattern backtrack for seconds (10,000 took over 10 s), freezing the page while it rendered. Every inline span now has a bounded length; the same test set found that thousands of nested `>` overflowed the call stack, so quote nesting stops at 8 levels. `test_hostile_descriptions_render_in_linear_time` runs ten such inputs (20,000–80,000 characters, each under 0.2 s); the backtick case fails on the previous parser.
 - `pytest -q`: 877 passed, 1 skipped. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T72 README app screenshots in the refreshed design (Claude)
+- `docs/assets/app-runs.png` and `docs/assets/app-github-sign-in.png` re-captured from the refreshed app (headless Chrome, 1280×800 at 1.5625×, dark), same content as before: the Runs page on copies of the committed demo runs (three BLOCK, one REVIEW, all evidence intact; the committed bundles were not touched), and the Setup GitHub row while signing in. For the sign-in card `gh` was a stand-in script that prints the one-time code `06F2-E201`; nothing reached GitHub.
+- Found while capturing: beside the detail, the Base → head column squeezed run names to a few characters a line at 1280 px. Between 64rem and 110rem that column now hides, as the PR branch column already does; the detail shows both SHAs.
+- The walkthrough video and its GIF were not re-recorded (the recording harness is not in the repository); the README now says they predate the visual refresh.
+- `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.

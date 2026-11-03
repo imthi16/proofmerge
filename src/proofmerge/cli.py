@@ -402,6 +402,45 @@ def post(
     typer.echo(f"posted to {name}#{pr}: {inline} inline suggestion(s){', ' if inline else ''}review {url}")
 
 
+@app.command()
+def approve(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
+) -> None:
+    """Approve the pull request on GitHub. Only a PASS run, on the commit it checked, can approve."""
+    from proofmerge.pr_review import ReviewError, build_approval, post_review
+
+    if verify_manifest(proof_json.parent):
+        typer.echo("The evidence changed since the run; check it with replay before approving.", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        review = build_approval(proof)
+        _checked_commits(proof, repo)
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if view.returncode or not name:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        current = json.loads(view.stdout)
+        if current["state"] != "OPEN":
+            raise ReviewError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to approve.")
+        if current["headRefOid"] != proof.head_sha:
+            raise ReviewError(f"PR #{pr} changed since this run (head {current['headRefOid'][:7]}, "
+                              f"checked {proof.head_sha[:7]}). Verify it again.")
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+    except (OSError, ValueError, KeyError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"approve failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"approved {name}#{pr}: review {url}")
+
+
 def _outcomes(experiment: Experiment, revision: str) -> str:
     return "".join(
         execution.outcome[0]

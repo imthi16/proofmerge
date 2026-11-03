@@ -3,7 +3,8 @@
 Inline mode puts each fix on the lines it changes as a GitHub suggestion block (the author
 can commit it from the page); a change outside the pull request's diff, which GitHub cannot
 anchor, goes in the review body. Overall mode puts everything in the body. The review is a
-COMMENT: it never approves or requests changes. Nothing posts without an explicit command.
+COMMENT: it never approves or requests changes. Approving is its own command, for a PASS run only.
+Nothing posts without an explicit command.
 """
 
 import difflib
@@ -153,6 +154,25 @@ def build_review(
     if comments:
         review["comments"] = comments
     return review
+
+
+def build_approval(proof: Proof) -> dict[str, Any]:
+    """An APPROVE review on the commit the run checked. Only a PASS run may approve."""
+    if proof.verdict.decision != "PASS":
+        raise ReviewError(f"This run is {proof.verdict.decision}; only a PASS run can approve a pull request.")
+    body = [
+        "### ProofMerge: PASS",
+        "",
+        *[f"- {_quiet(reason)}" for reason in proof.verdict.reasons],
+        "",
+        *[f"{_quiet(limit)}" for limit in proof.verdict.scope_limitations],
+        "",
+        (
+            f"<sub>Run `{proof.run_id}`, base `{proof.base_sha[:7]}`, head `{proof.head_sha[:7]}`. "
+            "Approved by ProofMerge on the maintainer's request, from the evidence bundle.</sub>"
+        ),
+    ]
+    return {"commit_id": proof.head_sha, "event": "APPROVE", "body": "\n".join(body)}
 
 
 def post_review(

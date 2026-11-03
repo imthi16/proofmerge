@@ -331,3 +331,18 @@ def test_fix_and_post_jobs_name_the_run_and_check_their_inputs(project: Path, tm
             jobs.start({"command": "post", "run": "pr-7-abcdef0-1", "project": str(project)} | bad, runs)
     with pytest.raises(JobError, match="no longer"):
         jobs.start({"command": "fix", "run": "gone", "project": str(project)}, runs)
+
+
+def test_approve_job_names_the_run_and_needs_a_pr_number(project: Path, tmp_path: Path) -> None:
+    run = tmp_path / "runs" / "pr-7-abcdef0-1"
+    run.mkdir(parents=True)
+    seen = []
+    jobs = Jobs(tmp_path / "runs", spawn=lambda argv, **k: seen.append(argv) or FakeProcess([], 0))
+    jobs.start({"command": "approve", "run": "pr-7-abcdef0-1", "project": str(project), "pr": 7},
+               {"pr-7-abcdef0-1": run})
+    wait_done(jobs)
+    assert seen[0][3:] == ["approve", str(run / "proof.json"), "--pr", "7", "--repo", str(project.resolve())]
+    for bad in ({"pr": "7; rm"}, {"pr": True}, {}):
+        with pytest.raises(JobError, match="pull request"):
+            jobs.start({"command": "approve", "run": "pr-7-abcdef0-1", "project": str(project)} | bad,
+                       {"pr-7-abcdef0-1": run})

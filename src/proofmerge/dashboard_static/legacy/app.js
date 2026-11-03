@@ -864,7 +864,7 @@
     const busy = waiting || gh?.clone?.state === "running";
     useEffect(() => {
       if (!busy) return;
-      const timer = setTimeout(load, waiting ? 2000 : 1500);
+      const timer = setTimeout(load, waiting ? 2000 : 1000);  // cheap: the server reuses its sign-in answer
       return () => clearTimeout(timer);
     }, [reads, busy]);
     const act = (url, body = {}) => post(url, body).then((d) => { setGh(d); setReads((n) => n + 1); return d; });

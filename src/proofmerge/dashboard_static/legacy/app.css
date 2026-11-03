@@ -199,8 +199,9 @@ h3 { font-size: 1rem; font-weight: 600; letter-spacing: -.015em; margin: 0 0 .35
 .recent-list .run-name { flex: 1; min-width: 0; }
 .recent-list .mono { font-size: .76rem; }
 
-/* Folder picker */
-.picker { max-width: 42rem; display: flex; flex-direction: column; gap: .75rem; max-height: min(44rem, 92vh); }
+/* Folder picker. Scoped to .dialog: the repository picker below reuses .picker with display: grid,
+   which let the folder list grow past the dialog and scroll the page. */
+.dialog.picker { max-width: 42rem; display: flex; flex-direction: column; gap: .75rem; max-height: min(44rem, 92vh); }
 .picker-head { display: flex; align-items: center; justify-content: space-between; }
 .picker-head h3 { margin: 0; }
 .picker > p { margin: 0; font-size: .88rem; }

@@ -685,3 +685,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `uninstall.sh` now asks `Remove ProofMerge from this computer? ... [y/N]` and removes nothing unless the answer starts with y; an empty answer or closed input keeps everything. It waits for Enter at the end, so the terminal window does not close before the message is read.
 - Test: `test_uninstaller_asks_first_and_keeps_the_checks` writes the real uninstaller into a temporary folder and runs it with no answer, `n` and `y`; only `y` removes the install and menu entry, and `~/ProofMerge/runs` stays every time. It fails on the previous script.
 - `pytest -q`: 862 passed, 1 skipped. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T70 Folder picker list stays inside its dialog (Claude)
+- Found in the app: on Home, "Choose your project folder" with a full home folder drew the list past the dialog and scrolled the page. Cause: the repository picker's later `.picker { display: grid }` rule also matched the folder dialog, so the list's `flex: 1` and the dialog's height limit no longer held.
+- The folder picker rule is now `.dialog.picker`, which outranks it. Measured in headless Chrome at 1920×1080 on a real home folder: before, the list ended at 1247 px and the page was 1301 px tall; after, the list ends at 822 px inside the dialog (bottom 894 px), the footer shows, and the page is 1080 px with no scroll. The dialog is back to its intended 42rem width.
+- Test: `test_folder_picker_list_scrolls_inside_the_dialog` pins the scoped rule; it fails on the previous CSS.
+- `pytest -q`: 863 passed, 1 skipped. `ruff check src tests`: all checks passed.

@@ -34,7 +34,7 @@ MAX_INTENT = 20_000
 MAX_DIRS = 400
 JOB_TIMEOUT = 1800
 CHECK_TIMEOUT = 15
-COMMANDS = ("verify", "probe", "hypotheses", "replay", "rerun", "fix", "post", "smoke", "setup")
+COMMANDS = ("verify", "probe", "hypotheses", "replay", "rerun", "fix", "ponytail", "post", "approve", "smoke", "setup")
 REF = re.compile(r"[A-Za-z0-9._/@{}^~-]{1,200}")
 KEY = re.compile(r"[\x21-\x7e]{8,512}")
 MODEL_NAME = re.compile(r"[A-Za-z0-9._:/@+-]{1,100}")
@@ -251,7 +251,7 @@ class Jobs:
         cli = [sys.executable, "-m", "proofmerge.cli"]
         if command in ("smoke", "setup"):
             return cli + [command], "", ""
-        if command in ("replay", "rerun", "fix", "post"):
+        if command in ("replay", "rerun", "fix", "ponytail", "post", "approve"):
             run_dir = runs.get(str(request.get("run", "")))
             if run_dir is None:
                 raise JobError("That run is no longer in the runs folder.")
@@ -263,9 +263,13 @@ class Jobs:
                 return cli + ["replay", proof, "--rerun", "--repo", repo], "", ""
             if command == "fix":
                 return cli + ["fix", proof, "--repo", repo], "", ""
+            if command == "ponytail":
+                return cli + ["ponytail", proof, "--repo", repo], "", ""
             number, mode = request.get("pr"), request.get("mode")
             if not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 10**7:
                 raise JobError("Which pull request? This run has no PR number.")
+            if command == "approve":
+                return cli + ["approve", proof, "--pr", str(number), "--repo", repo], "", ""
             if mode not in ("inline", "overall"):
                 raise JobError("Choose inline or overall.")
             return cli + ["post", proof, "--pr", str(number), "--repo", repo, "--mode", mode], "", ""

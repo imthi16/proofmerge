@@ -26,7 +26,7 @@ from proofmerge.dashboard_events import EventJournal, tail_events
 from proofmerge.dashboard_github import GH_CREDENTIALS
 
 PR_FIELDS = "number,title,author,headRefName,baseRefName,headRefOid,state,url,updatedAt,isDraft,body"
-PR_LIMIT = 50
+PR_LIMIT = 1000  # every open PR; the page searches them, it does not page
 CACHE_SECONDS = 60
 VERIFY_TIMEOUT = 1800
 MAX_BODY = 20_000
@@ -83,13 +83,17 @@ class PullRequests:
         self._remote = (name, url)
         return self._remote
 
+    def forget(self) -> None:
+        """Drop what GitHub answered for the previous account."""
+        self._cache = self._remote = None
+
     def pulls(self, refresh: bool = False) -> list[dict[str, Any]]:
         if self._cache and not refresh and time.monotonic() - self._cache[0] < CACHE_SECONDS:
             return self._cache[1]
         name, _ = self._repository()
         try:
             result = self._run(
-                ["gh", "pr", "list", "--repo", name, "--state", "all", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
+                ["gh", "pr", "list", "--repo", name, "--state", "open", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
                 cwd=self.repo, capture_output=True, text=True, timeout=30,
             )
         except FileNotFoundError:

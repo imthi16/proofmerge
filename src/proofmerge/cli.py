@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import tempfile
 import webbrowser
@@ -399,6 +400,86 @@ def post(
         raise typer.Exit(1) from None
     inline = len(review.get("comments", []))
     typer.echo(f"posted to {name}#{pr}: {inline} inline suggestion(s){', ' if inline else ''}review {url}")
+
+
+@app.command()
+def approve(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
+) -> None:
+    """Approve the pull request on GitHub. Only a PASS run, on the commit it checked, can approve."""
+    from proofmerge.pr_review import ReviewError, build_approval, post_review
+
+    if verify_manifest(proof_json.parent):
+        typer.echo("The evidence changed since the run; check it with replay before approving.", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        review = build_approval(proof)
+        # Hashes alone do not show the recorded decision is the one the evidence gives: recompute it,
+        # as replay does, so an edited PASS with a regenerated manifest cannot approve anything.
+        problems = rederive(proof)
+        if problems is None:
+            raise ReviewError("This run predates recorded verdict inputs, so its verdict cannot be recomputed. "
+                              "Verify the pull request again.")
+        if problems:
+            raise ReviewError("The recorded verdict does not follow from the evidence: " + "; ".join(problems[:3]))
+        _checked_commits(proof, repo)
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid,baseRefName"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if view.returncode or not name:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        current = json.loads(view.stdout)
+        if current["state"] != "OPEN":
+            raise ReviewError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to approve.")
+        if current["headRefOid"] != proof.head_sha:
+            raise ReviewError(f"PR #{pr} changed since this run (head {current['headRefOid'][:7]}, "
+                              f"checked {proof.head_sha[:7]}). Verify it again.")
+        # A retargeted PR keeps its head but gets another diff and other required checks: the base this
+        # run checked must still be part of the branch the PR now targets.
+        target = current["baseRefName"]
+        compare = subprocess.run(
+            ["gh", "api", f"repos/{name}/compare/{proof.base_sha}...{target}", "--jq", ".status"],
+            cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", target) or compare.stdout.strip() not in ("identical", "ahead"):
+            raise ReviewError(f"PR #{pr} now targets {target}, which does not contain the base this run checked "
+                              f"({proof.base_sha[:7]}). Verify it again.")
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+    except (OSError, ValueError, KeyError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"approve failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"approved {name}#{pr}: review {url}")
+
+
+@app.command()
+def ponytail(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+) -> None:
+    """Review the run's diff for over-engineering: what to delete, what replaces it.
+
+    Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
+    from proofmerge.ponytail import ponytail_dir, review_diff
+
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        context = get_context(repo, proof.base_sha, proof.head_sha)
+        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"ponytail failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for finding in report.findings:
+        typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
+    typer.echo(f"written: {ponytail_dir(proof_json.parent) / 'ponytail.json'}")
 
 
 def _outcomes(experiment: Experiment, revision: str) -> str:

@@ -459,6 +459,34 @@ def approve(
     typer.echo(f"approved {name}#{pr}: review {url}")
 
 
+@app.command("ponytail-diff")
+def ponytail_diff(
+    repo: Annotated[Path, typer.Argument(help="Git repository")],
+    base: Annotated[str, typer.Option(help="Base ref or SHA")],
+    head: Annotated[str, typer.Option(help="Head ref or SHA")],
+    out: Annotated[Path, typer.Option(help="Where to write the review (JSON)")],
+    intent_file: Annotated[Path | None, typer.Option(help="The pull request description")] = None,
+    label: Annotated[str, typer.Option(help="Name recorded in the review")] = "diff",
+) -> None:
+    """Review base..head for over-engineering: what to delete, what replaces it. No run needed.
+
+    Reads the diff only and never runs code. This is what the Pull requests page runs."""
+    from proofmerge.ponytail import review_pull_request
+
+    try:
+        context = get_context(repo, base, head)
+        intent = intent_file.read_text(encoding="utf-8") if intent_file else ""
+        report = review_pull_request(label, context.base_sha, context.head_sha, intent, MetaClient(max_calls=1),
+                                     context.diff_text, out)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"ponytail failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for finding in report.findings:
+        typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
+    typer.echo(f"written: {out}")
+
+
 @app.command()
 def ponytail(
     proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],

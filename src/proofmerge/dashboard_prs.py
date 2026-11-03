@@ -29,6 +29,7 @@ PR_FIELDS = "number,title,author,headRefName,baseRefName,headRefOid,state,url,up
 PR_LIMIT = 1000  # every open PR; the page searches them, it does not page
 CACHE_SECONDS = 60
 VERIFY_TIMEOUT = 1800
+PONYTAIL_TIMEOUT = 900
 MAX_BODY = 20_000
 MAX_JOURNALS = 10  # finished jobs whose events stay readable
 REPO_NAME = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
@@ -59,6 +60,7 @@ class PullRequests:
         self._lock = threading.Lock()
         self.job: dict[str, Any] | None = None
         self.journals: dict[str, EventJournal] = {}  # job id -> events, oldest first
+        self.pony: dict[str, Any] | None = None  # the Ponytail review's job, apart from verify's
 
     def _repository(self) -> tuple[str, str]:
         """The repository gh lists PRs from; fetching from it keeps list and fetch in step."""
@@ -145,6 +147,70 @@ class PullRequests:
                            data={"pr_number": number})
         threading.Thread(target=self._verify, args=(pr, run_id), daemon=True).start()
         return self.job
+
+    # Ponytail review: the diff only, so it needs no verify run, no Docker and one model call. ---------
+    def ponytail_path(self, pr: dict[str, Any]) -> Path:
+        return self.root / "ponytail" / f"pr-{pr['number']}-{pr['head_sha'][:7]}.json"
+
+    def ponytail_report(self, pr: dict[str, Any]) -> dict[str, Any] | None:
+        """The saved review of this PR at its current head commit, if there is one."""
+        from proofmerge.ponytail import load_report_file
+
+        report = load_report_file(self.ponytail_path(pr))
+        return None if report is None else report.model_dump(mode="json")
+
+    def start_ponytail(self, number: int) -> dict[str, Any]:
+        pr = next((p for p in self.pulls() if p["number"] == number), None)
+        if pr is None:
+            raise PrError(f"PR #{number} is not in the list.")
+        if pr["state"] != "OPEN":
+            raise PrError(f"PR #{number} is {pr['state'].lower()}; only open pull requests can be reviewed.")
+        if not _valid_branch(self.repo, pr["base"], self._run):
+            raise PrError(f"PR #{number} has an unusable base branch name.")
+        with self._lock:
+            if self.pony and self.pony["status"] == "running":
+                raise PrError(f"The Ponytail review of PR #{self.pony['number']} is still running.")
+            self.pony = {"number": number, "status": "running", "step": "Fetching the PR",
+                         "head_sha": pr["head_sha"], "error": None, "created": time.time()}
+        threading.Thread(target=self._ponytail, args=(pr,), daemon=True).start()
+        return self.pony
+
+    def _ponytail(self, pr: dict[str, Any]) -> None:
+        n = pr["number"]
+        head, base = f"refs/proofmerge/pr-{n}", f"refs/proofmerge/base-{n}"
+        job = self.pony
+
+        def finish(status: str, step: str, error: str | None = None) -> None:
+            job.update(status=status, step=step, error=error)
+
+        try:
+            fetched = self._step(["git", "-C", str(self.repo), *GH_CREDENTIALS, "fetch", "--no-tags",
+                                  f"{self._repository()[1]}.git",
+                                  f"+refs/pull/{n}/head:{head}", f"+refs/heads/{pr['base']}:{base}"], 300)
+            if fetched.returncode != 0:
+                finish("failed", "git fetch failed", "Could not fetch the pull request from GitHub.")
+                return
+            job["step"] = "Reading the diff (one model call)"
+            out = self.ponytail_path(pr)
+            with tempfile.TemporaryDirectory(prefix="proofmerge-pony-") as tmp:
+                intent = Path(tmp) / "intent.md"
+                intent.write_text(f"{pr['title']}\n\n{pr['body']}", encoding="utf-8")
+                done = self._step([
+                    sys.executable, "-m", "proofmerge.cli", "ponytail-diff", str(self.repo),
+                    "--base", base, "--head", head, "--intent-file", str(intent), "--label", f"pr-{n}",
+                    "--out", str(out),
+                ], PONYTAIL_TIMEOUT, self._environment())
+            if done.returncode == 0 and out.is_file():
+                finish("done", "Finished")
+            else:
+                tail = ((done.stderr or "") + (done.stdout or "")).strip()[-400:]
+                finish("failed", "The review did not finish", tail or "The review did not produce a result.")
+        except subprocess.TimeoutExpired:
+            finish("failed", "Timed out", "The review took too long and was stopped.")
+        except OSError as error:
+            finish("failed", f"Could not start: {type(error).__name__}", "Could not start the review.")
+        except PrError as error:
+            finish("failed", str(error), str(error))
 
     def _step(self, argv: list[str], timeout: int, env: dict[str, str] | None = None) -> Any:
         extra = {} if env is None else {"env": env}

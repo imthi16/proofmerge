@@ -153,6 +153,7 @@ class FakeRunner:
         self.head_sha, self.verify_code, self.calls = head_sha, verify_code, []
         self.done = threading.Event()
         self.gate: threading.Event | None = None  # when set, verify waits for it
+        self.pony_code = 0
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -171,6 +172,16 @@ class FakeRunner:
             (evidence / "proof.json").write_text("{}")
             self.done.set()
             return SimpleNamespace(returncode=self.verify_code, stdout="verdict: BLOCK\n", stderr="")
+        if "ponytail-diff" in argv:
+            self.pony_argv = argv
+            self.pony_intent = Path(argv[argv.index("--intent-file") + 1]).read_text()
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "One-implementation base class.",
+                              "replacement": "Inline it."}],
+                "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": self.head_sha, "calls": 1}))
+            return SimpleNamespace(returncode=self.pony_code, stdout="", stderr="ponytail failed: boom")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
@@ -387,3 +398,46 @@ def test_repo_picker_declares_every_hook_before_its_early_returns() -> None:
     body = js.split("function RepoPicker(", 1)[1].split("\n  function ", 1)[0]
     after = body[body.index("if (!gh) return"):]
     assert not re.search(r"\buse(State|Effect|Ref|Callback|Memo|Context)\(", after)
+
+
+def post_json(base: str, token: str, path: str, body: dict) -> tuple[int, dict]:
+    sent = {"Content-Type": "application/json", "Origin": base, "X-ProofMerge-Token": token}
+    status, _, reply = fetch(base + path, "POST", sent, json.dumps(body).encode())
+    return status, json.loads(reply)
+
+
+def wait_for(predicate, seconds: float = 5.0) -> None:
+    deadline = time.time() + seconds
+    while not predicate():
+        assert time.time() < deadline, "timed out"
+        time.sleep(0.02)
+
+
+def test_the_pull_requests_page_runs_a_ponytail_review_without_a_verify_run(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert json.loads(fetch(base + "/api/prs")[2])["prs"][0]["ponytail"] is None
+    status, job = post_json(base, token, "/api/ponytail", {"number": 7})
+    assert status == 202 and job["status"] == "running"
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    assert pr["ponytail"]["findings"][0]["tag"] == "yagni" and pr["ponytail"]["net_lines"] == 9
+    assert PRS[0]["title"] in runner.pony_intent  # the PR title and body are the intent
+    assert not any("verify" in call for call in runner.calls)  # no run, no sandbox
+    assert any(call[:1] == ["git"] and "fetch" in call for call in runner.calls)
+
+
+def test_a_failed_ponytail_review_says_why_and_a_closed_pr_is_refused(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    runner.pony_code = 1
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "failed")
+    assert "boom" in json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["error"]
+    PRS[0]["state"] = "MERGED"
+    try:
+        wait_for(lambda: json.loads(fetch(base + "/api/prs?refresh=1")[2])["prs"][0]["state"] == "MERGED")
+        status, reply = post_json(base, token, "/api/ponytail", {"number": 7})
+        assert status == 409 and "only open pull requests" in reply["error"]
+    finally:
+        PRS[0]["state"] = "OPEN"

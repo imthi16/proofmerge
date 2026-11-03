@@ -280,7 +280,7 @@
     const models = writer === checker ? `${writer} wrote and checked the tests` : `${writer} wrote the tests, ${checker} checked them`;
     // The id is relative to the dashboard folder, so the command uses the absolute path.
     const replay = `proofmerge replay '${summary.proof_path.replaceAll("'", "'\\''")}'`;
-    return html`<aside class="panel detail" aria-label=${"Run " + id}>
+    return html`<${React.Fragment}><aside class="panel detail" aria-label=${"Run " + id}>
       <div class="detail-head">
         <span class=${"decision " + decision}>${decision}</span>
         <strong>${HEADLINE[decision]}</strong>
@@ -310,6 +310,8 @@
       </div>
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
+    </aside>
+    <section class="panel evidence" aria-label=${"Evidence for run " + id}>
       <h2>Hypotheses and probes</h2>
       ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
         <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}} />`)
@@ -325,7 +327,7 @@
         <div>${c.statement}</div>
         ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
       </div>`)}
-    </aside>`;
+    </section><//>`;
   }
 
   function RunsView({ index, selected, onSelect }) {
@@ -389,7 +391,7 @@
         <span class="muted" style=${{ fontSize: ".88rem" }}>${runs.length} shown</span>
         <button class="ghost" type="button" onClick=${exportCsv} disabled=${!runs.length}>Export CSV</button>
       </div>
-      <div class="split">
+      <div class="split runs-split">
         ${runs.length ? html`<${RunsTable} runs=${runs} selected=${selected} onSelect=${pick} sort=${sort} setSort=${setSort} />`
           : html`<div class="panel empty"><strong>No run matches</strong>Change the search or filters.</div>`}
         <${Detail} key=${selected} id=${selected} />

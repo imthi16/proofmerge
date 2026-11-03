@@ -38,7 +38,7 @@ tests; Muse Wonder 1.0 checks Spark's work. [MIT licensed](LICENSE).
 
 ## Use it without a terminal
 
-<img alt="The ProofMerge app in the browser: the Runs page with three BLOCK runs and one REVIEW run, every one marked 'evidence intact', and the selected run's verdict, BLOCK, 'Verified regression — do not merge', with its reasons, commits, model calls and the line 'Muse Spark wrote the tests, Muse Wonder checked them'." src="docs/assets/app-runs.png" width="100%">
+<img alt="The ProofMerge app in the browser: the Runs page. On the left, three BLOCK runs and one REVIEW run, every one marked 'evidence intact', with the selected run's verdict, BLOCK, below the list. On the right, its evidence: hypothesis H1, 'Cached SKU bypasses unknown-tenant check', whose probe passed on base 9dcc104 in all three attempts and failed on head 32dff53 in all three." src="docs/assets/app-runs.png" width="100%">
 
 `proofmerge app` opens ProofMerge in your browser and does everything the
 command line does. It was built for people who never open a terminal:

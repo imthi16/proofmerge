@@ -716,3 +716,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Found while capturing: beside the detail, the Base → head column squeezed run names to a few characters a line at 1280 px. Between 64rem and 110rem that column now hides, as the PR branch column already does; the detail shows both SHAs.
 - The walkthrough video and its GIF were not re-recorded (the recording harness is not in the repository); the README now says they predate the visual refresh.
 - `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T73 Runs page: verdict under the list, evidence beside it (Claude)
+- Found in the app: with one run, the Runs page was a short list on the left and a long detail on the right, so the left half stood empty for most of the page.
+- The run detail is now two panels in a grid: the summary (verdict, reasons, commits, models, actions) sits under the run list and stays in view while scrolling; the evidence (hypotheses and probes, test-tamper guard, intent claims) takes the right column. The narrow list keeps verdict, name and regressions; the SHAs and the call count are in the summary. Below 64rem everything stacks: list, summary, evidence.
+- Checked in Chrome at 1440×900, 1280×800 and 390×844 with the real Claude run `pr-75-479d672`: no horizontal scroll; after scrolling 1,500 px the summary stays 24 px from the top on both wide sizes. `docs/assets/app-runs.png` re-captured in this layout (copies of the committed demo runs, as in T72).
+- `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.

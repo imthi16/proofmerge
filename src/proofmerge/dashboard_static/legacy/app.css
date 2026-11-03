@@ -627,7 +627,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 /* Runs: the list is a rail. One run reads top to bottom beside it: its verdict with the facts next to
    it, the actions, then the evidence. */
 .runs-split { grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-  grid-template-areas: "list summary" "list evidence"; grid-template-rows: auto 1fr; gap: 1rem; align-items: start; }
+  grid-template-areas: "list summary"; gap: 1rem; align-items: start; }
 .runs-split > :first-child { grid-area: list; }
 .runs-split > .detail { grid-area: summary; }
 /* With room for it, the facts sit beside the verdict instead of under it. */
@@ -638,7 +638,6 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .runs-split > .detail > .facts { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; padding-top: 0; border-top: 0; align-self: start; }
   .runs-split > .detail > :not(.detail-head, .reasons, .facts) { grid-column: 1 / -1; }
 }
-.runs-split > .evidence { grid-area: evidence; padding: 1.6rem 1.75rem; min-width: 0; }
 /* The facts show the SHAs and the call count, so the narrow rail keeps verdict, name and regressions. */
 .runs-split .runs { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); }
 .runs-split .runs .hide-sm { display: none; }
@@ -650,7 +649,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 @keyframes evidence-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .evidence { animation: evidence-in .5s var(--ease) .08s both; }
 @media (max-width: 64rem) {
-  .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary" "evidence"; grid-template-rows: none; }
+  .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary"; }
   .runs-split .runs { position: static; max-height: 40vh; }
 }
 /* Phones: the benchmark tables and the PR list fit the width instead of pushing the page sideways. */
@@ -708,3 +707,5 @@ pre.diff .hunk { color: var(--brand); }
 /* `.recent-list button` styles the whole card; the close button is not a card. */
 .recent-list button.recent-x { display: inline-flex; width: auto; padding: .3rem; border: 0; background: none; box-shadow: none; transform: none; }
 .recent-list button.recent-x:hover { background: var(--raised); border: 0; transform: none; }
+.fixes { margin-top: 1.5rem; }
+.fixes h3 { margin-top: 0; }

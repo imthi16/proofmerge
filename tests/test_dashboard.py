@@ -441,3 +441,10 @@ def test_a_failed_ponytail_review_says_why_and_a_closed_pr_is_refused(pr_server)
         assert status == 409 and "only open pull requests" in reply["error"]
     finally:
         PRS[0]["state"] = "OPEN"
+
+
+def test_the_runs_page_leaves_the_evidence_to_the_full_report() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
+    assert 'class="panel evidence"' not in detail and "<${Hypothesis}" not in detail
+    assert "/report?id=" in detail and 'aria-label="Suggested fixes"' in detail  # the report link and the fixes stay

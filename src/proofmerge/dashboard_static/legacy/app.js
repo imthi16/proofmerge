@@ -270,10 +270,10 @@
         .catch((error) => live && setState({ error: error.message }));
       return () => { live = false; };
     }, [id, fixDone]);
-    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict, probes and evidence show here.</aside>`;
+    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict and a link to its full report show here.</aside>`;
     if (state.error) return html`<aside class="panel detail"><div class="error-box">Could not load this run: ${state.error}</div></aside>`;
     if (state.loading) return html`<aside class="panel detail muted">Loading ${id}…</aside>`;
-    const { summary, proof, probes, failures, logs, fix } = state.data;
+    const { summary, proof, fix } = state.data;
     // Runs started from the Pull requests page are named pr-<number>-<sha>-<time>.
     const prNumber = Number((/^pr-(\d+)-[0-9a-f]{7}-\d+$/.exec(id) || [])[1]) || 0;
     const decision = proof.verdict.decision;
@@ -326,27 +326,15 @@
           <${Icon} name="shield" />Approve PR #${prNumber}</button>
         <span class="muted fix-note">PASS means no regression was found in the tested scope, not that the change is correct.</span>
       </div>` : null}
+      ${fix && fix.fixes.length ? html`<section class="fixes" aria-label="Suggested fixes">
+        <h3>Suggested fixes</h3>
+        ${fix.fixes.map((f) => html`<div key=${f.hypothesis_id}>
+          <p class="meta"><code>${f.hypothesis_id}</code> ${proof.hypotheses.hypotheses.find((h) => h.id === f.hypothesis_id)?.title || ""}</p>
+          <${FixView} fix=${f} /></div>`)}
+      </section>` : null}
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
-    <section class="panel evidence" aria-label=${"Evidence for run " + id}>
-      <h2>Hypotheses and probes</h2>
-      ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
-        <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}}
-          fix=${fix?.fixes.find((f) => f.hypothesis_id === h.id)} />`)
-        : html`<p class="muted">No hypotheses were recorded for this run.</p>`}
-      <h2>Test-tamper guard</h2>
-      ${proof.tamper_findings.length ? html`<ul class="reasons">${proof.tamper_findings.map((t, i) => html`<li key=${i}>
-        <code>${t.test_path}</code>${t.test_name ? html` :: <code>${t.test_name}</code>` : null} — ${t.kind}${t.base_test_on_head_outcome ? `, base test on head: ${t.base_test_on_head_outcome}` : ""}</li>`)}</ul>`
-        : html`<p class="muted">No tamper finding was recorded.</p>`}
-      <h2>Intent claims</h2>
-      ${proof.intent.claims.map((c) => html`<div key=${c.id} style=${{ marginBottom: ".6rem" }}>
-        <code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span>
-        ${proof.contested_claim_ids.includes(c.id) ? html` <span class="kind">contested by ${checker}</span>` : null}
-        <div>${c.statement}</div>
-        ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
-      </div>`)}
-    </section>
     ${approving ? html`<${ConfirmApprove} pr=${prNumber} onCancel=${() => setApproving(false)}
       onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
     ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} onCancel=${() => setPosting(false)}

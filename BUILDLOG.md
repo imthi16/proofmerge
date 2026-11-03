@@ -809,3 +809,8 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Real run in Chrome (system Chrome through Playwright, Claude Code backend) on the author's repository: PR #75 (+83/-1) finished in 19 s and PR #74 (+14,984/-712, far over the diff budget) in 12 s, both showing findings with no page errors.
 - Tests: two dashboard tests (the review runs without any verify call and its result is listed on the PR; a failed review says why and a merged PR is refused). Account switching is also refused while a Ponytail review runs.
 - Not checked: the Control Center (`/`) Pull requests page, which has no Ponytail button; the Docker sandbox tests locally.
+
+### 2026-11-03 — T88 Runs page: the evidence stays in the full report (Claude)
+- The author asked for the detail on the right of the Runs tab to go, since the full report already has it. The evidence panel (hypotheses and probes, tamper guard, intent claims) is removed from the Runs page; `report.html` and its **Open full report** button are unchanged. Suggested fixes were shown inside the hypotheses, so they now have their own "Suggested fixes" block under the actions and stay visible. The run's verdict, reasons and facts stay.
+- Checked in real Chrome on a copy of the demo runs with a fix result written beside one run: no evidence panel and no hypothesis cards, the report button and the fix block present, no horizontal overflow at 1600 and 390 px, no page errors.
+- Not checked: the Control Center (`/`) Runs page, which is separate code.

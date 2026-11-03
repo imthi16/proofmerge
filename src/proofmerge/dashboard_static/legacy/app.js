@@ -260,6 +260,9 @@
     const [state, setState] = useState({ loading: true });
     const [posting, setPosting] = useState(false);
     const [approving, setApproving] = useState(false);
+    const { gh } = useGitHub();  // who a post or an approval would be made as
+    const account = gh?.user || "";
+    const accountCount = gh?.accounts?.length || 0;
     const fixDone = ctx.job?.command === "fix" && ctx.job.status !== "running" ? ctx.job.finished : 0;
     useEffect(() => {
       if (!id) return;
@@ -270,10 +273,10 @@
         .catch((error) => live && setState({ error: error.message }));
       return () => { live = false; };
     }, [id, fixDone]);
-    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict, probes and evidence show here.</aside>`;
+    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict and a link to its full report show here.</aside>`;
     if (state.error) return html`<aside class="panel detail"><div class="error-box">Could not load this run: ${state.error}</div></aside>`;
     if (state.loading) return html`<aside class="panel detail muted">Loading ${id}…</aside>`;
-    const { summary, proof, probes, failures, logs, fix } = state.data;
+    const { summary, proof, fix } = state.data;
     // Runs started from the Pull requests page are named pr-<number>-<sha>-<time>.
     const prNumber = Number((/^pr-(\d+)-[0-9a-f]{7}-\d+$/.exec(id) || [])[1]) || 0;
     const decision = proof.verdict.decision;
@@ -316,40 +319,28 @@
           title=${ctx.settings.project ? "The model writes a fix for each verified regression; ProofMerge re-runs the failing probe on it in the sandbox" : "Choose the project on Home first"}>
           <${Icon} name="spark" />${fix ? "Suggest the fix again" : "Suggest a fix"}</button>
         ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
-          title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}</button>` : null}
+          title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
       </div>` : null}
       ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
         <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
           onClick=${() => setApproving(true)}
           title=${ctx.settings.project ? "Approves the pull request on GitHub as you, after you confirm" : "Choose the project on Home first"}>
-          <${Icon} name="shield" />Approve PR #${prNumber}</button>
+          <${Icon} name="shield" />Approve PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>
         <span class="muted fix-note">PASS means no regression was found in the tested scope, not that the change is correct.</span>
       </div>` : null}
+      ${fix && fix.fixes.length ? html`<section class="fixes" aria-label="Suggested fixes">
+        <h3>Suggested fixes</h3>
+        ${fix.fixes.map((f) => html`<div key=${f.hypothesis_id}>
+          <p class="meta"><code>${f.hypothesis_id}</code> ${proof.hypotheses.hypotheses.find((h) => h.id === f.hypothesis_id)?.title || ""}</p>
+          <${FixView} fix=${f} /></div>`)}
+      </section>` : null}
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
-    <section class="panel evidence" aria-label=${"Evidence for run " + id}>
-      <h2>Hypotheses and probes</h2>
-      ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
-        <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}}
-          fix=${fix?.fixes.find((f) => f.hypothesis_id === h.id)} />`)
-        : html`<p class="muted">No hypotheses were recorded for this run.</p>`}
-      <h2>Test-tamper guard</h2>
-      ${proof.tamper_findings.length ? html`<ul class="reasons">${proof.tamper_findings.map((t, i) => html`<li key=${i}>
-        <code>${t.test_path}</code>${t.test_name ? html` :: <code>${t.test_name}</code>` : null} — ${t.kind}${t.base_test_on_head_outcome ? `, base test on head: ${t.base_test_on_head_outcome}` : ""}</li>`)}</ul>`
-        : html`<p class="muted">No tamper finding was recorded.</p>`}
-      <h2>Intent claims</h2>
-      ${proof.intent.claims.map((c) => html`<div key=${c.id} style=${{ marginBottom: ".6rem" }}>
-        <code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span>
-        ${proof.contested_claim_ids.includes(c.id) ? html` <span class="kind">contested by ${checker}</span>` : null}
-        <div>${c.statement}</div>
-        ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
-      </div>`)}
-    </section>
-    ${approving ? html`<${ConfirmApprove} pr=${prNumber} onCancel=${() => setApproving(false)}
+    ${approving ? html`<${ConfirmApprove} pr=${prNumber} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setApproving(false)}
       onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
-    ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} onCancel=${() => setPosting(false)}
+    ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setPosting(false)}
       onConfirm=${(mode) => { setPosting(false); ctx.start({ command: "post", run: id, project: ctx.settings.project, pr: prNumber, mode }); }} />` : null}<//>`;
   }
 
@@ -389,7 +380,14 @@
     </div>`;
   }
 
-  function ConfirmPost({ pr, fix, onConfirm, onCancel }) {
+  // Which GitHub account the action is made as, and a way to change it when there are several.
+  function ActingAs({ account, accounts, onSetup }) {
+    return html`<p class="acting">${account
+      ? html`Acting as <strong>@${account}</strong>${accounts > 1 ? html` <button class="copy" type="button" onClick=${onSetup}>Use another account</button>` : null}`
+      : "Acting as your signed-in GitHub account."}</p>`;
+  }
+
+  function ConfirmPost({ pr, fix, account, accounts, onSetup, onConfirm, onCancel }) {
     const [mode, setMode] = useState("inline");
     const cancel = useRef(null);
     useEffect(() => {
@@ -403,7 +401,8 @@
     return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
       <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="post-title">
         <h3 id="post-title">Post to PR #${pr}?</h3>
-        <p>ProofMerge posts one review comment as your GitHub account: the verdict, its reasons${fix ? " and the suggested fixes" : ""}.
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge posts one review comment: the verdict, its reasons${fix ? " and the suggested fixes" : ""}.
           It never approves or requests changes.</p>
         ${fix ? null : html`<p class="note">No fix has been suggested for this run, so only the verdict is posted.</p>`}
         <div class="post-modes" role="radiogroup" aria-label="Where to post">${options.map(([value, label, note]) => html`
@@ -418,7 +417,7 @@
     </div>`;
   }
 
-  function ConfirmApprove({ pr, onConfirm, onCancel }) {
+  function ConfirmApprove({ pr, account, accounts, onSetup, onConfirm, onCancel }) {
     const cancel = useRef(null);
     useEffect(() => {
       cancel.current?.focus();
@@ -429,7 +428,8 @@
     return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
       <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="approve-title">
         <h3 id="approve-title">Approve PR #${pr}?</h3>
-        <p>ProofMerge approves the pull request as your GitHub account, on the commit it checked. If the pull request
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge approves the pull request on the commit it checked. If the pull request
           has changed since this run, nothing is posted.</p>
         <p class="note">PASS means no regression was found within the tested scope. It does not prove the change correct.</p>
         <div class="actions">

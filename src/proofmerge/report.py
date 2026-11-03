@@ -201,6 +201,20 @@ def _plural(n: int, word: str, plural: str = "") -> str:
     return f"{n} {word if n == 1 else plural or word + 's'}"
 
 
+def model_names(proof: Proof) -> tuple[str, str]:
+    """Who wrote the tests and who checked them, as this run recorded it (Meta's Muse models
+    when the proof predates the record)."""
+    usage = proof.model_usage
+    if (usage.endpoint or "").startswith("cli:"):
+        return "Claude", "Claude"  # claude-cli is the only CLI backend
+
+    def name(role: str, muse: str) -> str:
+        model = usage.models.get(role, "")
+        return muse if not model or model.startswith("muse-") else model
+
+    return name("spark", "Muse Spark"), name("wonder", "Muse Wonder")
+
+
 def scope_receipt(proof: Proof) -> list[str]:
     """What this run actually checked, in plain sentences: the limits of its verdict."""
     ids = [h.id for h in proof.hypotheses.hypotheses]
@@ -209,7 +223,8 @@ def scope_receipt(proof: Proof) -> list[str]:
     # A probe counts as evidence only if it passed on base every time (probe-validity rule).
     valid = [i for i, e in probes.items()
              if all(r.outcome == "PASS" for r in e.executions if r.revision == "base")]
-    lines = [f"Spark proposed {_plural(len(ids), 'hypothesis', 'hypotheses')}."]
+    writer = model_names(proof)[0].removeprefix("Muse ")  # "Spark proposed", as before
+    lines = [f"{writer} proposed {_plural(len(ids), 'hypothesis', 'hypotheses')}."]
     # Tamper experiments (T1, T2…) are one run per changed test file whose base version exists.
     tamper_runs = [e for e in proof.experiments if e.hypothesis_id not in ids and e.executions]
     if probes:
@@ -249,6 +264,7 @@ def _banner(proof: Proof) -> str:
 
 def _claims(proof: Proof) -> str:
     e = html.escape
+    checker = e(model_names(proof)[1])
     blocks = []
     for claim in proof.intent.claims:
         quote = (
@@ -257,7 +273,7 @@ def _claims(proof: Proof) -> str:
             else '<p class="muted">implicit claim — not stated in the intent text</p>'
         )
         contested = (
-            ' <span class="kind contested">contested by Muse Wonder</span>'
+            f' <span class="kind contested">contested by {checker}</span>'
             if claim.id in proof.contested_claim_ids else ""
         )
         blocks.append(
@@ -388,6 +404,7 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
     experiments = {exp.hypothesis_id: exp for exp in proof.experiments}
     findings = {f.hypothesis_id: f for f in proof.findings}
     claims = {c.id: c for c in proof.intent.claims}
+    checker = e(model_names(proof)[1])
     cards = []
     for h in proof.hypotheses.hypotheses:
         experiment = experiments.get(h.id)
@@ -397,13 +414,13 @@ def _cards(proof: Proof, evidence_dir: Path) -> str:
         verified = " (verified)" if finding is not None and finding.verified else ""
         intended = " · possibly intended" if h.possibly_intended else ""
         mismatch = (
-            '<p class="note">Muse Wonder: probe may not test this hypothesis</p>'
+            f'<p class="note">{checker}: probe may not test this hypothesis</p>'
             if h.id in proof.mismatched_probe_ids else ""
         )
         explained = ""
         if h.id in proof.explained_probe_ids:
             change_id = proof.explained_probe_claim_ids.get(h.id, "")
-            explained = f'<p class="note">Muse Wonder: may be the intended change {e(change_id)}</p>'
+            explained = f'<p class="note">{checker}: may be the intended change {e(change_id)}</p>'
         cards.append(
             f'<section class="card"><h3><code>{e(h.id)}</code> {e(h.title)}</h3>'
             f"{_cited(claim, h.claim_id)}{mismatch}{explained}"

@@ -546,7 +546,7 @@ def probe(
         typer.echo(f"{experiment.hypothesis_id}: base {grid['base']}  head {grid['head']}")
     for p in probes:
         if not p.test_source:
-            typer.echo(f"{p.hypothesis_id}: Spark wrote no probe (untestable with public names)")
+            typer.echo(f"{p.hypothesis_id}: no probe written (untestable with public names)")
         elif not p.passed_on_base:
             typer.echo(f"{p.hypothesis_id}: no probe passed on base after {p.drafts} drafts")
     _echo_usage(client)

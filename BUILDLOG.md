@@ -764,3 +764,7 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `approve` trusted the manifest alone: a BLOCK bundle relabelled PASS with a regenerated manifest would have been accepted. It now recomputes the verdict with `rederive`, as `replay` does, and refuses a decision that does not follow from the evidence, or a run that predates recorded verdict inputs.
 - A PR retargeted to another branch keeps its head SHA, so the head check passed while the diff and the required checks differed. `approve` now also requires the base this run checked to still be part of the branch the PR targets (`gh api compare/<base>...<target>` answers identical or ahead).
 - Tests: `test_an_edited_pass_cannot_approve_even_with_a_new_manifest` (real pipeline run, relabelled and resealed), and the approve refusals now cover a retargeted base. `pytest -q --ignore=tests/test_docker_sandbox.py`: 904 passed, 1 skipped. `ruff check src tests`: clean.
+
+### 2026-11-03 — T82 review fix (Claude)
+- The logo only reached the legacy page (`/app/`); `/` and the Control Center routes serve `app/index.html`, which had no icon and a text-only brand. `ui/index.html` now links `ui/public/icon.svg`, `App.tsx` shows it in the header, and the committed build was regenerated (`npm run build`). The same sources built before the change reproduced the committed hashes exactly, so the CI "committed build matches" check holds.
+- `npm run lint`, `typecheck` and `npm test` (20 tests) pass locally. The Playwright e2e was not run locally; CI runs it.

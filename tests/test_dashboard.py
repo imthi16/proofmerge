@@ -361,6 +361,8 @@ def test_app_icon_is_served_and_linked_without_scripts() -> None:
     assert icon.startswith("<svg") and not re.search(r"<script|<image|href=|onload", icon)
     assert 'rel="icon"' in (legacy / "index.html").read_text()
     assert "/static/legacy/icon.svg" in (legacy / "app.js").read_text()
+    app = legacy.parent / "app"  # the Control Center, which answers "/"
+    assert (app / "icon.svg").read_text() == icon and "/static/app/icon.svg" in (app / "index.html").read_text()
 
 def test_dialog_stays_fixed_to_the_window() -> None:
     # `.scrim` is position: fixed, but a filling transform animation on `.page` or `.detail` makes

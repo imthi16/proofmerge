@@ -441,6 +441,30 @@ def approve(
     typer.echo(f"approved {name}#{pr}: review {url}")
 
 
+@app.command()
+def ponytail(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+) -> None:
+    """Review the run's diff for over-engineering: what to delete, what replaces it.
+
+    Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
+    from proofmerge.ponytail import ponytail_dir, review_diff
+
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        context = get_context(repo, proof.base_sha, proof.head_sha)
+        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"ponytail failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for finding in report.findings:
+        typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
+    typer.echo(f"written: {ponytail_dir(proof_json.parent) / 'ponytail.json'}")
+
+
 def _outcomes(experiment: Experiment, revision: str) -> str:
     return "".join(
         execution.outcome[0]

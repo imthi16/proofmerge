@@ -96,6 +96,11 @@ are `proofmerge fix <proof.json> --repo <repo>` and
 `proofmerge post <proof.json> --pr <n> --repo <repo> --mode inline|overall`
 (`--dry-run` prints the review instead of posting it).
 
+Any run also has a **Ponytail review** button (`proofmerge ponytail <proof.json> --repo <repo>`). One model call
+reads the pull request's diff and lists what could be deleted or shortened, in the form `location: tag: what.
+replacement`, using the rules of the [ponytail-review](https://github.com/DietrichGebert/ponytail) skill (MIT). It
+looks at over-engineering only, never runs code and never changes the verdict.
+
 A **PASS** run shows **Approve PR #n** instead. After you confirm, ProofMerge approves the pull request as your
 GitHub account, but only on the commit it checked: if the PR has new commits, nothing is posted. From a terminal:
 `proofmerge approve <proof.json> --pr <n> --repo <repo> [--dry-run]`. PASS means no regression was found within the

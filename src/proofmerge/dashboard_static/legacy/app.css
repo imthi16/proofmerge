@@ -698,3 +698,8 @@ pre.diff .hunk { color: var(--brand); }
 .post-mode input { margin-top: .2rem; }
 .post-mode > span { display: grid; gap: .15rem; font-size: .9rem; }
 .post-mode .muted { font-size: .82rem; }
+
+/* Ponytail review: its own block under the actions. */
+.ponytail { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
+.ponytail h4 { margin: 0 0 .4rem; font-size: .95rem; }
+.ponytail h4 .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }

@@ -114,9 +114,7 @@ def test_only_a_pass_run_can_approve() -> None:
     assert "ProofMerge: PASS" in review["body"] and "comments" not in review
 
 
-def test_approve_command_refuses_a_stale_or_closed_pr(monkeypatch, tmp_path: Path) -> None:
-    from typer.testing import CliRunner
-
+def approve_setup(monkeypatch, tmp_path: Path):
     from proofmerge import cli
 
     block = proof()
@@ -124,20 +122,38 @@ def test_approve_command_refuses_a_stale_or_closed_pr(monkeypatch, tmp_path: Pat
     (tmp_path / "proof.json").write_text(passed.model_dump_json())
     monkeypatch.setattr(cli, "verify_manifest", lambda _dir: [])
     monkeypatch.setattr(cli, "_checked_commits", lambda *_: None)
-    state = {"state": "OPEN", "headRefOid": passed.head_sha}
+    monkeypatch.setattr(cli, "rederive", lambda _proof: [])
+    state = {"state": "OPEN", "headRefOid": passed.head_sha, "baseRefName": "main", "compare": "ahead"}
 
     def gh(argv, **_):
+        if argv[1] == "api":
+            return SimpleNamespace(returncode=0, stdout=state["compare"], stderr="")
         out = "o/r" if argv[1] == "repo" else json.dumps(state)
         return SimpleNamespace(returncode=0, stdout=out, stderr="")
 
     monkeypatch.setattr(cli.subprocess, "run", gh)
     args = ["approve", str(tmp_path / "proof.json"), "--pr", "7", "--repo", str(tmp_path), "--dry-run"]
+    return cli, state, args
+
+
+def test_approve_command_refuses_a_stale_closed_or_retargeted_pr(monkeypatch, tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    cli, state, args = approve_setup(monkeypatch, tmp_path)
     ok = CliRunner().invoke(cli.app, args)
     assert ok.exit_code == 0 and '"event": "APPROVE"' in ok.output
-    for change, text in (({"headRefOid": "f" * 40}, "changed since this run"), ({"state": "MERGED"}, "merged")):
-        state |= change
+    healthy = dict(state)
+    for change, text in (
+        ({"headRefOid": "f" * 40}, "changed since this run"),
+        ({"state": "MERGED"}, "merged"),
+        ({"compare": "diverged"}, "does not contain the base"),
+        ({"baseRefName": "x?y"}, "does not contain the base"),
+    ):
+        state.clear()
+        state.update(healthy | change)
         bad = CliRunner().invoke(cli.app, args)
-        assert bad.exit_code == 1 and text in bad.output
+        assert bad.exit_code == 1 and text in bad.output, (change, bad.output)
+
 
 def test_a_shared_fix_keeps_each_probes_own_status() -> None:
     shared = report()  # H1: verified, probe PPP -> PPP

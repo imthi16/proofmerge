@@ -755,3 +755,8 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - A regression against a contested claim (a REVIEW matter in `verdict`) no longer gets a fix.
 - Two regressions that share one patch are still posted once, but each now carries its own probe status; before, one verified probe stood for the whole group.
 - Tests: `test_a_probe_path_that_leaves_the_evidence_is_never_read` (parent path, absolute path, symlink), `test_a_regression_against_a_contested_claim_gets_no_fix`, `test_a_shared_fix_keeps_each_probes_own_status`. `pytest -q --ignore=tests/test_docker_sandbox.py`: 893 passed, 1 skipped. `ruff check src tests`: clean.
+
+### 2026-11-03 — T79 review fixes (Claude)
+- `approve` trusted the manifest alone: a BLOCK bundle relabelled PASS with a regenerated manifest would have been accepted. It now recomputes the verdict with `rederive`, as `replay` does, and refuses a decision that does not follow from the evidence, or a run that predates recorded verdict inputs.
+- A PR retargeted to another branch keeps its head SHA, so the head check passed while the diff and the required checks differed. `approve` now also requires the base this run checked to still be part of the branch the PR targets (`gh api compare/<base>...<target>` answers identical or ahead).
+- Tests: `test_an_edited_pass_cannot_approve_even_with_a_new_manifest` (real pipeline run, relabelled and resealed), and the approve refusals now cover a retargeted base. `pytest -q --ignore=tests/test_docker_sandbox.py`: 904 passed, 1 skipped. `ruff check src tests`: clean.

@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import tempfile
 import webbrowser
@@ -417,10 +418,18 @@ def approve(
     try:
         proof = Proof.model_validate_json(proof_json.read_text())
         review = build_approval(proof)
+        # Hashes alone do not show the recorded decision is the one the evidence gives: recompute it,
+        # as replay does, so an edited PASS with a regenerated manifest cannot approve anything.
+        problems = rederive(proof)
+        if problems is None:
+            raise ReviewError("This run predates recorded verdict inputs, so its verdict cannot be recomputed. "
+                              "Verify the pull request again.")
+        if problems:
+            raise ReviewError("The recorded verdict does not follow from the evidence: " + "; ".join(problems[:3]))
         _checked_commits(proof, repo)
         name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
                               cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
-        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid"],
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid,baseRefName"],
                               cwd=repo, capture_output=True, text=True, timeout=30, check=False)
         if view.returncode or not name:
             raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
@@ -430,6 +439,15 @@ def approve(
         if current["headRefOid"] != proof.head_sha:
             raise ReviewError(f"PR #{pr} changed since this run (head {current['headRefOid'][:7]}, "
                               f"checked {proof.head_sha[:7]}). Verify it again.")
+        # A retargeted PR keeps its head but gets another diff and other required checks: the base this
+        # run checked must still be part of the branch the PR now targets.
+        target = current["baseRefName"]
+        compare = subprocess.run(
+            ["gh", "api", f"repos/{name}/compare/{proof.base_sha}...{target}", "--jq", ".status"],
+            cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", target) or compare.stdout.strip() not in ("identical", "ahead"):
+            raise ReviewError(f"PR #{pr} now targets {target}, which does not contain the base this run checked "
+                              f"({proof.base_sha[:7]}). Verify it again.")
         if dry_run:
             typer.echo(json.dumps(review, indent=2))
             return

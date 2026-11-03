@@ -56,6 +56,16 @@ def test_an_edited_decision_fails_even_with_a_new_manifest(tmp_path):
     )
 
 
+def test_an_edited_pass_cannot_approve_even_with_a_new_manifest(tmp_path):
+    _, evidence, _, _ = execute(tmp_path)
+    reseal(evidence, lambda data: data["verdict"].update(decision="PASS"))
+    result = CliRunner().invoke(
+        cli.app, ["approve", str(evidence / "proof.json"), "--pr", "7", "--repo", str(tmp_path), "--dry-run"]
+    )
+    assert result.exit_code == 1
+    assert "does not follow from the evidence" in result.output
+
+
 def test_an_edited_execution_outcome_changes_the_recomputed_finding(tmp_path):
     _, evidence, _, _ = execute(tmp_path)
 

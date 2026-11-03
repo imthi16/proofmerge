@@ -154,6 +154,7 @@ class FakeRunner:
         self.done = threading.Event()
         self.gate: threading.Event | None = None  # when set, verify waits for it
         self.pony_code = 0
+        self.post_code = 0
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -172,6 +173,9 @@ class FakeRunner:
             (evidence / "proof.json").write_text("{}")
             self.done.set()
             return SimpleNamespace(returncode=self.verify_code, stdout="verdict: BLOCK\n", stderr="")
+        if "ponytail-post" in argv:
+            self.post_argv = argv
+            return SimpleNamespace(returncode=self.post_code, stdout="posted", stderr="post failed: boom")
         if "ponytail-diff" in argv:
             self.pony_argv = argv
             self.pony_intent = Path(argv[argv.index("--intent-file") + 1]).read_text()
@@ -464,4 +468,43 @@ def test_posting_and_approving_say_which_github_account_they_act_as() -> None:
     detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
     assert "useGitHub()" in detail  # read with the other hooks, before any early return
     assert detail.count('class="as-account"') == 2  # the Post and the Approve buttons name the account
-    assert js.count("<${ActingAs}") == 2 and "Use another account" in js  # and so do both confirm dialogs
+    assert js.count("<${ActingAs}") == 3 and "Use another account" in js  # and so do the three confirm dialogs (post, approve, Ponytail)
+
+
+def test_ponytail_findings_can_be_posted_to_the_pr_once_they_exist(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    status, reply = post_json(base, token, "/api/ponytail/post", {"number": 7})
+    assert status == 409 and "Review the pull request first" in reply["error"]  # nothing to post yet
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["status"] == "done")
+    argv = runner.post_argv
+    assert argv[3:5] == ["ponytail-post", argv[4]] and argv[argv.index("--pr") + 1] == "7"
+    assert argv[4].endswith(".json") and "/ponytail/pr-7-" in argv[4]
+
+
+def test_a_failed_post_says_why_and_posted_findings_are_not_posted_twice(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    runner.post_code = 1
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["status"] == "failed")
+    assert "boom" in json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["error"]
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    path = next(Path(runner.pony_argv[runner.pony_argv.index("--out") + 1]).parent.glob("pr-7-*.json"))
+    path.write_text(json.dumps(pr["ponytail"] | {"posted_url": "https://github.com/o/r/pull/7#review"}))
+    status, reply = post_json(base, token, "/api/ponytail/post", {"number": 7})
+    assert status == 409 and "already posted" in reply["error"]
+
+
+def test_the_ponytail_block_can_post_its_findings_after_a_confirm_that_names_the_account() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    block = js.split("function PonytailBlock(", 1)[1].split("\n  function ", 1)[0]
+    assert "onPost" in block and "posted_url" in block and 'class="as-account"' in block
+    dialog = js.split("function ConfirmPonyPost(", 1)[1].split("\n  function ", 1)[0]
+    assert "<${ActingAs}" in dialog and "never approves or requests changes" in dialog
+    assert "/api/ponytail/post" in js and "useGitHub()" in js.split("function PullsView(", 1)[1].split("if (error && !data)", 1)[0]

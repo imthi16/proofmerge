@@ -995,7 +995,7 @@
         ? html`<span class="muted">Posted to the pull request.</span> <a href=${ponytail.posted_url} target="_blank" rel="noopener noreferrer">View the review on GitHub</a>`
         : html`<button class="primary btn-small" type="button" disabled=${posting || pr.state !== "OPEN"} onClick=${onPost}
             title="Posts these findings to the pull request as review comments, after you confirm.">
-            ${posting ? "Posting…" : n === 1 ? "Post as a review comment" : `Post ${n} findings as review comments`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
+            ${posting ? "Posting…" : n === 1 ? "Post the finding to the PR" : `Post ${n} findings to the PR`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
           <span class="muted">Each finding goes on its lines when they are in the diff.</span>`}</div>` : null}
     </section>`;
   }

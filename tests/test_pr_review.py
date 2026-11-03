@@ -166,3 +166,69 @@ def test_a_shared_fix_keeps_each_probes_own_status() -> None:
         assert "**H2:** **Suggested fix, not verified:** The probe still fails." in text
     overall = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "overall")["body"]
     assert "**H2:** **Suggested fix, not verified:**" in overall
+
+
+def pony_report(*findings, **extra):
+    from proofmerge.ponytail import PonytailFinding, PonytailReport
+
+    rows = [PonytailFinding(location=loc, tag=tag, what=what, replacement=rep) for loc, tag, what, rep in findings]
+    return PonytailReport(findings=rows, net_lines=12, run_id="pr-7", base_sha="a" * 40, head_sha="b" * 40, **extra)
+
+
+def test_ponytail_findings_become_comments_on_their_lines_and_the_rest_go_in_the_summary() -> None:
+    from proofmerge.pr_review import build_ponytail_review
+
+    report = pony_report(
+        ("shop.py:L2-4", "yagni", "One-implementation base class. Mention @team.", "Inline it."),   # inside the diff, a range
+        ("shop.py:L5", "delete", "Dead helper.", "nothing"),                                        # one line, nothing replaces it
+        ("other.py:L9-20", "shrink", "Loop that dict() does.", "dict(zip(a, b))"),                  # a file the diff does not touch
+    )
+    review = build_ponytail_review(report, DIFF)
+    assert review["event"] == "COMMENT" and review["commit_id"] == "b" * 40
+    first, second = review["comments"]
+    assert (first["path"], first["start_line"], first["line"], first["side"]) == ("shop.py", 2, 4, "RIGHT")
+    assert "@\u200bteam" in first["body"] and "Instead: Inline it." in first["body"]  # nobody gets pinged
+    assert second["line"] == 5 and "start_line" not in second and "Instead" not in second["body"]
+    assert "`other.py:L9-20`" in review["body"] and "dict(zip(a, b))" in review["body"]  # not on a line: in the summary
+    assert review["body"].startswith("<!-- proofmerge-ponytail -->") and "3 findings" in review["body"]
+
+
+def test_a_review_with_no_findings_is_not_posted() -> None:
+    from proofmerge.pr_review import build_ponytail_review
+
+    with pytest.raises(ReviewError, match="no findings"):
+        build_ponytail_review(pony_report(), DIFF)
+
+
+def test_ponytail_post_refuses_a_moved_pr_and_remembers_the_review_it_posted(monkeypatch, tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    from proofmerge import cli
+    from proofmerge.ponytail import load_report_file
+
+    report = pony_report(("shop.py:L2-4", "yagni", "Base class.", "Inline it."))
+    file = tmp_path / "pr-7.json"
+    file.write_text(report.model_dump_json())
+    state = {"state": "OPEN", "headRefOid": "b" * 40}
+    posted = []
+
+    def gh(argv, **kwargs):
+        if argv[1] == "repo":
+            return SimpleNamespace(returncode=0, stdout="o/r", stderr="")
+        if argv[1:3] == ["pr", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(state), stderr="")
+        return SimpleNamespace(returncode=0, stdout=DIFF, stderr="")  # gh pr diff
+
+    monkeypatch.setattr(cli.subprocess, "run", gh)
+    from proofmerge import pr_review
+
+    monkeypatch.setattr(pr_review, "post_review",
+                        lambda repo, number, review, runner=None: posted.append((repo, number, review)) or "https://github.com/o/r/pull/7#review")
+    args = ["ponytail-post", str(file), "--pr", "7", "--repo", str(tmp_path)]
+    state["headRefOid"] = "c" * 40
+    moved = CliRunner().invoke(cli.app, args)
+    assert moved.exit_code == 1 and "changed since this review" in moved.output and not posted
+    state["headRefOid"] = "b" * 40
+    ok = CliRunner().invoke(cli.app, args)
+    assert ok.exit_code == 0 and len(posted) == 1
+    assert load_report_file(file).posted_url == "https://github.com/o/r/pull/7#review"

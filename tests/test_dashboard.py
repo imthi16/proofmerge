@@ -355,6 +355,15 @@ def test_folder_picker_list_scrolls_inside_the_dialog() -> None:
     assert re.search(r"\.dirs \{[^}]*overflow: auto", css)
 
 
+def test_app_icon_is_served_and_linked_without_scripts() -> None:
+    legacy = Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy"
+    icon = (legacy / "icon.svg").read_text()
+    assert icon.startswith("<svg") and not re.search(r"<script|<image|href=|onload", icon)
+    assert 'rel="icon"' in (legacy / "index.html").read_text()
+    assert "/static/legacy/icon.svg" in (legacy / "app.js").read_text()
+    app = legacy.parent / "app"  # the Control Center, which answers "/"
+    assert (app / "icon.svg").read_text() == icon and "/static/app/icon.svg" in (app / "index.html").read_text()
+
 def test_dialog_stays_fixed_to_the_window() -> None:
     # `.scrim` is position: fixed, but a filling transform animation on `.page` or `.detail` makes
     # Chrome treat that ancestor as the containing block, so the dialog scrolled away with the page.

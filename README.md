@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
-  <img src="docs/assets/hero-light.png" alt="ProofMerge: Don't trust AI-generated code. Make it prove itself. A real run: hypothesis H1, 'Cached SKU bypasses the unknown-tenant check'. The same Spark-written test passes 3 of 3 times on the original commit 9dcc104 and fails 3 of 3 times on the AI's patch 32dff53, so the verdict is BLOCK, decided in plain code." width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/cover-dark.png">
+  <img src="docs/assets/brand/cover-light.png" alt="ProofMerge: Don't trust the patch. Make it prove itself. Reproducible probes, deterministic verdicts, and replayable evidence. A redrawn view of the demo run below: the test passes 3 of 3 times on the original commit 9dcc104 and fails 3 of 3 times on the AI's patch 32dff53, so the verdict is BLOCK." width="100%">
 </picture>
 
 <p align="center">

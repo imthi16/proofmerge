@@ -105,6 +105,7 @@ function Shell({ session }: { session: Session | null }) {
       </a>
       <header className="top">
         <Link to={routes.overview} className="brand" aria-label="ProofMerge Control Center, overview">
+          <img src="/static/app/icon.svg" alt="" width={24} height={24} />
           ProofMerge <span>Control Center</span>
         </Link>
         <nav aria-label="Main">

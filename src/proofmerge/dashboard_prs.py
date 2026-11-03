@@ -89,7 +89,7 @@ class PullRequests:
         name, _ = self._repository()
         try:
             result = self._run(
-                ["gh", "pr", "list", "--repo", name, "--state", "all", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
+                ["gh", "pr", "list", "--repo", name, "--state", "open", "--limit", str(PR_LIMIT), "--json", PR_FIELDS],
                 cwd=self.repo, capture_output=True, text=True, timeout=30,
             )
         except FileNotFoundError:

@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -342,3 +343,12 @@ def test_pr_verification_uses_session_key_without_exposing_it(tmp_path: Path, mo
     assert "session-key-for-offline-test" not in json.dumps(prs.job)
     assert "session-key-for-offline-test" not in json.dumps(jobs.settings())
     assert prs.job["status"] == "done"
+
+
+def test_folder_picker_list_scrolls_inside_the_dialog() -> None:
+    # The repository picker's later `.picker { display: grid }` used to win, so the folder list
+    # grew past the dialog and scrolled the page. The dialog rule must outrank it.
+    css = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.css").read_text()
+    rule = re.search(r"\.dialog\.picker \{([^}]*)\}", css)
+    assert rule and "display: flex" in rule.group(1) and "max-height" in rule.group(1)
+    assert re.search(r"\.dirs \{[^}]*overflow: auto", css)

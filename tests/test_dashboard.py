@@ -448,3 +448,11 @@ def test_the_runs_page_leaves_the_evidence_to_the_full_report() -> None:
     detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
     assert 'class="panel evidence"' not in detail and "<${Hypothesis}" not in detail
     assert "/report?id=" in detail and 'aria-label="Suggested fixes"' in detail  # the report link and the fixes stay
+
+
+def test_posting_and_approving_say_which_github_account_they_act_as() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
+    assert "useGitHub()" in detail  # read with the other hooks, before any early return
+    assert detail.count('class="as-account"') == 2  # the Post and the Approve buttons name the account
+    assert js.count("<${ActingAs}") == 2 and "Use another account" in js  # and so do both confirm dialogs

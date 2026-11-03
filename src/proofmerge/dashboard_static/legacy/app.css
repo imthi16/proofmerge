@@ -709,3 +709,8 @@ pre.diff .hunk { color: var(--brand); }
 .recent-list button.recent-x:hover { background: var(--raised); border: 0; transform: none; }
 .fixes { margin-top: 1.5rem; }
 .fixes h3 { margin-top: 0; }
+
+/* "as @account" on the buttons that act on GitHub for the person. */
+.as-account { margin-left: .15rem; font-weight: 400; opacity: .8; font-size: .85em; }
+.acting { margin: -.25rem 0 .75rem; padding: .45rem .7rem; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--raised); font-size: .9rem; }
+.acting strong { color: var(--fg); }

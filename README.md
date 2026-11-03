@@ -38,7 +38,7 @@ tests; Muse Wonder 1.0 checks Spark's work. [MIT licensed](LICENSE).
 
 ## Use it without a terminal
 
-<img alt="The ProofMerge app in the browser: the Runs page with three BLOCK runs and one REVIEW run, every one marked 'evidence intact', and the selected run's verdict, BLOCK, 'Verified regression — do not merge', with its reasons, commits, model calls and buttons to open the report, download it, check the evidence and run the tests again." src="docs/assets/app-runs.png" width="100%">
+<img alt="The ProofMerge app in the browser: the Runs page with three BLOCK runs and one REVIEW run, every one marked 'evidence intact', and the selected run's verdict, BLOCK, 'Verified regression — do not merge', with its reasons, commits, model calls and the line 'Muse Spark wrote the tests, Muse Wonder checked them'." src="docs/assets/app-runs.png" width="100%">
 
 `proofmerge app` opens ProofMerge in your browser and does everything the
 command line does. It was built for people who never open a terminal:
@@ -71,7 +71,8 @@ in `~/ProofMerge/runs`, repositories in `~/ProofMerge/repos`.
 <a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
 
 [Watch the full walkthrough](docs/assets/walkthrough.mp4) (4 min 20 s, no
-sound, captions on screen). It covers every use case in order: setup, GitHub
+sound, captions on screen). It was recorded before the app's 2026-11-03 visual
+refresh, so the colours and the Home layout differ from the screenshots above. It covers every use case in order: setup, GitHub
 sign-in, picking a repository, verifying a pull request, the evidence and the
 report, checking a local branch, runs and benchmarks, then the terminal
 (`verify`, `replay`) and the Agent Skill.

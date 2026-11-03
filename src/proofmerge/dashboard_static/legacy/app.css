@@ -637,6 +637,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 .md-table th, .md-table td { padding: .45rem .7rem; border-bottom: 1px solid var(--rule); text-align: left; }
 .md-table tbody tr { cursor: default; }
 .md-table tbody tr:last-child td { border-bottom: 0; }
-/* Beside the detail the branch column pushed the verdict column out of view; the detail shows the branch. */
-@media (min-width: 64.01rem) and (max-width: 110rem) { .pr-table .hide-sm { display: none; } }
+/* Beside the detail, the PR branch and the run SHAs squeezed the names to a few letters a line;
+   the detail shows both. */
+@media (min-width: 64.01rem) and (max-width: 110rem) { .pr-table .hide-sm, .col-shas { display: none; } }
 .pr-table td:last-child { white-space: nowrap; }

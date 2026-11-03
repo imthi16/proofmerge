@@ -629,6 +629,7 @@
     };
     const running = job?.status === "running";
     const ponyRunning = pony?.status === "running";
+    const ponyOnThis = ponyRunning && pr && pony.number === pr.number;
     const startPony = () => {
       setPosting("");
       fetch("/api/ponytail", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
@@ -659,7 +660,8 @@
                 <td class="hide-sm mono" style=${{ fontSize: ".8rem" }}>${p.head} → ${p.base}</td>
                 <td>${verdict ? html`<span class=${"pill " + verdict}>${verdict}</span>`
                   : running && job.number === p.number ? html`<span class="pill">RUNNING</span>`
-                  : html`<span class="muted" style=${{ fontSize: ".85rem" }}>not verified</span>`}</td>
+                  : html`<span class="muted" style=${{ fontSize: ".85rem" }}>not verified</span>`}
+                  <${PonyChip} pr=${p} pony=${pony} /></td>
               </tr>`;
             })}</tbody></table>` : html`<div class="empty"><strong>No pull request matches</strong>Change the search.</div>`}
         </div>
@@ -677,12 +679,13 @@
               ${running ? `Verifying PR #${job.number}…` : "Verify this PR"}</button>
             <button class="ghost" type="button" disabled=${ponyRunning || pr.state !== "OPEN"} onClick=${startPony}
               title="One model call reads the diff and lists what could be deleted or shortened. No sandbox, and no verdict.">
-              <${Icon} name="spark" />${ponyRunning && pony.number === pr.number ? "Reviewing…" : pr.ponytail ? "Ponytail review again" : "Ponytail review"}</button>
+              <${Icon} name="spark" />${ponyOnThis ? "Reviewing…" : pr.ponytail ? "Review again" : "Ponytail review"}</button>
             <a class="ghost" href=${pr.url} target="_blank" rel="noopener noreferrer">Open on GitHub</a>
           </div>
+          ${ponyOnThis ? html`<${PonyProgress} job=${pony} />` : null}
           ${pony?.status === "failed" && pony.number === pr.number && pony.error && ponyGone !== pony.created
-            ? html`<${Alert} message=${pony.error} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
-          ${pr.ponytail ? html`<${PonytailBlock} ponytail=${pr.ponytail} />` : null}
+            ? html`<${Alert} message=${"The Ponytail review did not finish. " + pony.error} seconds=${60} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
+          ${pr.ponytail && !ponyOnThis ? html`<${PonytailBlock} ponytail=${pr.ponytail} />` : null}
           ${pr.state !== "OPEN" ? html`<p class="muted" style=${{ fontSize: ".88rem" }}>This pull request is ${(STATE[pr.state] || pr.state).toLowerCase()}, so its base already contains it. Only open pull requests can be verified.</p>` : null}
           ${posting ? html`<${Alert} message=${posting} onClose=${() => setPosting("")} style=${{ marginTop: ".75rem" }} />` : null}
           <h2>ProofMerge runs at this commit</h2>
@@ -932,14 +935,47 @@
 
   // The Ponytail review of a pull request: what to delete or shorten. It reads the diff and changes no verdict.
   function PonytailBlock({ ponytail }) {
+    const n = ponytail.findings.length;
     return html`<section class="ponytail" aria-label="Ponytail review">
-      <h4>Ponytail review <span class="muted">over-engineering only; it reads the diff and runs nothing</span></h4>
-      ${ponytail.findings.length ? html`<ul class="reasons">${ponytail.findings.map((f, i) => html`<li key=${i}>
-        <code>${f.location}</code> <span class="kind">${f.tag}</span> ${f.what} <span class="muted">${f.replacement}</span></li>`)}</ul>
-        <p class="muted fix-note">net: -${ponytail.net_lines} lines possible.</p>`
-        : html`<p class="muted">Lean already. Ship.</p>`}
-      ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long; only the main part of it was reviewed.</p>` : null}
+      <div class="pony-head">
+        <h4>Ponytail review</h4>
+        <span class="muted">Over-engineering only. It reads the diff and runs nothing.</span>
+      </div>
+      <p class="pony-summary">${n
+        ? html`<strong>${n} finding${n === 1 ? "" : "s"}</strong>${ponytail.net_lines ? `, about ${ponytail.net_lines} line${ponytail.net_lines === 1 ? "" : "s"} could go` : ""}.`
+        : html`<strong>Lean already.</strong> There is nothing to cut in this diff.`}
+        <span class="muted"> Reviewed at <code>${short(ponytail.head_sha)}</code>.</span></p>
+      ${n ? html`<ol class="pony-list">${ponytail.findings.map((f, i) => html`<li key=${i} class="pony-item">
+        <div class="pony-where"><span class="kind">${f.tag}</span><code>${f.location}</code></div>
+        <p class="pony-what">${f.what}</p>
+        <p class="pony-instead"><span class="muted">${/^nothing\.?$/i.test(f.replacement.trim()) ? "Nothing replaces it." : "Instead:"}</span>${/^nothing\.?$/i.test(f.replacement.trim()) ? "" : " " + f.replacement}</p>
+      </li>`)}</ol>` : null}
+      ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long, so part of it was not reviewed.</p>` : null}
     </section>`;
+  }
+
+  // While a review runs: the two real steps, and how long it has taken.
+  function PonyProgress({ job }) {
+    const [now, setNow] = useState(() => Date.now() / 1000);
+    useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
+    const reading = /^Reading/.test(job.step || "");
+    const steps = [["Fetch the pull request", reading], ["Read the diff with the model", false]];  // [label, finished]
+    const current = reading ? 1 : 0;
+    return html`<section class="pony-progress" role="status" aria-live="polite" aria-label="Ponytail review in progress">
+      <ol>${steps.map(([label, finished], i) => html`<li key=${i} class=${finished ? "done" : i === current ? "now" : "next"}>
+        <span class="pony-mark">${finished ? html`<${Icon} name="check" size=${13} />` : i === current ? html`<span class="spinner small"></span>` : null}</span>${label}</li>`)}</ol>
+      <span class="muted">${Math.max(0, Math.round(now - (job.created || now)))} s</span>
+    </section>`;
+  }
+
+  // The list's view of a pull request's Ponytail review.
+  function PonyChip({ pr, pony }) {
+    if (pony?.status === "running" && pony.number === pr.number) {
+      return html`<div class="pony-chip"><span class="spinner small"></span>Reviewing</div>`;
+    }
+    if (!pr.ponytail) return null;
+    const n = pr.ponytail.findings.length;
+    return html`<div class="pony-chip done" title=${n ? `${n} Ponytail finding${n === 1 ? "" : "s"}` : "Ponytail found nothing to cut"}>Ponytail: ${n || "lean"}</div>`;
   }
 
   // A transient error: it can be closed, and it closes itself, so it never sits on the page for good.

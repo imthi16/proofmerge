@@ -441,3 +441,13 @@ def test_a_failed_ponytail_review_says_why_and_a_closed_pr_is_refused(pr_server)
         assert status == 409 and "only open pull requests" in reply["error"]
     finally:
         PRS[0]["state"] = "OPEN"
+
+
+def test_the_ponytail_review_shows_its_progress_its_status_in_the_list_and_findings_as_rows() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    for part in ("function PonyProgress(", "function PonyChip(", "function PonytailBlock("):
+        assert part in js
+    page = js.split("function PonyProgress(", 1)[1].split("\n  function ", 1)[0]
+    assert 'role="status"' in page and "Fetch the pull request" in page and "Read the diff with the model" in page
+    assert "<${PonyChip}" in js and "<${PonyProgress}" in js
+    assert "seconds=${60}" in js  # a failed review stays long enough to be read

@@ -26,7 +26,7 @@ from proofmerge.dashboard_events import EventJournal, tail_events
 from proofmerge.dashboard_github import GH_CREDENTIALS
 
 PR_FIELDS = "number,title,author,headRefName,baseRefName,headRefOid,state,url,updatedAt,isDraft,body"
-PR_LIMIT = 50
+PR_LIMIT = 1000  # every open PR; the page searches them, it does not page
 CACHE_SECONDS = 60
 VERIFY_TIMEOUT = 1800
 MAX_BODY = 20_000

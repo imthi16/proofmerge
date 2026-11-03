@@ -641,3 +641,24 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
    the detail shows both. */
 @media (min-width: 64.01rem) and (max-width: 110rem) { .pr-table .hide-sm, .col-shas { display: none; } }
 .pr-table td:last-child { white-space: nowrap; }
+
+/* Runs: the list and the chosen run's verdict share the left column, the evidence takes the
+   right. The verdict stays in view while the evidence scrolls, so neither side runs empty. */
+.runs-split { grid-template-columns: minmax(19rem, 26rem) minmax(0, 1fr);
+  grid-template-areas: "list evidence" "summary evidence"; grid-template-rows: auto 1fr; row-gap: 1rem; }
+.runs-split > :first-child { grid-area: list; }
+.runs-split > .detail { grid-area: summary; position: sticky; top: 1.5rem; align-self: start;
+  max-height: calc(100vh - 3rem); overflow: auto; }
+.runs-split > .evidence { grid-area: evidence; padding: .4rem 1.75rem 1.6rem; min-width: 0; }
+/* The summary shows the SHAs and the call count, so the narrow list keeps verdict, name and regressions. */
+.runs-split .runs { position: static; max-height: 55vh; }
+.runs-split .runs .hide-sm { display: none; }
+.runs-split .detail .decision { font-size: 2.6rem; }
+.evidence > h2:first-child { border-top: 0; margin-top: 1.2rem; padding-top: 0; }
+@keyframes evidence-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.evidence { animation: evidence-in .5s var(--ease) .08s both; }
+@media (max-width: 64rem) {
+  .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary" "evidence"; grid-template-rows: none; }
+  .runs-split > .detail { position: static; max-height: none; }
+  .runs-split .runs { max-height: none; }
+}

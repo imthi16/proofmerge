@@ -777,3 +777,8 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Error boxes (a refused action, a failed sign-in, a failed clone, a branch list error) had no close button and stayed until the page changed. They are now an `Alert`: it has a close button and closes itself after 10 seconds.
 - A card on Home's Recent checks could not be removed. Each card now has a close button and the panel a **Clear** link; the choice is kept in this browser (`localStorage`, `pm-hidden-recent`) and only hides the card there, the run stays under Runs.
 - Checked in real Chrome (Playwright with the system Chrome) against this branch's dashboard on a copy of a real run folder: closing a card, the card staying closed after a reload, **Clear** removing the panel, an alert (a faked 422 on `/api/github/add`) closing with its button and closing by itself after about 10 s, and no page errors. Not checked: dark mode and a phone-width screen.
+
+### 2026-11-03 — T83 fix: the Pull requests tab went black (Claude)
+- Cause: the closable-alert change put a `useState` in `RepoPicker` after its early `return`s, so once `gh` loaded React threw error #310 ("rendered more hooks than during the previous render") and the tab showed nothing. Reproduced in real Chrome (the prs tab: 0 characters of text, error #310); the hook now sits with the others at the top.
+- Re-checked in real Chrome: all five tabs (Home, Runs, Pull requests, Benchmarks, Setup) render with no page errors, and the Pull requests list with a repository (1 open PR row) renders with none. The earlier check had covered Home and Setup only.
+- `test_repo_picker_declares_every_hook_before_its_early_returns` keeps it from coming back.

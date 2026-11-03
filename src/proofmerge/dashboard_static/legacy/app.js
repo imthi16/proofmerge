@@ -1078,6 +1078,7 @@
     const [query, setQuery] = useState("");
     const [other, setOther] = useState("");
     const [fail, setFail] = useState("");
+    const [gone, setGone] = useState("");  // a clone failure that was closed
     const asked = useRef("");
     const signedIn = !!gh?.user;
     const loadRepos = () => {
@@ -1122,7 +1123,6 @@
     const q = query.trim().toLowerCase();
     const shown = (repos || []).filter((r) => !q || `${r.name} ${r.description}`.toLowerCase().includes(q));
     const failed = fail || (clone?.state === "failed" ? clone.error : "");
-    const [gone, setGone] = useState("");
     return html`<section class="panel picker">
       <div class="picker-head">
         <div><strong>Choose a repository</strong>

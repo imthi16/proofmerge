@@ -685,3 +685,10 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `uninstall.sh` now asks `Remove ProofMerge from this computer? ... [y/N]` and removes nothing unless the answer starts with y; an empty answer or closed input keeps everything. It waits for Enter at the end, so the terminal window does not close before the message is read.
 - Test: `test_uninstaller_asks_first_and_keeps_the_checks` writes the real uninstaller into a temporary folder and runs it with no answer, `n` and `y`; only `y` removes the install and menu entry, and `~/ProofMerge/runs` stays every time. It fails on the previous script.
 - `pytest -q`: 862 passed, 1 skipped. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T69 Faster repository pick in the app (Claude)
+- Measured on a real 14 MB repository (2,382 commits, 268 branches): `gh repo clone` took 5.5–6.4 s and a blobless clone 9.5 s, so the download itself was not the slow part to cut. A single-branch clone saved about 2 s but would hide the other branches from the Home branch picker, so it was not used.
+- What the app added: every status read ran `gh api user` (0.7–1.1 s), and the page reads status every 1.5 s while a clone runs. The signed-in answer is now reused for 30 s (`WHO_SECONDS`); a signed-out answer is never reused, so signing in elsewhere shows at once, and signing out clears it. The clone poll is 1 s instead of 1.5 s.
+- Real timing, same machine and repository, pick to the page seeing "done" (already downloaded, so a fetch): 4.0 s and 4.5 s on `main`, 3.0 s and 3.0 s with this change.
+- Test: `test_status_polls_reuse_a_signed_in_answer_but_never_a_signed_out_one` (five polls ask GitHub once; signed-out and after-logout ask every time). It fails on the previous code.
+- `pytest -q`: 863 passed, 1 skipped. `ruff check src tests`: all checks passed.

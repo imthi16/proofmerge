@@ -238,3 +238,18 @@ def test_http_routes_need_the_session_token(tmp_path: Path) -> None:
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_status_polls_reuse_a_signed_in_answer_but_never_a_signed_out_one(tmp_path: Path) -> None:
+    gh = FakeGh()
+    github = GitHub(tmp_path, gh.run, gh.spawn)
+    asks = lambda: sum(argv[:3] == ["gh", "api", "user"] for argv in gh.calls)
+    github.status(), github.status()
+    assert asks() == 2  # signed out: asked every time, so a sign-in elsewhere shows at once
+    gh.user = "octocat"
+    for _ in range(5):
+        assert github.status()["user"] == "octocat"
+    assert asks() == 3  # the page polls every 1.5 s while cloning; GitHub is asked once
+    github.logout()
+    gh.user = None
+    assert github.status()["user"] is None and asks() == 4

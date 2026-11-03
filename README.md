@@ -312,7 +312,7 @@ It checks for Python 3.11+, Git, the GitHub CLI (optional) and Docker, and print
 the install command for anything missing; it never uses sudo. It installs
 ProofMerge for your user only in `~/.local/share/proofmerge`, adds ProofMerge and
 Uninstall ProofMerge to the applications menu, then opens it. Run it again to
-update. Uninstalling keeps your checks in `~/ProofMerge`.
+update. Uninstalling asks before it removes anything and keeps your checks in `~/ProofMerge`.
 
 ### macOS, Linux, or Windows with Python
 

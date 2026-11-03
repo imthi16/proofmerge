@@ -679,3 +679,9 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - Tests: `tests/test_linux_installer.py` runs the script for real for bad refs and a bad install folder (both stop before any download) and pins no sudo, no piped downloads, and an uninstaller that keeps `~/ProofMerge`.
 - Review fixes (Codex, #60): Python is chosen only with venv support, so a later interpreter that has it is used; an install folder with `%` is refused (desktop `Exec` reads it as a field code); the uninstaller first stops this install's running app, found by its venv path in `/proc/*/cmdline`. Re-checked for real: with the app running detached, `uninstall.sh` stopped it, removed the install and kept `~/ProofMerge/runs`. A new test gives the script a PATH whose `python3.13` lacks venv; it fails on the previous script and passes now.
 - `pytest -q`: 861 passed, 1 skipped. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T68 Uninstall asks first (Claude)
+- Found on the real install: the GNOME menu shows "Uninstall ProofMerge" next to "ProofMerge", and one click on it (journal: `app-gnome-proofmerge\x2duninstall` launched by gnome-shell at 12:08) removed the install without asking.
+- `uninstall.sh` now asks `Remove ProofMerge from this computer? ... [y/N]` and removes nothing unless the answer starts with y; an empty answer or closed input keeps everything. It waits for Enter at the end, so the terminal window does not close before the message is read.
+- Test: `test_uninstaller_asks_first_and_keeps_the_checks` writes the real uninstaller into a temporary folder and runs it with no answer, `n` and `y`; only `y` removes the install and menu entry, and `~/ProofMerge/runs` stays every time. It fails on the previous script.
+- `pytest -q`: 862 passed, 1 skipped. `ruff check src tests`: all checks passed.

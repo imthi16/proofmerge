@@ -115,6 +115,14 @@ mkdir -p "$APPS"
 cat > "$INSTALL_DIR/uninstall.sh" <<EOF
 #!/bin/sh
 # Remove ProofMerge. Your checks in ~/ProofMerge stay where they are.
+# The menu entry sits next to the app's own, so ask before deleting anything, and wait
+# for Enter at the end: the terminal window closes as soon as this script exits.
+printf 'Remove ProofMerge from this computer? Your checks in ~/ProofMerge stay. [y/N] '
+read -r answer || answer=
+case "\$answer" in
+    [yY]*) ;;
+    *) echo 'Nothing removed.'; printf 'Press Enter to close.'; read -r _ || true; exit 0 ;;
+esac
 # Stop this install's running app first: deleting its files does not stop the server.
 for proc in /proc/[0-9]*; do
     case "\$(tr '\\0' ' ' 2>/dev/null < "\$proc/cmdline")" in
@@ -125,6 +133,8 @@ sleep 1
 rm -f "$APPS/proofmerge.desktop" "$APPS/proofmerge-uninstall.desktop"
 rm -rf "$INSTALL_DIR"
 echo 'ProofMerge removed. Your checks in ~/ProofMerge stay where they are.'
+printf 'Press Enter to close.'
+read -r _ || true
 EOF
 chmod +x "$INSTALL_DIR/uninstall.sh"
 cat > "$APPS/proofmerge.desktop" <<EOF

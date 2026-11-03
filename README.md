@@ -301,6 +301,19 @@ accept each license yourself. It installs ProofMerge for your user only in
 Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
 Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.
 
+### Linux, one script
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/imthi16/proofmerge/main/installer/linux/install-proofmerge.sh
+sh install-proofmerge.sh
+```
+
+It checks for Python 3.11+, Git, the GitHub CLI (optional) and Docker, and prints
+the install command for anything missing; it never uses sudo. It installs
+ProofMerge for your user only in `~/.local/share/proofmerge`, adds ProofMerge and
+Uninstall ProofMerge to the applications menu, then opens it. Run it again to
+update. Uninstalling keeps your checks in `~/ProofMerge`.
+
 ### macOS, Linux, or Windows with Python
 
 You need Python 3.11 or newer, Git and Docker.
@@ -502,6 +515,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Scope receipt: what a run checked (hypotheses, probes, attempts, changed tests), in `report.html` and `verify` output | Built and tested |
 | `proofmerge app` (`/app/`): every command from the browser (verify, risks only, probes only, evidence check, re-run, setup, model check) | Built and tested offline with fakes; a real `verify` on the demo shop was started and finished from the page in headless Chrome with the model endpoint pointed at a closed local port (REVIEW, as expected); not yet run with a real key from the page, and not yet run on Windows |
 | GitHub sign-in, repository and pull request picker in the app | Built and tested offline; a real `gh` sign-in was started and cancelled, and with a real account the page listed repositories, cloned one and listed its 50 pull requests; a full sign-in by a person and a run on Windows are not done yet |
+| Linux installer (`installer/linux/install-proofmerge.sh`) | Built and run on Ubuntu in a clean home folder: installed from GitHub, the menu entry's command started the app (`/app/` answered 200), a second run updated it, the uninstaller removed it and kept `~/ProofMerge`; other distributions not tried |
 | Windows installer (`installer/windows/Install-ProofMerge.cmd`) | Built; its structure and safety rules are checked by tests on Linux; not yet run on a Windows machine |
 | One-command install and `proofmerge setup` | Built; checked from a fresh clone |
 | GitHub Action | Built and tested; ran on three PRs in [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr) (BLOCK, BLOCK, REVIEW), each with a verdict comment and an evidence artifact |
@@ -576,6 +590,7 @@ src/proofmerge/
   prompts/       the instructions given to Muse Spark and Muse Wonder
 ui/              Control Center source (React + TypeScript + Vite); see docs/control-center.md
 installer/windows/  the double-click Windows installer
+installer/linux/    the one-script Linux installer
 tests/           offline tests; models are replaced with fakes
 docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth

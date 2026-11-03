@@ -34,6 +34,7 @@ from proofmerge.dashboard_jobs import JobError, Jobs, branches, browse, git_proj
 from proofmerge.dashboard_models import ApiError, VerificationRequest
 from proofmerge.dashboard_prs import PrError, PullRequests
 from proofmerge.evidence import Proof
+from proofmerge.fixes import load_report
 from proofmerge.manifest import verify_manifest
 from proofmerge.rederive import rederive
 from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
@@ -264,6 +265,7 @@ def _detail(run_id: str, run_dir: Path) -> dict[str, Any]:
         "probes": probes,
         "failures": failures,
         "logs": logs,
+        "fix": None if (report := load_report(run_dir)) is None else report.model_dump(mode="json"),
     }
 
 

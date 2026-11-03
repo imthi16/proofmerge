@@ -671,3 +671,30 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .pr-table td:nth-child(2) { min-width: 0; }
   .pr-table td, .pr-table th { padding-left: .6rem; padding-right: .6rem; }
 }
+
+/* Suggested fixes: their own block under the evidence, marked by how they were checked. */
+.fix-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .9rem; padding-top: .9rem;
+  border-top: 1px solid var(--rule); }
+.fix-note { font-size: .84rem; }
+.fix { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--surface) 60%, var(--bg)); }
+.fix.verified { border-color: var(--pass-line); }
+.fix.unverified { border-color: var(--review-line); }
+.fix h4 { display: flex; align-items: center; gap: .45rem; margin: 0 0 .35rem; font-size: .95rem; }
+.fix.verified h4 { color: var(--pass); }
+.fix.unverified h4 { color: var(--review); }
+.fix p { margin: 0 0 .6rem; font-size: .9rem; }
+.fix .fix-proof { color: var(--muted); font-size: .84rem; }
+pre.diff { font-size: .76rem; white-space: pre; overflow-x: auto; }
+pre.diff span { display: block; }
+pre.diff .add { color: var(--pass); background: var(--pass-bg); }
+pre.diff .del { color: var(--block); background: var(--block-bg); }
+pre.diff .hunk { color: var(--brand); }
+.post-modes { display: grid; gap: .5rem; margin: 1rem 0; }
+.post-mode { display: flex; gap: .7rem; align-items: flex-start; padding: .75rem .9rem; border: 1px solid var(--rule);
+  border-radius: var(--r-md); cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.post-mode:hover { background: var(--hover); }
+.post-mode.on { border-color: color-mix(in oklab, var(--brand) 55%, var(--rule)); background: color-mix(in oklab, var(--brand) 7%, var(--surface)); }
+.post-mode input { margin-top: .2rem; }
+.post-mode > span { display: grid; gap: .15rem; font-size: .9rem; }
+.post-mode .muted { font-size: .82rem; }

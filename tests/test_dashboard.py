@@ -371,3 +371,10 @@ def test_dialog_stays_fixed_to_the_window() -> None:
     for selector in (r"\.page", r"\.detail"):
         for rule in re.findall(selector + r" \{([^}]*animation:[^}]*)\}", css):
             assert not re.search(r"\b(both|forwards)\b", rule), selector
+
+
+def test_errors_and_recent_checks_can_be_closed() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert "function Alert(" in js and "setTimeout(onClose" in js and 'aria-label="Dismiss"' in js
+    assert js.count("<${Alert}") >= 5 and 'class="error-box">${posting}' not in js  # action errors do not stay for good
+    assert "pm-hidden-recent" in js and "recent-x" in js

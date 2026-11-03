@@ -706,3 +706,15 @@ pre.diff .hunk { color: var(--brand); }
 
 /* GitHub accounts on Setup: the other signed-in accounts as switch buttons. */
 .gh-accounts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .6rem; }
+
+/* Closable alerts and the close button on a recent check. */
+.error-box.alert { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.error-box.alert .icon-btn { color: inherit; flex: none; margin: -.35rem -.5rem 0 0; }
+.recent-list li { position: relative; }
+.recent-x { position: absolute; top: .45rem; right: .45rem; opacity: .55; transition: opacity .15s var(--ease); }
+.recent-list li:hover .recent-x, .recent-x:focus-visible { opacity: 1; }
+.section-head .link + .link { margin-left: .9rem; }
+.recent-list .recent-top { padding-right: 1.5rem; }
+/* `.recent-list button` styles the whole card; the close button is not a card. */
+.recent-list button.recent-x { display: inline-flex; width: auto; padding: .3rem; border: 0; background: none; box-shadow: none; transform: none; }
+.recent-list button.recent-x:hover { background: var(--raised); border: 0; transform: none; }

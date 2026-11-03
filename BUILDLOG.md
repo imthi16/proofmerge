@@ -771,4 +771,4 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 
 ### 2026-11-03 — T83 Applications menu icon (Claude)
 - The Linux installer wrote `Icon=applications-development`, a stock icon. Step 6 now copies the app's logo out of the installed package to `<install folder>/proofmerge.svg` and the menu entry points at it, so it does not depend on the Python version's folder and the uninstaller removes it with the install folder. If the copy fails the entry falls back to the stock icon.
-- Run for real with the installer from this branch on Ubuntu: see the next line for what was observed.
+- Run for real with this branch's installer on Ubuntu (against a local clone of the repository): the install finished, `Icon=` in `proofmerge.desktop` points at the copied `proofmerge.svg`, and `desktop-file-validate` accepts the entry. Not checked: how the icon looks in the desktop's menu, and a fresh install from GitHub.

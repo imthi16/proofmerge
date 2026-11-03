@@ -120,18 +120,14 @@
     const unreadable = runs.filter((r) => r.error).length;
     return html`<section class="dist" aria-label="Verdicts">
       <div class=${"dist-bar" + (filter ? " filtered" : "")}>
-        ${DECISIONS.filter((d) => counts[d]).map((d, i) => html`
-          <button key=${d} type="button" class=${"seg " + d.toLowerCase()} style=${{ flexGrow: counts[d], "--i": i }}
+        ${DECISIONS.filter((d) => counts[d]).map((d) => html`
+          <button key=${d} type="button" class=${"seg " + d.toLowerCase()}
             aria-pressed=${filter === d} onClick=${() => setFilter(filter === d ? "" : d)}
             title=${filter === d ? "Show every verdict" : `Show only ${d}`}>
             <span class="k">${d}</span><span class="n">${counts[d]}</span>
-            <span class="pct">${Math.round((counts[d] / total) * 100)}%</span>
           </button>`)}
-      </div>
-      <div class="dist-legend muted">
-        <span>${total} run${total === 1 ? "" : "s"}${unreadable ? `, ${unreadable} unreadable` : ""}</span>
-        <span>${filter ? html`Showing ${filter} only. <button class="copy" type="button"
-          onClick=${() => setFilter("")}>clear</button>` : "Click a verdict to filter"}</span>
+        <span class="dist-note muted">${total} run${total === 1 ? "" : "s"}${unreadable ? `, ${unreadable} unreadable` : ""}${filter ? html`, showing ${filter} only <button class="copy" type="button"
+          onClick=${() => setFilter("")}>clear</button>` : ""}</span>
       </div>
     </section>`;
   }

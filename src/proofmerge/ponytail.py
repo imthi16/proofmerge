@@ -12,11 +12,11 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from proofmerge.diffbudget import view_diff
 from proofmerge.evidence import Proof
 from proofmerge.meta import SPARK_MODEL, MetaClient
 
 PROMPT = (resources.files("proofmerge") / "prompts" / "ponytail.md").read_text()
-MAX_DIFF = 60_000
 MAX_FINDINGS = 15
 
 
@@ -56,12 +56,12 @@ def load_report(evidence_dir: Path) -> PonytailReport | None:
 
 def review_diff(proof: Proof, evidence_dir: Path, client: MetaClient, diff_text: str) -> PonytailReport:
     """One model call on the diff. Raises MetaError when the model fails."""
-    shown = diff_text[:MAX_DIFF]
+    shown = view_diff(diff_text)
     intent = "\n".join(f"- {claim.statement}" for claim in proof.intent.claims)
     review = client.structured(
         SPARK_MODEL,
         developer=PROMPT,
-        user=f"What the pull request intends:\n{intent or '(no description)'}\n\nUnified diff:\n{shown}",
+        user=f"What the pull request intends:\n{intent or '(no description)'}\n\nUnified diff:\n{shown.text}",
         schema=PonytailReview,
         reasoning_effort="medium",
     )
@@ -73,7 +73,7 @@ def review_diff(proof: Proof, evidence_dir: Path, client: MetaClient, diff_text:
         head_sha=proof.head_sha,
         endpoint=getattr(client, "endpoint", None),
         calls=client.calls,
-        truncated=len(diff_text) > MAX_DIFF,
+        truncated=bool(shown.omitted or shown.noted),
     )
     out = ponytail_dir(evidence_dir)
     out.mkdir(exist_ok=True)

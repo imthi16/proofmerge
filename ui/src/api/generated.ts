@@ -491,6 +491,8 @@ export interface VerdictInputs {
   intent_given: boolean;
   layout_scope_limitations: string[];
   tamper_guard_language: string | null;
+  unshown_files: string[];
+  unshown_other: string[];
   wonder_checked: boolean;
 }
 /**

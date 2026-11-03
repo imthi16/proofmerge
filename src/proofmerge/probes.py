@@ -19,6 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from proofmerge.context import GitContext
+from proofmerge.diffbudget import view_diff
 from proofmerge.evidence import Experiment
 from proofmerge.hypotheses import Hypothesis
 from proofmerge.intent import IntentContract
@@ -154,7 +155,7 @@ def write_probe(
         f"Claim it tests:\n{claim.model_dump_json(indent=2)}\n\n"
         f"Base source of the changed files:\n{sources}\n\n"
         f"Unified diff from base {context.base_sha} to head {context.head_sha}:\n"
-        f"{context.diff_text}"
+        f"{view_diff(context.diff_text).text}"
     )
     history: list[dict[str, str]] = []
     source = ""

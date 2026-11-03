@@ -545,6 +545,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Part | State |
 |---|---|
 | `proofmerge verify`, end to end | Built and tested; real runs on the demo and the benchmark |
+| Large pull requests: a diff over 60,000 characters is fitted to Spark's budget (source files first, then tests, never lock or generated files) instead of refused | Built and tested offline. Source Spark was not shown is named in the scope and a PASS becomes REVIEW; unshown tests and generated files are only noted. One real `verify` on a 65,582-character pull request of the author's own repository ran (12 calls, REVIEW) where it used to be refused; its tests errored in the sandbox for missing dependencies, so that run shows the feature, not a useful verdict |
 | Intent contract: claims must quote the PR text | Built and tested |
 | Spark hypotheses and probes that must pass on base first | Built and tested |
 | Docker runs: no network, no host secrets, read-only code, 3 runs per version | Built and tested |

@@ -19,6 +19,7 @@ def decide(
     explained_probe_claim_ids: dict[str, str] | None = None,
     mismatched_probe_ids: frozenset[str] = frozenset(),
     wonder_checked: bool = False,
+    unshown_source_files: list[str] | None = None,
 ) -> Verdict:
     """Apply rules 1–9, preserving all reasons when BLOCK takes precedence."""
     claims = {claim.id: claim for claim in contract.claims}
@@ -115,6 +116,15 @@ def decide(
             unresolved.append(risk)
             reasons.append(risk + ".")
     reasons.extend(errors or ())
+    if unshown_source_files:
+        # Part of the change was never examined, so there can be no PASS (a BLOCK still stands).
+        names = ", ".join(unshown_source_files[:10])
+        more = len(unshown_source_files) - 10
+        reasons.append(
+            f"{len(unshown_source_files)} changed source file(s) were too large to show to the "
+            f"hypothesis writer ({names}{f' and {more} more' if more > 0 else ''}), so no regression "
+            "was looked for in them. Review them, or split the pull request."
+        )
 
     decision = "BLOCK" if block else "REVIEW" if reasons else "PASS"
     if decision == "PASS":
@@ -160,7 +170,7 @@ def adjudicate(
         errors=list(inputs.errors), intent_established=inputs.intent_established,
         intent_given=inputs.intent_given, explained_probe_ids=explained_probe_ids,
         explained_probe_claim_ids=explained_probe_claim_ids,
-        wonder_checked=inputs.wonder_checked,
+        wonder_checked=inputs.wonder_checked, unshown_source_files=list(inputs.unshown_files),
     )  # fmt: skip
     if inputs.tamper_guard_language is not None:
         verdict.scope_limitations.append(
@@ -168,4 +178,18 @@ def adjudicate(
             "changed tests were not re-run."
         )
     verdict.scope_limitations.extend(inputs.layout_scope_limitations)
+    if inputs.unshown_other:
+        verdict.scope_limitations.append(
+            "Test, lock, generated or binary files were not shown to the hypothesis writer: "
+            + ", ".join(inputs.unshown_other[:10])
+            + (f" and {len(inputs.unshown_other) - 10} more." if len(inputs.unshown_other) > 10 else ".")
+        )
+    if inputs.unshown_files:
+        names = ", ".join(inputs.unshown_files[:10])
+        more = len(inputs.unshown_files) - 10
+        verdict.scope_limitations.append(
+            f"{len(inputs.unshown_files)} changed source file(s) were not shown to the hypothesis writer "
+            f"(the diff was over the size limit), so no hypothesis covers them: {names}"
+            + (f" and {more} more." if more > 0 else ".")
+        )
     return verdict

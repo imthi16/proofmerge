@@ -683,7 +683,7 @@
             <a class="ghost" href=${pr.url} target="_blank" rel="noopener noreferrer">Open on GitHub</a>
           </div>
           ${pr.state !== "OPEN" ? html`<p class="muted" style=${{ fontSize: ".88rem" }}>This pull request is ${(STATE[pr.state] || pr.state).toLowerCase()}, so its base already contains it. Only open pull requests can be verified.</p>` : null}
-          ${posting ? html`<div class="error-box" style=${{ marginTop: ".75rem" }}>${posting}</div>` : null}
+          ${posting ? html`<${Alert} message=${posting} onClose=${() => setPosting("")} style=${{ marginTop: ".75rem" }} />` : null}
           <h2>ProofMerge runs at this commit</h2>
           ${pr.runs.length ? html`<ul class="reasons">${pr.runs.map((id) => html`<li key=${id}>
               <span class=${"pill " + (verdictOf(id) || "")}>${verdictOf(id) || "?"}</span>
@@ -752,7 +752,7 @@
           <input class="search" value=${typed} onInput=${(e) => setTyped(e.target.value)} aria-label="Folder path" spellcheck="false" />
           <button class="ghost" type="submit">Go</button>
         </form>
-        ${error ? html`<p class="error-box">${error}</p>` : null}
+        ${error ? html`<${Alert} message=${error} onClose=${() => setError("")} />` : null}
         <ul class="dirs" role="list">
           ${data && !data.dirs.length ? html`<li class="muted dir-empty">No folders inside this one.</li>` : null}
           ${(data?.dirs || []).map((d) => html`<li key=${d.path}>
@@ -812,7 +812,7 @@
         </span>
         <span class="chip">${settings.project ? "Change" : "Browse"}</span>
       </button>
-      ${error ? html`<p class="error-box">${error}</p>` : null}
+      ${error ? html`<${Alert} message=${error} onClose=${() => setError("")} />` : null}
       <div class="sentence">
         <span>Check</span>
         <label class="select-wrap"><${Icon} name="branch" size=${16} />
@@ -929,11 +929,25 @@
     </section>`;
   }
 
+  // A transient error: it can be closed, and it closes itself, so it never sits on the page for good.
+  function Alert({ message, onClose, seconds = 10, className = "", style }) {
+    useEffect(() => {
+      const timer = setTimeout(onClose, seconds * 1000);
+      return () => clearTimeout(timer);
+    }, [message]);
+    return html`<div class=${"error-box alert " + className} role="alert" style=${style}>
+      <span>${message}</span>
+      <button class="icon-btn" type="button" onClick=${onClose} aria-label="Dismiss"><${Icon} name="x" size=${16} /></button></div>`;
+  }
+
   function Home({ index }) {
     const ctx = React.useContext(AppCtx);
     const job = ctx.job;
     const showJob = job && VERDICT_JOBS.includes(job.command) && ctx.dismissed !== job.started;
-    const recent = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 6);
+    const [hidden, setHidden] = useState(() => { try { return JSON.parse(store.get("pm-hidden-recent", "[]")); } catch { return []; } });
+    const hide = (ids) => { const next = [...new Set([...hidden, ...ids])].slice(-200); setHidden(next); store.set("pm-hidden-recent", JSON.stringify(next)); };
+    const all = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id));
+    const recent = all.filter((r) => !hidden.includes(r.id)).slice(0, 6);
     const missing = ctx.health ? [!ctx.health.docker_running && "Docker", !ctx.health.runner_image && "sandbox image",
       !ctx.health.model_key && "AI model"].filter(Boolean) : [];
     return html`<div class=${"home" + (recent.length ? " has-recent" : "")}>
@@ -957,14 +971,17 @@
       </div>
       ${recent.length ? html`<aside class="recent" aria-labelledby="recent-title">
         <div class="section-head"><h2 id="recent-title">Recent checks</h2>
-          <button class="link" type="button" onClick=${() => ctx.go({ tab: "runs" })}>See all ${index.runs.length}</button></div>
+          <span><button class="link" type="button" onClick=${() => hide(recent.map((r) => r.id))}>Clear</button>
+            <button class="link" type="button" onClick=${() => ctx.go({ tab: "runs" })}>See all ${index.runs.length}</button></span></div>
         <ol class="recent-list">${recent.map((r, i) => html`<li key=${r.id} style=${{ "--i": i }}>
           <button type="button" class=${r.decision} onClick=${() => ctx.go({ tab: "runs", run: r.id })}>
             <span class="recent-top"><span class=${"pill " + r.decision}>${r.decision}</span>
               <span class="muted mono">${short(r.base_sha)} → ${short(r.head_sha)}</span></span>
             <span class="run-name">${r.id}</span>
             ${r.reasons?.[0] ? html`<span class="recent-why">${r.reasons[0]}</span>` : null}
-          </button></li>`)}</ol>
+          </button>
+          <button class="icon-btn recent-x" type="button" onClick=${() => hide([r.id])} aria-label=${"Remove " + r.id + " from recent checks"}
+            title="Remove from this list (the run stays under Runs)"><${Icon} name="x" size=${14} /></button></li>`)}</ol>
       </aside>` : null}
     </div>`;
   }
@@ -1050,7 +1067,7 @@
         ${login?.state === "failed" ? "Try again" : "Sign in to GitHub"}</button>`;
     }
     return html`<${SetupRow} ok=${!!gh.user} optional=${true} icon="pull" title="GitHub" action=${action}>
-      ${body}${fail ? html`<div class="error-box gh-error">${fail}</div>` : null}</${SetupRow}>`;
+      ${body}${fail ? html`<${Alert} message=${fail} onClose=${() => setFail("")} className="gh-error" />` : null}</${SetupRow}>`;
   }
 
   function RepoPicker({ onPicked, onCancel }) {
@@ -1061,6 +1078,7 @@
     const [query, setQuery] = useState("");
     const [other, setOther] = useState("");
     const [fail, setFail] = useState("");
+    const [gone, setGone] = useState("");  // a clone failure that was closed
     const asked = useRef("");
     const signedIn = !!gh?.user;
     const loadRepos = () => {
@@ -1111,7 +1129,7 @@
           <div class="muted">Signed in as @${gh.user}. ProofMerge downloads it to your ProofMerge folder; its code only ever runs in the sandbox.</div></div>
         ${back}
       </div>
-      ${failed ? html`<div class="error-box" role="alert">${failed}</div>` : null}
+      ${failed && failed !== gone ? html`<${Alert} message=${failed} onClose=${() => { setFail(""); setGone(failed); }} />` : null}
       <input class="search" type="search" placeholder="Search your repositories" value=${query}
         onInput=${(e) => setQuery(e.target.value)} aria-label="Search your repositories" />
       ${listError ? html`<div class="error-box">${listError} <button class="ghost" type="button" onClick=${loadRepos}>Try again</button></div>`

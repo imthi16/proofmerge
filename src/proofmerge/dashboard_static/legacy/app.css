@@ -1,5 +1,6 @@
-/* ProofMerge dashboard: an evidence ledger. Dark ink by default, light on request.
-   Verdict hues carry meaning only (PASS / REVIEW / BLOCK); the periwinkle brand marks interaction. */
+/* ProofMerge dashboard: an evidence ledger. Neutral graphite by default, light on request.
+   Verdict hues carry meaning only (PASS / REVIEW / BLOCK); the azure brand marks interaction,
+   picked to sit apart from all three verdict hues. */
 @font-face { font-family: "Geist"; src: url("/static/legacy/vendor/geist-latin-wght-normal.woff2") format("woff2");
   font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Geist Mono"; src: url("/static/legacy/vendor/geist-mono-latin-wght-normal.woff2") format("woff2");
@@ -7,34 +8,35 @@
 
 :root {
   color-scheme: dark;
-  --bg: #090c11; --surface: #0f141b; --raised: #151b24; --hover: #131922;
-  --rule: #1f2732; --rule-strong: #2c3644;
-  --fg: #e9eef5; --muted: #8b97a9; --faint: #75818f;
-  --brand: #8b9cff; --brand-ink: #0b0f2a;
-  --pass: #34d399; --review: #fbbf24; --block: #ff5d5d;
-  --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -12px rgba(0, 0, 0, .6);
-  --glow: radial-gradient(60rem 18rem at 15% -6rem, rgba(139, 156, 255, .13), transparent 70%);
+  --bg: #09090b; --surface: #111114; --raised: #18181c; --hover: #151519;
+  --rule: #222228; --rule-strong: #303038;
+  --fg: #ececf1; --muted: #9d9daa; --faint: #80808c;
+  --brand: #5cc6ff; --brand-ink: #021521;
+  --pass: #3ddc97; --review: #fbbf24; --block: #ff5f5f;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .045) inset, 0 1px 2px rgba(0, 0, 0, .4), 0 16px 36px -18px rgba(0, 0, 0, .75);
+  --glow: radial-gradient(52rem 20rem at 8% -8rem, rgba(92, 198, 255, .10), transparent 70%),
+    radial-gradient(40rem 22rem at 100% -10rem, rgba(140, 120, 255, .06), transparent 70%);
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f6f8; --surface: #ffffff; --raised: #f0f2f5; --hover: #f6f7f9;
-  --rule: #e2e6ec; --rule-strong: #cdd3dc;
-  --fg: #0e131a; --muted: #5b6676; --faint: #5f6a7a;
-  --brand: #3f4fd0; --brand-ink: #ffffff;
+  --bg: #f6f6f8; --surface: #ffffff; --raised: #f0f0f3; --hover: #f5f5f8;
+  --rule: #e3e3e8; --rule-strong: #cfcfd7;
+  --fg: #101014; --muted: #5a5a66; --faint: #62626e;
+  --brand: #0a6aad; --brand-ink: #ffffff;
   --pass: #0b7550; --review: #855000; --block: #b42323;
-  --shadow: 0 1px 2px rgba(14, 19, 26, .05), 0 12px 32px -14px rgba(14, 19, 26, .16);
-  --glow: radial-gradient(60rem 18rem at 15% -6rem, rgba(75, 92, 228, .08), transparent 70%);
+  --shadow: 0 1px 2px rgba(16, 16, 20, .05), 0 14px 32px -16px rgba(16, 16, 20, .18);
+  --glow: radial-gradient(52rem 20rem at 8% -8rem, rgba(10, 106, 173, .07), transparent 70%);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --bg: #f5f6f8; --surface: #ffffff; --raised: #f0f2f5; --hover: #f6f7f9;
-    --rule: #e2e6ec; --rule-strong: #cdd3dc;
-    --fg: #0e131a; --muted: #5b6676; --faint: #5f6a7a;
-    --brand: #3f4fd0; --brand-ink: #ffffff;
+    --bg: #f6f6f8; --surface: #ffffff; --raised: #f0f0f3; --hover: #f5f5f8;
+    --rule: #e3e3e8; --rule-strong: #cfcfd7;
+    --fg: #101014; --muted: #5a5a66; --faint: #62626e;
+    --brand: #0a6aad; --brand-ink: #ffffff;
     --pass: #0b7550; --review: #855000; --block: #b42323;
-    --shadow: 0 1px 2px rgba(14, 19, 26, .05), 0 12px 32px -14px rgba(14, 19, 26, .16);
-    --glow: radial-gradient(60rem 18rem at 15% -6rem, rgba(75, 92, 228, .08), transparent 70%);
+    --shadow: 0 1px 2px rgba(16, 16, 20, .05), 0 14px 32px -16px rgba(16, 16, 20, .18);
+    --glow: radial-gradient(52rem 20rem at 8% -8rem, rgba(10, 106, 173, .07), transparent 70%);
   }
 }
 :root {
@@ -46,7 +48,7 @@
   --review-line: color-mix(in oklab, var(--review) 45%, transparent);
   --block-line: color-mix(in oklab, var(--block) 45%, transparent);
   --select: color-mix(in oklab, var(--brand) 32%, transparent);
-  --r-sm: 6px; --r-md: 12px;
+  --r-sm: 7px; --r-md: 14px;
   --ease: cubic-bezier(.16, 1, .3, 1);
   --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -187,17 +189,29 @@ h3 { font-size: 1rem; font-weight: 600; letter-spacing: -.015em; margin: 0 0 .35
   padding-top: .9rem; border-top: 1px solid var(--rule); }
 .blocker { color: var(--review); font-size: .88rem; }
 
-.recent { max-width: 54rem; margin-top: 2.75rem; }
+.home { display: grid; gap: 2.5rem; align-items: start; }
+.home.has-recent { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
+.home-main { min-width: 0; max-width: 54rem; }
+.recent { position: sticky; top: 2.25rem; }
+/* The one authored entrance on Home: the column slides in from the right, its rows after it. */
+@keyframes from-right { from { opacity: 0; transform: translateX(22px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.recent { animation: from-right .7s var(--ease) .12s both; }
+.recent-list li { animation: from-right .6s var(--ease) both; animation-delay: calc(.26s + var(--i, 0) * 70ms); }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; }
 .section-head h2 { border: 0; padding: 0; margin: 0 0 .75rem; }
-.recent-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--r-md);
-  overflow: hidden; background: var(--surface); }
-.recent-list li + li { border-top: 1px solid var(--rule); }
-.recent-list button { display: flex; align-items: center; gap: .9rem; width: 100%; padding: .75rem 1rem; border: 0;
-  background: none; color: inherit; cursor: pointer; text-align: left; transition: background .15s var(--ease); }
-.recent-list button:hover { background: var(--hover); }
-.recent-list .run-name { flex: 1; min-width: 0; }
-.recent-list .mono { font-size: .76rem; }
+.recent-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.recent-list button { display: grid; gap: .3rem; width: 100%; padding: .8rem .95rem; border: 1px solid var(--rule);
+  border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow); color: inherit; cursor: pointer;
+  text-align: left; transition: border-color .2s var(--ease), background .2s var(--ease), transform .25s var(--ease); }
+.recent-list button:hover { background: var(--raised); border-color: var(--rule-strong); transform: translateX(-3px); }
+.recent-list button.BLOCK:hover { border-color: var(--block-line); }
+.recent-list button.REVIEW:hover { border-color: var(--review-line); }
+.recent-list button.PASS:hover { border-color: var(--pass-line); }
+.recent-top { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.recent-list .run-name { font-size: .9rem; min-width: 0; }
+.recent-list .mono { font-size: .74rem; }
+.recent-why { font-size: .8rem; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; }
 
 /* Folder picker. Scoped to .dialog: the repository picker below reuses .picker with display: grid,
    which let the folder list grow past the dialog and scroll the page. */
@@ -368,7 +382,7 @@ details.cli summary { display: inline-flex; align-items: center; gap: .4rem; }
 /* Runs + detail */
 .split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
 .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md); box-shadow: var(--shadow); }
-.runs { overflow: auto; max-height: calc(100vh - 17rem); }
+.runs { overflow: auto; position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; font-size: .76rem;
   color: var(--faint); font-weight: 500; padding: .65rem .9rem; border-bottom: 1px solid var(--rule); }
@@ -399,7 +413,7 @@ td.mono { font-size: .8rem; color: var(--muted); white-space: nowrap; }
 .seal.unsealed { color: var(--review); }
 .disagree { color: var(--block); font-weight: 600; }
 
-.detail { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow: auto; padding: 1.5rem 1.6rem; }
+.detail { padding: 1.6rem 1.75rem; scroll-margin-top: 1.5rem; min-width: 0; }
 /* The detail re-enters on every selection, so the change reads as a response to the click. */
 @keyframes detail-in { from { opacity: 0; transform: translateY(10px); filter: blur(3px); }
   to { opacity: 1; transform: none; filter: none; } }
@@ -502,13 +516,14 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 .mismatch li + li { margin-top: .3rem; }
 
 @media (max-width: 64rem) {
-  .split { grid-template-columns: 1fr; }
-  .detail { position: static; max-height: none; }
-  .runs { max-height: none; }
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .runs { position: static; max-height: none; }
+  .home.has-recent { grid-template-columns: minmax(0, 1fr); }
+  .recent { position: static; }
 }
 @media (max-width: 52rem) {
   /* The sidebar folds into a bar along the top. */
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .side { position: sticky; z-index: 10; height: auto; flex-direction: row; align-items: center; gap: .5rem;
     padding: .55rem .75rem; border-right: 0; border-bottom: 1px solid var(--rule); overflow-x: auto;
     background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(12px); }
@@ -539,7 +554,6 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .setup-row { grid-template-columns: auto minmax(0, 1fr); }
   .setup-action { grid-column: 2; }
   .live-head { flex-wrap: wrap; }
-  .recent-list .mono { display: none; }
 }
 /* Long branch names wrap instead of squeezing the PR title to a letter per line. */
 .pr-table td:nth-child(2) { min-width: 12rem; }
@@ -600,3 +614,29 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* A pull request description, rendered from its Markdown. Measure and rhythm for reading. */
+.h-note { font-size: .8rem; font-weight: 400; margin-left: .35rem; }
+.md { font-size: .92rem; line-height: 1.65; max-width: 72ch; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md p { margin: 0 0 .8rem; }
+.md h3, .md h4, .md h5, .md h6 { margin: 1.4rem 0 .5rem; letter-spacing: -.015em; line-height: 1.3; border: 0; padding: 0; }
+.md h3 { font-size: 1.08rem; } .md h4 { font-size: 1rem; } .md h5, .md h6 { font-size: .92rem; color: var(--muted); }
+.md ul, .md ol { margin: 0 0 .9rem; padding-left: 1.3rem; }
+.md li + li { margin-top: .2rem; }
+.md li::marker { color: var(--faint); }
+.md li.d1 { margin-left: 1.2rem; } .md li.d2 { margin-left: 2.4rem; } .md li.d3 { margin-left: 3.6rem; }
+.md li.task { list-style: none; margin-left: -1.3rem; display: flex; gap: .5rem; align-items: baseline; }
+.md li.task input { margin: 0; transform: translateY(1px); }
+.md blockquote { margin: 0 0 .9rem; padding: .1rem 0 .1rem .9rem; border-left: 1px solid var(--rule-strong); color: var(--muted); }
+.md hr { border: 0; border-top: 1px solid var(--rule); margin: 1.2rem 0; }
+.md pre { margin: 0 0 .9rem; font-size: .8rem; }
+.md a { overflow-wrap: anywhere; }
+.md-table { overflow-x: auto; margin: 0 0 .9rem; border: 1px solid var(--rule); border-radius: var(--r-sm); }
+.md-table table { font-size: .86rem; }
+.md-table th, .md-table td { padding: .45rem .7rem; border-bottom: 1px solid var(--rule); text-align: left; }
+.md-table tbody tr { cursor: default; }
+.md-table tbody tr:last-child td { border-bottom: 0; }
+/* Beside the detail the branch column pushed the verdict column out of view; the detail shows the branch. */
+@media (min-width: 64.01rem) and (max-width: 110rem) { .pr-table .hide-sm { display: none; } }
+.pr-table td:last-child { white-space: nowrap; }

@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from proofmerge.cli import app
 from proofmerge.evidence import Proof
-from proofmerge.report import render_html, scope_receipt
+from proofmerge.report import model_names, render_html, scope_receipt
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLES = ["sample_proof_block.json", "sample_proof_review.json"]
@@ -216,3 +216,17 @@ def test_receipt_counts_tamper_runs_per_file_not_findings() -> None:
     lines = scope_receipt(proof)
     assert "No hypothesis probe ran; only the changed tests below were run." in lines
     assert "1 test file changed by the pull request was run from base on head." in lines
+
+
+def test_report_names_the_models_the_run_used() -> None:
+    proof = load("sample_proof_block.json").model_copy(deep=True)
+    proof.contested_claim_ids = [proof.intent.claims[0].id]
+    proof.mismatched_probe_ids = [proof.hypotheses.hypotheses[0].id]
+    assert model_names(proof) == ("Muse Spark", "Muse Wonder")  # predates the record: Meta
+    proof.model_usage.endpoint, proof.model_usage.models = "cli:claude-cli", {"spark": "", "wonder": ""}
+    page = render_html(proof, FIXTURES)
+    assert "contested by Claude" in page and "Claude: probe may not test this hypothesis" in page
+    assert "Muse" not in page and scope_receipt(proof)[0] == "Claude proposed 3 hypotheses."
+    proof.model_usage.endpoint = "https://api.example.com/v1"
+    proof.model_usage.models = {"spark": "muse-spark-1.3", "wonder": "gpt-x"}
+    assert model_names(proof) == ("Muse Spark", "gpt-x")

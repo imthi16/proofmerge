@@ -11,6 +11,19 @@
     PASS: "No regression found within the tested scope",
   };
 
+  // Who writes the tests and who checks them. Meta's Muse models unless the run or the
+  // chosen provider says otherwise; same rule as report.py's model_names.
+  function runModels(usage) {
+    if ((usage?.endpoint || "").startsWith("cli:")) return ["Claude", "Claude"];
+    const name = (role, muse) => { const m = usage?.models?.[role] || ""; return !m || m.startsWith("muse-") ? muse : m; };
+    return [name("spark", "Muse Spark"), name("wonder", "Muse Wonder")];
+  }
+  function chosenModels(model) {
+    if (model?.provider === "claude") return ["Claude", "Claude"];
+    if (model?.provider === "openai") return [model.spark_model || "Your model", model.wonder_model || "Your model"];
+    return ["Muse Spark", "Muse Wonder"];
+  }
+
   const store = {
     get(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { localStorage.setItem(key, value); } catch { /* private window */ } },
@@ -212,12 +225,13 @@
     const experiment = proof.experiments.find((e) => e.hypothesis_id === h.id);
     const finding = proof.findings.find((f) => f.hypothesis_id === h.id);
     const claim = proof.intent.claims.find((c) => c.id === h.claim_id);
+    const checker = runModels(proof.model_usage)[1];
     return html`<article class="hyp">
       <h3><code>${h.id}</code> ${h.title}</h3>
       <p class="meta">cites <code>${h.claim_id}</code> ${claim ? claim.kind : "unknown claim"}, risk: ${h.risk_category}${h.possibly_intended ? ", possibly intended" : ""}</p>
       ${claim?.source_quote ? html`<blockquote>${claim.source_quote}</blockquote>` : null}
-      ${proof.mismatched_probe_ids.includes(h.id) ? html`<p class="note">Muse Wonder: probe may not test this hypothesis</p>` : null}
-      ${proof.explained_probe_ids.includes(h.id) ? html`<p class="note">Muse Wonder: may be the intended change ${proof.explained_probe_claim_ids[h.id] || ""}</p>` : null}
+      ${proof.mismatched_probe_ids.includes(h.id) ? html`<p class="note">${checker}: probe may not test this hypothesis</p>` : null}
+      ${proof.explained_probe_ids.includes(h.id) ? html`<p class="note">${checker}: may be the intended change ${proof.explained_probe_claim_ids[h.id] || ""}</p>` : null}
       <p>${h.suspected_behavior}</p>
       <p class="expect"><strong>Expected on base:</strong> ${h.expected_base}</p>
       <p class="expect"><strong>Expected on head:</strong> ${h.expected_head}</p>
@@ -232,6 +246,17 @@
   }
 
   const AppCtx = React.createContext(null);
+
+  // The detail scrolls with the page, not in a box of its own. After a pick, bring its top into
+  // view when it is out of sight: below the list on one column, or scrolled past on two.
+  function revealDetail() {
+    requestAnimationFrame(() => {
+      const detail = document.querySelector(".detail");
+      if (!detail) return;
+      const top = detail.getBoundingClientRect().top;
+      if (top < 0 || top > innerHeight * .8) detail.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
 
   function Detail({ id }) {
     const ctx = React.useContext(AppCtx);
@@ -251,7 +276,8 @@
     const { summary, proof, probes, failures, logs } = state.data;
     const decision = proof.verdict.decision;
     const usage = proof.model_usage;
-    const models = Object.entries(usage.models || {}).map(([role, model]) => `${role} ${model || "CLI default"}`).join(", ");
+    const [writer, checker] = runModels(usage);
+    const models = writer === checker ? `${writer} wrote and checked the tests` : `${writer} wrote the tests, ${checker} checked them`;
     // The id is relative to the dashboard folder, so the command uses the absolute path.
     const replay = `proofmerge replay '${summary.proof_path.replaceAll("'", "'\\''")}'`;
     return html`<aside class="panel detail" aria-label=${"Run " + id}>
@@ -268,7 +294,7 @@
         <dt>base</dt><dd><code>${short(proof.base_sha)}</code><${Copy} text=${proof.base_sha} label="base SHA" /></dd>
         <dt>head</dt><dd><code>${short(proof.head_sha)}</code><${Copy} text=${proof.head_sha} label="head SHA" /></dd>
         <dt>model calls</dt><dd>${usage.calls} calls, ${usage.prompt_tokens + usage.completion_tokens} tokens</dd>
-        ${usage.endpoint ? html`<dt>models</dt><dd>${models} via <code>${usage.endpoint}</code></dd>` : null}
+        <dt>models</dt><dd>${models}${usage.endpoint ? html` via <code>${usage.endpoint}</code>` : null}</dd>
         ${summary.benchmark ? html`<dt>label</dt><dd>${summary.benchmark.label}${summary.benchmark.held_out ? ", held out" : ""}
           ${disagrees(summary) ? html`<span class="disagree">disagrees with the verdict</span>` : null}</dd>` : null}
       </dl>
@@ -295,7 +321,7 @@
       <h2>Intent claims</h2>
       ${proof.intent.claims.map((c) => html`<div key=${c.id} style=${{ marginBottom: ".6rem" }}>
         <code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span>
-        ${proof.contested_claim_ids.includes(c.id) ? html` <span class="kind">contested by Muse Wonder</span>` : null}
+        ${proof.contested_claim_ids.includes(c.id) ? html` <span class="kind">contested by ${checker}</span>` : null}
         <div>${c.statement}</div>
         ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
       </div>`)}
@@ -320,13 +346,7 @@
       addEventListener("keydown", onKey);
       return () => removeEventListener("keydown", onKey);
     }, []);
-    // On one-column layouts the detail sits below the list, so bring it into view.
-    const pick = (id) => {
-      onSelect(id);
-      if (matchMedia("(max-width: 64rem)").matches) {
-        requestAnimationFrame(() => document.querySelector(".detail")?.scrollIntoView({ block: "start" }));
-      }
-    };
+    const pick = (id) => { onSelect(id); revealDetail(); };
     const hasLabels = index.runs.some((r) => r.benchmark);
     const runs = useMemo(() => {
       const q = query.trim().toLowerCase();
@@ -532,7 +552,7 @@
             <thead><tr><th>PR</th><th>Title</th><th class="hide-sm">Branch</th><th>ProofMerge</th></tr></thead>
             <tbody>${prs.map((p) => {
               const verdict = p.runs.length ? verdictOf(p.runs[p.runs.length - 1]) : null;
-              return html`<tr key=${p.number} aria-selected=${pr && p.number === pr.number} onClick=${() => onSelect(p.number)}>
+              return html`<tr key=${p.number} aria-selected=${pr && p.number === pr.number} onClick=${() => { onSelect(p.number); revealDetail(); }}>
                 <td class="mono">#${p.number}</td>
                 <td><div class="run-name">${p.title}</div>
                   <div class="run-sub">${p.draft ? "Draft, " : ""}${STATE[p.state] || p.state}, by ${p.author}</div></td>
@@ -571,8 +591,9 @@
               <span class=${"pill " + (verdictOf(id) || "")}>${verdictOf(id) || "?"}</span>
               <button class="copy" type="button" style=${{ marginLeft: ".4rem" }} onClick=${() => onOpenRun(id)}>open</button>
               <span class="mono" style=${{ marginLeft: ".4rem" }}>${id}</span></li>`)}</ul>` : null}
-          <details><summary>Description (used as the intent)</summary>
-            ${pr.body ? html`<pre>${pr.body}</pre>` : html`<p class="muted">The pull request has no description, so the intent is its title only.</p>`}</details>
+          <h2>Description <span class="muted h-note">used as the intent</span></h2>
+          ${pr.body ? html`<div class="md">${window.ProofMergeMarkdown(React.createElement, pr.body)}</div>`
+            : html`<p class="muted">The pull request has no description, so the intent is its title only.</p>`}
           <details><summary>Run it yourself</summary><pre>${command}</pre><${Copy} text=${command} label="commands" /></details>
         </aside>` : html`<aside class="panel detail empty"><strong>No pull requests</strong>The repository has none yet.</aside>`}
       </div>
@@ -591,11 +612,11 @@
     ["hypotheses", "Only list risks", "Lists what could break and why, without running anything. Two model calls."],
     ["probe", "Tests, no verdict", "Writes the tests and runs them on both branches, but stops before the verdict."],
   ];
-  const STATIONS = [
+  const stationsFor = ([writer, checker]) => [
     ["eye", "Read the change", "The diff and your description"],
-    ["spark", "Muse Spark looks for risks", "Each risk becomes a test"],
+    ["spark", `${writer} looks for risks`, "Each risk becomes a test"],
     ["box", "Tests run in the sandbox", "On both branches, three times"],
-    ["scale", "Muse Wonder checks the evidence", "Does each test prove its claim"],
+    ["scale", `${checker} checks the evidence`, "Does each test prove its claim"],
     ["shield", "Verdict", "PASS, REVIEW or BLOCK"],
   ];
 
@@ -729,7 +750,8 @@
     const elapsed = Math.max(0, (job.finished || now) - job.started);
     const failed = !running && job.status !== "done";
     const active = job.status === "done" ? 5 : [0, 1, 2, 2, 3, 5][job.stage] ?? 0;
-    const stations = job.command === "hypotheses" ? STATIONS.slice(0, 2) : job.command === "probe" ? STATIONS.slice(0, 3) : STATIONS;
+    const all = stationsFor(chosenModels(ctx.settings.model));
+    const stations = job.command === "hypotheses" ? all.slice(0, 2) : job.command === "probe" ? all.slice(0, 3) : all;
     const shown = Math.min(active, stations.length);
     // A finished verify ticks only the steps whose files exist; the rest did not run.
     const skipped = (i) => !running && !failed && job.command === "verify" && job.seen && !job.seen[i];
@@ -793,7 +815,7 @@
           <h3><code>${h.id}</code> ${h.title}</h3>
           <p class="meta">risk: ${h.risk_category}, cites <code>${h.claim_id}</code></p>
           <p>${h.suspected_behavior}</p></li>`)}</ol>`
-          : html`<p class="muted">Muse Spark found nothing it could test.</p>`}
+          : html`<p class="muted">${chosenModels(ctx.settings.model)[0]} found nothing it could test.</p>`}
         <h3 class="sub">What the change claims</h3>
         <ul class="reasons">${found.intent.claims.map((c) => html`<li key=${c.id}><code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span> ${c.statement}</li>`)}</ul>`
         : html`<h2>Done</h2><pre>${text}</pre>`}
@@ -805,10 +827,11 @@
     const ctx = React.useContext(AppCtx);
     const job = ctx.job;
     const showJob = job && VERDICT_JOBS.includes(job.command) && ctx.dismissed !== job.started;
-    const recent = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
+    const recent = (index?.runs || []).filter((r) => !r.error).slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 6);
     const missing = ctx.health ? [!ctx.health.docker_running && "Docker", !ctx.health.runner_image && "sandbox image",
       !ctx.health.model_key && "AI model"].filter(Boolean) : [];
-    return html`
+    return html`<div class=${"home" + (recent.length ? " has-recent" : "")}>
+      <div class="home-main">
       <section class="hero">
         <h1>Check a change before you merge it</h1>
         <p class="lede">Pick your project and the branch with the change. ProofMerge writes tests that try to break it,
@@ -825,16 +848,19 @@
         ${job.status === "done" && job.command === "probe" ? html`<section class="reveal panel"><h2>Tests ran on both branches</h2>
           <pre>${job.output}</pre><div class="actions"><button class="primary" type="button" onClick=${ctx.dismiss}>Check another change</button></div></section>` : null}`
         : html`<${Composer} />`}
-      ${recent.length ? html`<section class="recent">
-        <div class="section-head"><h2>Recent checks</h2>
+      </div>
+      ${recent.length ? html`<aside class="recent" aria-labelledby="recent-title">
+        <div class="section-head"><h2 id="recent-title">Recent checks</h2>
           <button class="link" type="button" onClick=${() => ctx.go({ tab: "runs" })}>See all ${index.runs.length}</button></div>
-        <ul class="recent-list">${recent.map((r) => html`<li key=${r.id}>
-          <button type="button" onClick=${() => ctx.go({ tab: "runs", run: r.id })}>
-            <span class=${"pill " + r.decision}>${r.decision}</span>
+        <ol class="recent-list">${recent.map((r, i) => html`<li key=${r.id} style=${{ "--i": i }}>
+          <button type="button" class=${r.decision} onClick=${() => ctx.go({ tab: "runs", run: r.id })}>
+            <span class="recent-top"><span class=${"pill " + r.decision}>${r.decision}</span>
+              <span class="muted mono">${short(r.base_sha)} → ${short(r.head_sha)}</span></span>
             <span class="run-name">${r.id}</span>
-            <span class="muted mono">${short(r.base_sha)} → ${short(r.head_sha)}</span>
-          </button></li>`)}</ul>
-      </section>` : null}`;
+            ${r.reasons?.[0] ? html`<span class="recent-why">${r.reasons[0]}</span>` : null}
+          </button></li>`)}</ol>
+      </aside>` : null}
+    </div>`;
   }
 
   // ---------------------------------------------------------------- GitHub sign-in and repositories

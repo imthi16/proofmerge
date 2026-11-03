@@ -310,3 +310,49 @@ def test_both_pr_apis_refuse_to_overlap_home_job(tmp_path: Path, route: str) -> 
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_fix_and_post_jobs_name_the_run_and_check_their_inputs(project: Path, tmp_path: Path) -> None:
+    run = tmp_path / "runs" / "pr-7-abcdef0-1"
+    run.mkdir(parents=True)
+    runs = {"pr-7-abcdef0-1": run}
+    seen = []
+    jobs = Jobs(tmp_path / "runs", spawn=lambda argv, **k: seen.append(argv) or FakeProcess([], 0))
+    jobs.start({"command": "fix", "run": "pr-7-abcdef0-1", "project": str(project)}, runs)
+    wait_done(jobs)
+    assert seen[0][3:] == ["fix", str(run / "proof.json"), "--repo", str(project.resolve())]
+    jobs.start({"command": "post", "run": "pr-7-abcdef0-1", "project": str(project), "pr": 7, "mode": "overall"}, runs)
+    wait_done(jobs)
+    assert seen[1][3:] == ["post", str(run / "proof.json"), "--pr", "7", "--repo", str(project.resolve()),
+                           "--mode", "overall"]
+    for bad, problem in (({"pr": "7; rm", "mode": "inline"}, "pull request"), ({"pr": True, "mode": "inline"}, "pull request"),
+                         ({"pr": 7, "mode": "approve"}, "inline or overall")):
+        with pytest.raises(JobError, match=problem):
+            jobs.start({"command": "post", "run": "pr-7-abcdef0-1", "project": str(project)} | bad, runs)
+    with pytest.raises(JobError, match="no longer"):
+        jobs.start({"command": "fix", "run": "gone", "project": str(project)}, runs)
+
+
+def test_approve_job_names_the_run_and_needs_a_pr_number(project: Path, tmp_path: Path) -> None:
+    run = tmp_path / "runs" / "pr-7-abcdef0-1"
+    run.mkdir(parents=True)
+    seen = []
+    jobs = Jobs(tmp_path / "runs", spawn=lambda argv, **k: seen.append(argv) or FakeProcess([], 0))
+    jobs.start({"command": "approve", "run": "pr-7-abcdef0-1", "project": str(project), "pr": 7},
+               {"pr-7-abcdef0-1": run})
+    wait_done(jobs)
+    assert seen[0][3:] == ["approve", str(run / "proof.json"), "--pr", "7", "--repo", str(project.resolve())]
+    for bad in ({"pr": "7; rm"}, {"pr": True}, {}):
+        with pytest.raises(JobError, match="pull request"):
+            jobs.start({"command": "approve", "run": "pr-7-abcdef0-1", "project": str(project)} | bad,
+                       {"pr-7-abcdef0-1": run})
+
+
+def test_ponytail_job_names_the_run(project: Path, tmp_path: Path) -> None:
+    run = tmp_path / "runs" / "run-1"
+    run.mkdir(parents=True)
+    seen = []
+    jobs = Jobs(tmp_path / "runs", spawn=lambda argv, **k: seen.append(argv) or FakeProcess([], 0))
+    jobs.start({"command": "ponytail", "run": "run-1", "project": str(project)}, {"run-1": run})
+    wait_done(jobs)
+    assert seen[0][3:] == ["ponytail", str(run / "proof.json"), "--repo", str(project.resolve())]

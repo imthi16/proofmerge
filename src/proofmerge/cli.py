@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import tempfile
 import webbrowser
@@ -12,7 +13,7 @@ from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
 from proofmerge.dashboard import make_server
 from proofmerge.dashboard_events import JsonlEventSink
-from proofmerge.evidence import Experiment, Proof
+from proofmerge.evidence import Experiment, Proof, read_evidence
 from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.manifest import (
@@ -273,6 +274,214 @@ def replay(
             raise typer.Exit(1)
 
 
+def _checked_commits(proof: Proof, repo: Path) -> None:
+    """Both recorded SHAs are full SHAs present in repo; never pass a ref or option to git."""
+    for sha in (proof.base_sha, proof.head_sha):
+        if not SHA.fullmatch(sha):
+            raise ValueError(f"not a full commit SHA: {sha!r}")
+    for sha in (proof.base_sha, proof.head_sha):
+        result = subprocess.run(
+            ["git", "-C", str(repo), "cat-file", "-e", f"{sha}^{{commit}}"],
+            capture_output=True, check=False,
+        )
+        if result.returncode:
+            raise ValueError(f"repository {repo} lacks recorded commit {sha} (or is not readable)")
+
+
+def _head_failures(proof: Proof, evidence_dir: Path) -> dict[str, str]:
+    """The assertion lines of each probe's first failing head run, for the fix prompt."""
+    failures = {}
+    for experiment in proof.experiments:
+        failed = next((e for e in experiment.executions if e.revision == "head" and e.outcome == "FAIL"), None)
+        if failed is None:
+            continue
+        log = read_evidence(evidence_dir, failed.stdout_path)
+        if log is None:
+            continue
+        lines = [x for x in log.splitlines() if x.startswith("E ")] or log.splitlines()[-30:]
+        failures[experiment.hypothesis_id] = "\n".join(lines[:60])
+    return failures
+
+
+@app.command()
+def fix(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    config_file: ConfigOption = None,
+) -> None:
+    """Suggest a fix for each verified regression and check it by re-running its probe in Docker.
+
+    Writes <evidence dir>.fix/ beside the evidence. The verdict and the sealed evidence never change."""
+    from proofmerge.fixes import FixError, fix_dir, regressions, suggest_fixes
+
+    evidence_dir = proof_json.parent
+    problems = verify_manifest(evidence_dir)
+    if problems:
+        typer.echo("The evidence changed since the run, so no fix is suggested:", err=True)
+        for problem in problems:
+            typer.echo(f"  {problem}", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        if not regressions(proof):
+            typer.echo("No verified regression in this run, so there is nothing to fix.")
+            return
+        config, python_project, _source = _load_setup(repo, proof.base_sha, config_file)
+        context = get_context(repo, proof.base_sha, proof.head_sha)
+        client = MetaClient(max_calls=len(regressions(proof)) * 2)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"fix failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    experiments = {e.hypothesis_id: e for e in proof.experiments}
+
+    def run_probe(sha: str, identifier: str, source: str, destination: Path) -> Experiment:
+        experiment = experiments[identifier]
+        attempts = max(1, sum(e.revision == "head" for e in experiment.executions))
+        if config is None:
+            options = {"attempts": attempts, "timeout": experiment.timeout_seconds}
+            if python_project is not None:
+                options["python_project"] = python_project
+            return run_experiment(repo, proof.base_sha, sha, identifier, source, destination, **options)
+        return run_config_experiment(repo, proof.base_sha, sha, identifier, source, config, destination,
+                                     attempts=attempts, timeout=experiment.timeout_seconds)
+
+    typer.echo(f"suggesting fixes for {', '.join(regressions(proof))} (each is checked in the sandbox)")
+    try:
+        report = suggest_fixes(proof, evidence_dir, repo, client, context.diff_text,
+                               context.changed_files, run_probe, _head_failures(proof, evidence_dir))
+    except (OSError, ValueError, FixError, SandboxError) as error:
+        typer.echo(f"fix failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for result in report.fixes:
+        if result.verified:
+            typer.echo(f"{result.hypothesis_id}: fix verified, probe base {result.base_outcomes}, "
+                       f"fix {result.fixed_outcomes} ({', '.join(f.path for f in result.files)})")
+        else:
+            typer.echo(f"{result.hypothesis_id}: no verified fix: {result.problem}")
+    typer.echo(f"written: {fix_dir(evidence_dir) / 'fix.json'}")
+    _echo_usage(client)
+
+
+@app.command()
+def post(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    mode: Annotated[str, typer.Option(help="inline: suggestions on the changed lines; overall: one comment")] = "inline",
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
+) -> None:
+    """Post the verdict and any suggested fixes to the pull request as one GitHub review comment."""
+    from proofmerge.fixes import head_files, load_report
+    from proofmerge.pr_review import ReviewError, build_review, post_review
+
+    evidence_dir = proof_json.parent
+    if verify_manifest(evidence_dir):
+        typer.echo("The evidence changed since the run; check it with replay before posting.", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        diff = subprocess.run(["gh", "pr", "diff", str(pr), "--repo", name], cwd=repo,
+                              capture_output=True, text=True, timeout=60, check=False)
+        if diff.returncode or not name:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        report = load_report(evidence_dir)
+        paths = [f.path for fx in (report.fixes if report else []) for f in fx.files]
+        review = build_review(proof, report, diff.stdout, head_files(repo, proof.head_sha, paths), mode)
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+    except (OSError, ValueError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"post failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    inline = len(review.get("comments", []))
+    typer.echo(f"posted to {name}#{pr}: {inline} inline suggestion(s){', ' if inline else ''}review {url}")
+
+
+@app.command()
+def approve(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
+) -> None:
+    """Approve the pull request on GitHub. Only a PASS run, on the commit it checked, can approve."""
+    from proofmerge.pr_review import ReviewError, build_approval, post_review
+
+    if verify_manifest(proof_json.parent):
+        typer.echo("The evidence changed since the run; check it with replay before approving.", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        review = build_approval(proof)
+        # Hashes alone do not show the recorded decision is the one the evidence gives: recompute it,
+        # as replay does, so an edited PASS with a regenerated manifest cannot approve anything.
+        problems = rederive(proof)
+        if problems is None:
+            raise ReviewError("This run predates recorded verdict inputs, so its verdict cannot be recomputed. "
+                              "Verify the pull request again.")
+        if problems:
+            raise ReviewError("The recorded verdict does not follow from the evidence: " + "; ".join(problems[:3]))
+        _checked_commits(proof, repo)
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid,baseRefName"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if view.returncode or not name:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        current = json.loads(view.stdout)
+        if current["state"] != "OPEN":
+            raise ReviewError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to approve.")
+        if current["headRefOid"] != proof.head_sha:
+            raise ReviewError(f"PR #{pr} changed since this run (head {current['headRefOid'][:7]}, "
+                              f"checked {proof.head_sha[:7]}). Verify it again.")
+        # A retargeted PR keeps its head but gets another diff and other required checks: the base this
+        # run checked must still be part of the branch the PR now targets.
+        target = current["baseRefName"]
+        compare = subprocess.run(
+            ["gh", "api", f"repos/{name}/compare/{proof.base_sha}...{target}", "--jq", ".status"],
+            cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", target) or compare.stdout.strip() not in ("identical", "ahead"):
+            raise ReviewError(f"PR #{pr} now targets {target}, which does not contain the base this run checked "
+                              f"({proof.base_sha[:7]}). Verify it again.")
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+    except (OSError, ValueError, KeyError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"approve failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"approved {name}#{pr}: review {url}")
+
+
+@app.command()
+def ponytail(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+) -> None:
+    """Review the run's diff for over-engineering: what to delete, what replaces it.
+
+    Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
+    from proofmerge.ponytail import ponytail_dir, review_diff
+
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        context = get_context(repo, proof.base_sha, proof.head_sha)
+        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"ponytail failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for finding in report.findings:
+        typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
+    typer.echo(f"written: {ponytail_dir(proof_json.parent) / 'ponytail.json'}")
+
+
 def _outcomes(experiment: Experiment, revision: str) -> str:
     return "".join(
         execution.outcome[0]
@@ -286,17 +495,7 @@ def _replay_experiments(
 ) -> bool:
     if repo is None:
         raise ValueError("--repo is required with --rerun")
-    # Validate both before either reaches git; a ref or an option must never be executed.
-    for sha in (proof.base_sha, proof.head_sha):
-        if not SHA.fullmatch(sha):
-            raise ValueError(f"not a full commit SHA: {sha!r}")
-    for sha in (proof.base_sha, proof.head_sha):
-        result = subprocess.run(
-            ["git", "-C", str(repo), "cat-file", "-e", f"{sha}^{{commit}}"],
-            capture_output=True, check=False,
-        )
-        if result.returncode:
-            raise ValueError(f"repository {repo} lacks recorded commit {sha} (or is not readable)")
+    _checked_commits(proof, repo)
     if not proof.experiments:
         raise ValueError("no recorded experiments to re-run")
     # Same rule as verify: the test setup comes from the recorded base commit, and a

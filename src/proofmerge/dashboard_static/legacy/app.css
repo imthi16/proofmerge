@@ -128,7 +128,7 @@ h3 { font-size: 1rem; font-weight: 600; letter-spacing: -.015em; margin: 0 0 .35
 .nav-item.armed { color: var(--block); background: var(--block-bg); }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--rule); padding-top: .75rem; }
 .side-foot .nav-item { font-size: .86rem; }
-.page { padding: 2.25rem clamp(1.25rem, 3vw, 2.75rem) 4rem; max-width: 92rem; width: 100%; animation: page-in .45s var(--ease) both; }
+.page { padding: 2.25rem clamp(1.25rem, 3vw, 2.75rem) 4rem; max-width: 92rem; width: 100%; animation: page-in .45s var(--ease) backwards; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
 .page-head h1 { font-size: 1.75rem; font-weight: 650; letter-spacing: -.04em; margin: 0; }
@@ -417,7 +417,7 @@ td.mono { font-size: .8rem; color: var(--muted); white-space: nowrap; }
 /* The detail re-enters on every selection, so the change reads as a response to the click. */
 @keyframes detail-in { from { opacity: 0; transform: translateY(10px); filter: blur(3px); }
   to { opacity: 1; transform: none; filter: none; } }
-.detail { animation: detail-in .5s var(--ease) both; }
+.detail { animation: detail-in .5s var(--ease) backwards; }
 .detail.empty, .panel.empty { padding: 3rem 1.5rem; text-align: center; color: var(--muted); }
 .empty strong { display: block; color: var(--fg); font-size: 1.05rem; font-weight: 600; margin-bottom: .35rem; }
 .detail-head { display: flex; flex-direction: column; gap: .5rem; }
@@ -671,3 +671,38 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .pr-table td:nth-child(2) { min-width: 0; }
   .pr-table td, .pr-table th { padding-left: .6rem; padding-right: .6rem; }
 }
+
+/* Suggested fixes: their own block under the evidence, marked by how they were checked. */
+.fix-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .9rem; padding-top: .9rem;
+  border-top: 1px solid var(--rule); }
+.fix-note { font-size: .84rem; }
+.fix { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--surface) 60%, var(--bg)); }
+.fix.verified { border-color: var(--pass-line); }
+.fix.unverified { border-color: var(--review-line); }
+.fix h4 { display: flex; align-items: center; gap: .45rem; margin: 0 0 .35rem; font-size: .95rem; }
+.fix.verified h4 { color: var(--pass); }
+.fix.unverified h4 { color: var(--review); }
+.fix p { margin: 0 0 .6rem; font-size: .9rem; }
+.fix .fix-proof { color: var(--muted); font-size: .84rem; }
+pre.diff { font-size: .76rem; white-space: pre; overflow-x: auto; }
+pre.diff span { display: block; }
+pre.diff .add { color: var(--pass); background: var(--pass-bg); }
+pre.diff .del { color: var(--block); background: var(--block-bg); }
+pre.diff .hunk { color: var(--brand); }
+.post-modes { display: grid; gap: .5rem; margin: 1rem 0; }
+.post-mode { display: flex; gap: .7rem; align-items: flex-start; padding: .75rem .9rem; border: 1px solid var(--rule);
+  border-radius: var(--r-md); cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.post-mode:hover { background: var(--hover); }
+.post-mode.on { border-color: color-mix(in oklab, var(--brand) 55%, var(--rule)); background: color-mix(in oklab, var(--brand) 7%, var(--surface)); }
+.post-mode input { margin-top: .2rem; }
+.post-mode > span { display: grid; gap: .15rem; font-size: .9rem; }
+.post-mode .muted { font-size: .82rem; }
+
+/* Ponytail review: its own block under the actions. */
+.ponytail { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
+.ponytail h4 { margin: 0 0 .4rem; font-size: .95rem; }
+.ponytail h4 .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }
+
+/* GitHub accounts on Setup: the other signed-in accounts as switch buttons. */
+.gh-accounts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .6rem; }

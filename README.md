@@ -66,6 +66,46 @@ The app also lists risks without running anything, writes tests without a
 verdict, re-checks a run's evidence hashes and re-runs its tests. Runs are saved
 in `~/ProofMerge/runs`, repositories in `~/ProofMerge/repos`.
 
+### When it blocks: a fix, checked the same way
+
+On a BLOCK run, **Suggest a fix** asks the model for the smallest change that
+makes each failing probe pass again. ProofMerge holds the fix to the same
+standard as the regression:
+
+- The fix may edit only files the pull request changed, and never a test.
+- It is built as a commit under `refs/proofmerge/fix/`. Your branches and working
+  tree are never touched.
+- The probe that failed runs again in the sandbox, on base and on the fixed head.
+  The fix shows as **verified** only when it passes every attempt on both.
+  Otherwise the page says why.
+- A probe that Muse Wonder doubted, or one that may show the intended change,
+  gets no fix: fixing it could undo what the pull request is for.
+- The fix never changes the verdict, and it is saved beside the sealed evidence
+  (`<run>.fix/`), so `replay` still checks the run as it was.
+
+For a run started from **Pull requests**, **Post to PR** posts one review
+comment as your GitHub account, after you confirm. Choose where it goes:
+
+- **On the changed lines.** Each fix becomes a GitHub suggestion the author can
+  commit from the page. A change outside the pull request's diff goes in the
+  summary.
+- **One overall comment.** The verdict, its reasons and each fix as a diff.
+
+The review never approves or requests changes. From a terminal, the same steps
+are `proofmerge fix <proof.json> --repo <repo>` and
+`proofmerge post <proof.json> --pr <n> --repo <repo> --mode inline|overall`
+(`--dry-run` prints the review instead of posting it).
+
+Any run also has a **Ponytail review** button (`proofmerge ponytail <proof.json> --repo <repo>`). One model call
+reads the pull request's diff and lists what could be deleted or shortened, in the form `location: tag: what.
+replacement`, using the rules of the [ponytail-review](https://github.com/DietrichGebert/ponytail) skill (MIT). It
+looks at over-engineering only, never runs code and never changes the verdict.
+
+A **PASS** run shows **Approve PR #n** instead. After you confirm, ProofMerge approves the pull request as your
+GitHub account, but only on the commit it checked: if the PR has new commits, nothing is posted. From a terminal:
+`proofmerge approve <proof.json> --pr <n> --repo <repo> [--dry-run]`. PASS means no regression was found within the
+tested scope; it does not prove the change correct.
+
 ### Walkthrough video
 
 <a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
@@ -509,6 +549,8 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Spark hypotheses and probes that must pass on base first | Built and tested |
 | Docker runs: no network, no host secrets, read-only code, 3 runs per version | Built and tested |
 | Test-tamper guard: original tests run on the patch | Built and tested |
+| Suggested fix for a BLOCK, checked by re-running its probe (`proofmerge fix`) | Built and tested; real run on the demo shop's PR #1 with the Claude backend: both verified regressions got a fix that passes its probe 3/3 on base and on the fixed head |
+| Posting a run to its PR, inline suggestions or one comment (`proofmerge post`) | Built and tested; the inline review for PR #1 was built against GitHub's own PR diff with `--dry-run` and has not been posted |
 | Muse Wonder cross-check of claims and probes | Built and tested |
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
 | `replay` recomputes findings and the verdict from the recorded evidence (proofs from T56 on) | Built and tested; an edited and resealed verdict or outcome fails; older proofs get a notice |

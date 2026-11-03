@@ -26,6 +26,7 @@ Each item counts as built only when a dated `BUILDLOG.md` entry records its comm
 ## Third-party components
 - The dashboard vendors React 18.3.1 and React DOM 18.3.1 (MIT) and htm 3.1.1 (Apache-2.0) unchanged in `src/proofmerge/dashboard_static/vendor/`, with their license files. The tarballs' SHA-512 matched the npm registry's published integrity values.
 - The logo (`docs/assets/brand/`, `src/proofmerge/dashboard_static/legacy/icon.svg`) was generated with an AI image tool by the author and is used as the app icon.
+- The Ponytail review (`src/proofmerge/ponytail.py`, `prompts/ponytail.md`) adapts the rules of the ponytail-review skill (MIT, Copyright (c) 2026 DietrichGebert, https://github.com/DietrichGebert/ponytail) into a model prompt. The rules and tag names are theirs; the code that runs, stores and shows the review is new.
 - Python dependencies are pinned in `pyproject.toml`.
 - No invented benchmark scores, model calls, test passes, progress or demo screenshots.
 - AI coding assistants are development tools; the project is evaluated on the resulting verifiable implementation.

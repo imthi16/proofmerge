@@ -240,6 +240,7 @@ def test_verify_fetches_into_proofmerge_refs_and_runs_verify(pr_server, runs: Pa
                                "https://github.com/o/r.git"]
     assert "origin" not in fetch_call
     assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[3:5] == ["--repo", "o/r"]
+    assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[5:7] == ["--state", "open"]
     assert "+refs/pull/7/head:refs/proofmerge/pr-7" in fetch_call
     assert "+refs/heads/main:refs/proofmerge/base-7" in fetch_call
     verify = next(c for c in runner.calls if "verify" in c)
@@ -360,3 +361,11 @@ def test_app_icon_is_served_and_linked_without_scripts() -> None:
     assert icon.startswith("<svg") and not re.search(r"<script|<image|href=|onload", icon)
     assert 'rel="icon"' in (legacy / "index.html").read_text()
     assert "/static/legacy/icon.svg" in (legacy / "app.js").read_text()
+
+def test_dialog_stays_fixed_to_the_window() -> None:
+    # `.scrim` is position: fixed, but a filling transform animation on `.page` or `.detail` makes
+    # Chrome treat that ancestor as the containing block, so the dialog scrolled away with the page.
+    css = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.css").read_text()
+    for selector in (r"\.page", r"\.detail"):
+        for rule in re.findall(selector + r" \{([^}]*animation:[^}]*)\}", css):
+            assert not re.search(r"\b(both|forwards)\b", rule), selector

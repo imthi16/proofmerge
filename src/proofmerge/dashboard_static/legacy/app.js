@@ -220,7 +220,7 @@
     </div>`;
   }
 
-  function Hypothesis({ h, proof, probe, failure, logs }) {
+  function Hypothesis({ h, proof, probe, failure, logs, fix }) {
     const [open, setOpen] = useState("");
     const experiment = proof.experiments.find((e) => e.hypothesis_id === h.id);
     const finding = proof.findings.find((f) => f.hypothesis_id === h.id);
@@ -242,6 +242,7 @@
       ${failure?.length ? html`<details open><summary>Why head failed</summary><pre>${failure.join("\n")}</pre></details>` : null}
       <details><summary>Probe source</summary>${probe ? html`<pre>${probe}</pre>` : html`<p class="muted">Probe source not captured.</p>`}</details>
       ${finding ? html`<details><summary>Reproduce</summary><pre>${finding.reproducer_command}</pre></details>` : null}
+      ${fix ? html`<${FixView} fix=${fix} />` : null}
     </article>`;
   }
 
@@ -261,6 +262,9 @@
   function Detail({ id }) {
     const ctx = React.useContext(AppCtx);
     const [state, setState] = useState({ loading: true });
+    const [posting, setPosting] = useState(false);
+    const [approving, setApproving] = useState(false);
+    const fixDone = (ctx.job?.command === "fix" || ctx.job?.command === "ponytail") && ctx.job.status !== "running" ? ctx.job.finished : 0;
     useEffect(() => {
       if (!id) return;
       let live = true;
@@ -269,11 +273,13 @@
         .then((data) => live && setState({ data }))
         .catch((error) => live && setState({ error: error.message }));
       return () => { live = false; };
-    }, [id]);
+    }, [id, fixDone]);
     if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict, probes and evidence show here.</aside>`;
     if (state.error) return html`<aside class="panel detail"><div class="error-box">Could not load this run: ${state.error}</div></aside>`;
     if (state.loading) return html`<aside class="panel detail muted">Loading ${id}…</aside>`;
-    const { summary, proof, probes, failures, logs } = state.data;
+    const { summary, proof, probes, failures, logs, fix, ponytail } = state.data;
+    // Runs started from the Pull requests page are named pr-<number>-<sha>-<time>.
+    const prNumber = Number((/^pr-(\d+)-[0-9a-f]{7}-\d+$/.exec(id) || [])[1]) || 0;
     const decision = proof.verdict.decision;
     const usage = proof.model_usage;
     const [writer, checker] = runModels(usage);
@@ -307,14 +313,42 @@
         <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
           onClick=${() => ctx.start({ command: "rerun", run: id, project: ctx.settings.project })}
           title=${ctx.settings.project ? "Runs the recorded probes again in the sandbox" : "Choose the project on Home first"}><${Icon} name="refresh" />Run the tests again</button>
+        <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => ctx.start({ command: "ponytail", run: id, project: ctx.settings.project })}
+          title=${ctx.settings.project ? "The model reads the diff and lists what could be deleted or shortened. The verdict does not change." : "Choose the project on Home first"}><${Icon} name="spark" />${ponytail ? "Ponytail review again" : "Ponytail review"}</button>
       </div>
+      ${ponytail ? html`<section class="ponytail" aria-label="Ponytail review">
+        <h4>Ponytail review <span class="muted">over-engineering only, the verdict is unchanged</span></h4>
+        ${ponytail.findings.length ? html`<ul class="reasons">${ponytail.findings.map((f, i) => html`<li key=${i}>
+          <code>${f.location}</code> <span class="kind">${f.tag}</span> ${f.what} <span class="muted">${f.replacement}</span></li>`)}</ul>
+          <p class="muted fix-note">net: -${ponytail.net_lines} lines possible.</p>`
+          : html`<p class="muted">Lean already. Ship.</p>`}
+        ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long; only its first part was reviewed.</p>` : null}
+      </section>` : null}
+      ${decision === "BLOCK" ? html`<div class="fix-actions">
+        <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
+          onClick=${() => ctx.start({ command: "fix", run: id, project: ctx.settings.project })}
+          title=${ctx.settings.project ? "The model writes a fix for each verified regression; ProofMerge re-runs the failing probe on it in the sandbox" : "Choose the project on Home first"}>
+          <${Icon} name="spark" />${fix ? "Suggest the fix again" : "Suggest a fix"}</button>
+        ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
+          title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}</button>` : null}
+        ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
+      </div>` : null}
+      ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
+        <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
+          onClick=${() => setApproving(true)}
+          title=${ctx.settings.project ? "Approves the pull request on GitHub as you, after you confirm" : "Choose the project on Home first"}>
+          <${Icon} name="shield" />Approve PR #${prNumber}</button>
+        <span class="muted fix-note">PASS means no regression was found in the tested scope, not that the change is correct.</span>
+      </div>` : null}
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
     <section class="panel evidence" aria-label=${"Evidence for run " + id}>
       <h2>Hypotheses and probes</h2>
       ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
-        <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}} />`)
+        <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}}
+          fix=${fix?.fixes.find((f) => f.hypothesis_id === h.id)} />`)
         : html`<p class="muted">No hypotheses were recorded for this run.</p>`}
       <h2>Test-tamper guard</h2>
       ${proof.tamper_findings.length ? html`<ul class="reasons">${proof.tamper_findings.map((t, i) => html`<li key=${i}>
@@ -327,7 +361,76 @@
         <div>${c.statement}</div>
         ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
       </div>`)}
-    </section><//>`;
+    </section>
+    ${approving ? html`<${ConfirmApprove} pr=${prNumber} onCancel=${() => setApproving(false)}
+      onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
+    ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} onCancel=${() => setPosting(false)}
+      onConfirm=${(mode) => { setPosting(false); ctx.start({ command: "post", run: id, project: ctx.settings.project, pr: prNumber, mode }); }} />` : null}<//>`;
+  }
+
+  // One suggested fix, with how it was checked. A fix never changes the verdict.
+  function FixView({ fix }) {
+    return html`<section class=${"fix " + (fix.verified ? "verified" : "unverified")} aria-label=${"Suggested fix for " + fix.hypothesis_id}>
+      <h4><${Icon} name=${fix.verified ? "check" : "alert"} size=${15} />${fix.verified ? "Fix verified" : "Suggested fix, not verified"}</h4>
+      <p class="fix-proof">${fix.verified
+        ? `The probe passes on base (${fix.base_outcomes}) and on the fixed head (${fix.fixed_outcomes}). Only this probe was re-run.`
+        : fix.problem}</p>
+      ${fix.explanation ? html`<p>${fix.explanation}</p>` : null}
+      ${fix.patch ? html`<pre class="diff">${fix.patch.split("\n").map((line, i) => html`<span key=${i}
+        class=${line.startsWith("+") && !line.startsWith("+++") ? "add" : line.startsWith("-") && !line.startsWith("---") ? "del" : line.startsWith("@@") ? "hunk" : ""}>${line}\n</span>`)}</pre>
+        <${Copy} text=${fix.patch} label="the fix as a patch" />` : null}
+    </section>`;
+  }
+
+  function ConfirmPost({ pr, fix, onConfirm, onCancel }) {
+    const [mode, setMode] = useState("inline");
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    const options = [["inline", "On the changed lines", "Each fix becomes a GitHub suggestion on the lines it changes, which the author can commit from the page. Anything outside the pull request's diff goes in the summary."],
+      ["overall", "One overall comment", "The verdict, the reasons and each fix as a diff, in one comment."]];
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="post-title">
+        <h3 id="post-title">Post to PR #${pr}?</h3>
+        <p>ProofMerge posts one review comment as your GitHub account: the verdict, its reasons${fix ? " and the suggested fixes" : ""}.
+          It never approves or requests changes.</p>
+        ${fix ? null : html`<p class="note">No fix has been suggested for this run, so only the verdict is posted.</p>`}
+        <div class="post-modes" role="radiogroup" aria-label="Where to post">${options.map(([value, label, note]) => html`
+          <label key=${value} class=${"post-mode" + (mode === value ? " on" : "")}>
+            <input type="radio" name="post-mode" value=${value} checked=${mode === value} onChange=${() => setMode(value)} />
+            <span><strong>${label}</strong><span class="muted">${note}</span></span></label>`)}</div>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${() => onConfirm(mode)}>Post to PR #${pr}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function ConfirmApprove({ pr, onConfirm, onCancel }) {
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+        <h3 id="approve-title">Approve PR #${pr}?</h3>
+        <p>ProofMerge approves the pull request as your GitHub account, on the commit it checked. If the pull request
+          has changed since this run, nothing is posted.</p>
+        <p class="note">PASS means no regression was found within the tested scope. It does not prove the change correct.</p>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${onConfirm}>Approve PR #${pr}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
   }
 
   function RunsView({ index, selected, onSelect }) {
@@ -608,6 +711,7 @@
     verify: "Checking the change", probe: "Writing and running tests", hypotheses: "Listing what could break",
     replay: "Checking the evidence", rerun: "Running the tests again", smoke: "Testing the model connection",
     setup: "Building the sandbox image",
+    fix: "Suggesting and checking a fix", post: "Posting to the pull request",
   };
   const MODES = [
     ["verify", "Full check", "Writes tests that try to break the change, runs them in the sandbox and gives PASS, REVIEW or BLOCK."],
@@ -920,8 +1024,16 @@
       body = "To open pull requests from GitHub, ProofMerge needs the GitHub CLI. Run the ProofMerge installer again and it can add it for you.";
       action = html`<a class="ghost" href="https://cli.github.com/" target="_blank" rel="noopener noreferrer">Get GitHub CLI</a>`;
     } else if (gh.user) {
-      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.`;
-      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out</button>`;
+      const others = (gh.accounts || []).filter((a) => !a.active);
+      body = html`Signed in as <strong class="gh-user">@${gh.user}</strong>. Pick a repository under Pull requests.
+        ${others.length ? html`<div class="gh-accounts" role="group" aria-label="Switch GitHub account">
+          <span class="muted">Switch to</span>
+          ${others.map((a) => html`<button key=${a.login} class="ghost btn-small" type="button" disabled=${pending}
+            onClick=${() => { setPending(true); setFail(""); act("/api/github/switch", { user: a.login }).catch((e) => setFail(e.message)).finally(() => setPending(false)); }}>@${a.login}</button>`)}
+        </div>
+        <p class="muted fix-note">Switching also changes the account the <code>gh</code> command uses in a terminal.</p>` : null}`;
+      action = html`<button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/add")}>Add another account</button>
+        <button class="ghost" type="button" disabled=${pending} onClick=${() => run("/api/github/logout")}>Sign out @${gh.user}</button>`;
     } else if (login?.state === "waiting") {
       body = html`<div class="device" aria-live="polite">
         ${login.code

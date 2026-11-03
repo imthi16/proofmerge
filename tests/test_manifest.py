@@ -161,7 +161,6 @@ def test_probe_writes_manifest_after_run_json(tmp_path, monkeypatch):
     hypotheses = SimpleNamespace(hypotheses=[], model_dump=dict)
     client = SimpleNamespace(usage=[], calls=0)
     monkeypatch.setattr(cli, "get_context", lambda *args: context)
-    monkeypatch.setattr(cli, "check_diff", lambda *args: None)
     monkeypatch.setattr(cli, "MetaClient", lambda **kwargs: client)
     monkeypatch.setattr(cli, "extract_intent", lambda *args: contract)
     monkeypatch.setattr(cli, "generate_hypotheses", lambda *args, **kwargs: hypotheses)

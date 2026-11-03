@@ -264,7 +264,7 @@
     const [state, setState] = useState({ loading: true });
     const [posting, setPosting] = useState(false);
     const [approving, setApproving] = useState(false);
-    const fixDone = ctx.job?.command === "fix" && ctx.job.status !== "running" ? ctx.job.finished : 0;
+    const fixDone = (ctx.job?.command === "fix" || ctx.job?.command === "ponytail") && ctx.job.status !== "running" ? ctx.job.finished : 0;
     useEffect(() => {
       if (!id) return;
       let live = true;
@@ -277,7 +277,7 @@
     if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict, probes and evidence show here.</aside>`;
     if (state.error) return html`<aside class="panel detail"><div class="error-box">Could not load this run: ${state.error}</div></aside>`;
     if (state.loading) return html`<aside class="panel detail muted">Loading ${id}…</aside>`;
-    const { summary, proof, probes, failures, logs, fix } = state.data;
+    const { summary, proof, probes, failures, logs, fix, ponytail } = state.data;
     // Runs started from the Pull requests page are named pr-<number>-<sha>-<time>.
     const prNumber = Number((/^pr-(\d+)-[0-9a-f]{7}-\d+$/.exec(id) || [])[1]) || 0;
     const decision = proof.verdict.decision;
@@ -313,7 +313,18 @@
         <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
           onClick=${() => ctx.start({ command: "rerun", run: id, project: ctx.settings.project })}
           title=${ctx.settings.project ? "Runs the recorded probes again in the sandbox" : "Choose the project on Home first"}><${Icon} name="refresh" />Run the tests again</button>
+        <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => ctx.start({ command: "ponytail", run: id, project: ctx.settings.project })}
+          title=${ctx.settings.project ? "The model reads the diff and lists what could be deleted or shortened. The verdict does not change." : "Choose the project on Home first"}><${Icon} name="spark" />${ponytail ? "Ponytail review again" : "Ponytail review"}</button>
       </div>
+      ${ponytail ? html`<section class="ponytail" aria-label="Ponytail review">
+        <h4>Ponytail review <span class="muted">over-engineering only, the verdict is unchanged</span></h4>
+        ${ponytail.findings.length ? html`<ul class="reasons">${ponytail.findings.map((f, i) => html`<li key=${i}>
+          <code>${f.location}</code> <span class="kind">${f.tag}</span> ${f.what} <span class="muted">${f.replacement}</span></li>`)}</ul>
+          <p class="muted fix-note">net: -${ponytail.net_lines} lines possible.</p>`
+          : html`<p class="muted">Lean already. Ship.</p>`}
+        ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long; only its first part was reviewed.</p>` : null}
+      </section>` : null}
       ${decision === "BLOCK" ? html`<div class="fix-actions">
         <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
           onClick=${() => ctx.start({ command: "fix", run: id, project: ctx.settings.project })}

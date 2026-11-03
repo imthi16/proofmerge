@@ -346,3 +346,13 @@ def test_approve_job_names_the_run_and_needs_a_pr_number(project: Path, tmp_path
         with pytest.raises(JobError, match="pull request"):
             jobs.start({"command": "approve", "run": "pr-7-abcdef0-1", "project": str(project)} | bad,
                        {"pr-7-abcdef0-1": run})
+
+
+def test_ponytail_job_names_the_run(project: Path, tmp_path: Path) -> None:
+    run = tmp_path / "runs" / "run-1"
+    run.mkdir(parents=True)
+    seen = []
+    jobs = Jobs(tmp_path / "runs", spawn=lambda argv, **k: seen.append(argv) or FakeProcess([], 0))
+    jobs.start({"command": "ponytail", "run": "run-1", "project": str(project)}, {"run-1": run})
+    wait_done(jobs)
+    assert seen[0][3:] == ["ponytail", str(run / "proof.json"), "--repo", str(project.resolve())]

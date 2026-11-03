@@ -165,7 +165,7 @@ def build_approval(proof: Proof) -> dict[str, Any]:
         "",
         *[f"- {_quiet(reason)}" for reason in proof.verdict.reasons],
         "",
-        *[f"{_quiet(limit)}" for limit in proof.verdict.scope_limitations],
+        *[_quiet(limit) for limit in proof.verdict.scope_limitations],
         "",
         (
             f"<sub>Run `{proof.run_id}`, base `{proof.base_sha[:7]}`, head `{proof.head_sha[:7]}`. "

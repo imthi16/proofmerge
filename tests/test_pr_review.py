@@ -95,3 +95,16 @@ def test_one_fix_shared_by_two_regressions_is_posted_once() -> None:
     review = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "inline")
     (comment,) = review["comments"]
     assert comment["body"].startswith("**H1, H2**") and review["body"].count("#### **H1, H2**") == 1
+
+
+def test_a_shared_fix_keeps_each_probes_own_status() -> None:
+    shared = report()  # H1: verified, probe PPP -> PPP
+    shared.fixes.append(shared.fixes[0].model_copy(update={
+        "hypothesis_id": "H2", "verified": False, "fixed_outcomes": "FFF", "problem": "The probe still fails."}))
+    review = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "inline")
+    (comment,) = review["comments"]
+    for text in (comment["body"], review["body"]):
+        assert "**H1:** **Fix verified:**" in text
+        assert "**H2:** **Suggested fix, not verified:** The probe still fails." in text
+    overall = build_review(proof(), shared, DIFF, {"shop.py": HEAD}, "overall")["body"]
+    assert "**H2:** **Suggested fix, not verified:**" in overall

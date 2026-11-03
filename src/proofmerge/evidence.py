@@ -5,6 +5,7 @@ only interface between them. Hashes detect a file changed after capture; they ar
 not signatures and do not prove who produced the evidence.
 """
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
@@ -133,3 +134,14 @@ class Proof(BaseModel):
     explained_probe_claim_ids: dict[str, str] = {}
     orchestration: OrchestrationRecord | None = None  # None in proofs older than T55
     verdict_inputs: VerdictInputs | None = None  # None in proofs older than T56
+
+
+def read_evidence(evidence_dir: Path, relative: str) -> str | None:
+    """Text of a file the proof names, or None when the path leaves the evidence directory.
+
+    proof.json is untrusted: an absolute path, `..` or a symlink must never read a host file."""
+    root = evidence_dir.resolve()
+    path = (evidence_dir / relative).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8", errors="replace")

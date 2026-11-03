@@ -86,6 +86,14 @@ def _status(fix: FixResult) -> str:
     return f"**Suggested fix, not verified:** {_quiet(fix.problem or 'it was not checked')}"
 
 
+def _statuses(same: list[FixResult]) -> str:
+    """One status for a lone fix; one per hypothesis when several share a patch, since each
+    probe passed or failed on its own."""
+    if len(same) == 1:
+        return _status(same[0])
+    return "\n\n".join(f"**{f.hypothesis_id}:** {_status(f)}" for f in same)
+
+
 def build_review(
     proof: Proof, report: FixReport | None, diff_text: str, heads: dict[str, str], mode: str
 ) -> dict[str, Any]:
@@ -119,7 +127,7 @@ def build_review(
                         "path": file.path,
                         "line": last,
                         "side": "RIGHT",
-                        "body": f"{head}: {_quiet(fix.explanation)}\n\n{_status(fix)}\n\n"
+                        "body": f"{head}: {_quiet(fix.explanation)}\n\n{_statuses(same)}\n\n"
                         f"{fence}suggestion\n{text}\n{fence}",
                     }
                     if first < last:
@@ -128,7 +136,7 @@ def build_review(
                 else:
                     lines_out.append(file.path)
         placed = mode == "inline" and fix.files and not lines_out
-        body += [f"#### {head}", _quiet(fix.explanation), "", _status(fix), ""]
+        body += [f"#### {head}", _quiet(fix.explanation), "", _statuses(same), ""]
         if not placed and fix.patch:
             fence = _fence(fix.patch)
             note = (

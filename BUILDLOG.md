@@ -731,3 +731,8 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
   - Pull requests hid the verdict column: the title's 12rem minimum now applies above phone width only.
 - After the fixes all 30 captures measure zero overflow.
 - `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T82 App icon (Claude)
+- The author's AI-generated logo is now the app's tab icon (`<link rel="icon">`) and the sidebar mark, served from `dashboard_static/legacy/icon.svg`; the PNG and SVG sources are in `docs/assets/brand/`. The generated SVGs were checked for scripts, links and embedded images: none. Attributed in `ORIGINALITY.md`.
+- The generated cover banners are not used: their verification panel shows invented numbers and commit ids (labelled DEMO RUN), while the README hero is a real run.
+- Not checked: the icon was not looked at in the running app.

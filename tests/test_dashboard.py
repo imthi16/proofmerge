@@ -352,3 +352,11 @@ def test_folder_picker_list_scrolls_inside_the_dialog() -> None:
     rule = re.search(r"\.dialog\.picker \{([^}]*)\}", css)
     assert rule and "display: flex" in rule.group(1) and "max-height" in rule.group(1)
     assert re.search(r"\.dirs \{[^}]*overflow: auto", css)
+
+
+def test_app_icon_is_served_and_linked_without_scripts() -> None:
+    legacy = Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy"
+    icon = (legacy / "icon.svg").read_text()
+    assert icon.startswith("<svg") and not re.search(r"<script|<image|href=|onload", icon)
+    assert 'rel="icon"' in (legacy / "index.html").read_text()
+    assert "/static/legacy/icon.svg" in (legacy / "app.js").read_text()

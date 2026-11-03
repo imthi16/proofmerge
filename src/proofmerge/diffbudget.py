@@ -12,6 +12,8 @@ from pathlib import PurePosixPath
 from pydantic import BaseModel
 
 MAX_DIFF_CHARS = 60_000
+NOTE_CHARS = 3_000  # room kept for the note that names what was left out
+NAMES_IN_NOTE = 15  # the full lists stay in DiffView and in the proof; the prompt names only a few
 SECTION = re.compile(r"^diff --git ", re.MULTILINE)
 HEADER_PATH = re.compile(r'^diff --git "?a/.*?"? "?b/(.*?)"?$')
 GENERATED_NAMES = {
@@ -64,8 +66,27 @@ def _sections(diff_text: str) -> list[tuple[str, str]]:
 
 def _cut(text: str, limit: int) -> str:
     """The start of one file's diff, ended on a line boundary."""
+    if limit <= 0:
+        return ""
     head = text[:limit]
     return head[: head.rfind("\n") + 1] if "\n" in head else head
+
+
+_BARE_NOTE = "\n[ProofMerge: this diff is over the size limit, so you were not shown everything.]\n"
+_NAME_CHARS = 1_200  # one listing; both listings plus the fixed sentences stay inside NOTE_CHARS
+
+
+def _names(paths: list[str]) -> str:
+    """A few names for the prompt. The full list stays on DiffView and in the proof."""
+    parts: list[str] = []
+    used = 0
+    for index, path in enumerate(paths):
+        piece = path if not parts else ", " + path
+        if len(parts) >= NAMES_IN_NOTE or used + len(piece) > _NAME_CHARS:
+            return "".join(parts) + f" and {len(paths) - index} more"
+        parts.append(piece)
+        used += len(piece)
+    return "".join(parts)
 
 
 def view_diff(diff_text: str, limit: int = MAX_DIFF_CHARS) -> DiffView:
@@ -73,33 +94,39 @@ def view_diff(diff_text: str, limit: int = MAX_DIFF_CHARS) -> DiffView:
         return DiffView(text=diff_text)
     sections = _sections(diff_text)
     if not sections:  # not a git diff we can split: show the start of it
-        note = "\n[ProofMerge: this diff is over the size limit, so you were not shown everything.]\n"
-        return DiffView(text=_cut(diff_text, limit) + note, omitted=["the rest of the diff"])
+        return DiffView(
+            text=_cut(diff_text, limit - len(_BARE_NOTE)) + _BARE_NOTE,
+            omitted=["the rest of the diff"],
+        )
     generated = [path for path, _ in sections if is_generated(path)]
     code = [(i, path, text) for i, (path, text) in enumerate(sections) if not is_generated(path)]
     # Source before tests, and small files first, so more of the change is covered.
     order = sorted(code, key=lambda c: (is_test_path(c[1]), len(c[2]), c[0]))
+    budget = max(limit - NOTE_CHARS, limit // 2)  # the note is part of what the model is sent
     kept: dict[int, str] = {}
     left_out: list[str] = []
     used = 0
     for index, path, text in order:
-        if used + len(text) <= limit:
+        if used + len(text) <= budget:
             kept[index] = text
             used += len(text)
         else:
             left_out.append(path)
     if not kept and order:  # every file alone is over budget: show the start of the first one
         index, path, text = order[0]
-        kept[index] = _cut(text, limit)
+        kept[index] = _cut(text, budget)
         left_out = [path, *[p for p in left_out if p != path]]  # partly shown still counts
     # A test file Spark did not see is only noted: the tamper guard re-runs the original tests anyway.
     omitted = [path for path in left_out if not is_test_path(path)]
     noted = [path for path in left_out if is_test_path(path)] + generated
     note = ["", "[ProofMerge: this diff is over the size limit, so you were not shown everything."]
     if omitted:
-        note.append("Source files not shown (or only partly): " + ", ".join(omitted) + ".")
+        note.append("Source files not shown (or only partly): " + _names(omitted) + ".")
     if noted:
-        note.append("Test, lock, generated or binary files not shown: " + ", ".join(noted) + ".")
+        note.append("Test, lock, generated or binary files not shown: " + _names(noted) + ".")
     note.append("Write hypotheses only about code you can see.]")
-    text = "".join(kept[i] for i in sorted(kept)) + "\n".join(note) + "\n"
-    return DiffView(text=text, omitted=omitted, noted=noted)
+    note_text = "\n".join(note) + "\n"
+    body = "".join(kept[i] for i in sorted(kept))
+    if len(body) + len(note_text) > limit:
+        body = _cut(body, limit - len(note_text))
+    return DiffView(text=body + note_text, omitted=omitted, noted=noted)

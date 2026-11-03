@@ -106,3 +106,26 @@ def test_what_spark_was_not_shown_is_recorded_in_the_proof_and_replays(tmp_path,
     assert proof.verdict_inputs.unshown_files == ["calc.py"] and proof.verdict_inputs.unshown_other == ["yarn.lock"]
     assert any("calc.py" in note for note in proof.verdict.scope_limitations)
     assert rederive(proof) == []  # replay recomputes the same verdict from the recorded inputs
+
+
+def test_the_prompt_stays_within_the_limit_however_many_files_were_left_out() -> None:
+    many = "".join(section(f"vendor/long/directory/name/{i}/file_{i}.min.js", 1) for i in range(5_000))
+    view = view_diff(section("src/app.py", 19_000) + many)
+    assert len(view.text) <= MAX_DIFF_CHARS
+    assert len(view.noted) == 5_000  # the full list is kept for the proof, not sent to the model
+    assert "and 4985 more" in view.text
+
+
+def test_a_regression_still_blocks_when_source_was_not_shown() -> None:
+    from proofmerge.verdict import decide
+
+    claim = IntentClaim(id="C0", kind="PRESERVE", statement="Nothing else changes.", source_quote=None)
+    hypothesis = Hypothesis(
+        id="H1", claim_id="C0", title="t", changed_locations=["a.py::f"], suspected_behavior="s",
+        expected_base="b", expected_head="h", test_intent="i", risk_category="r",
+        falsification_criteria="f", possibly_intended=False,
+    )
+    finding = Finding(hypothesis_id="H1", claim_id="C0", classification="REGRESSION", verified=True, reproducer_command="x")
+    verdict = decide(IntentContract(claims=[claim], rejected=[]), [hypothesis], [finding], [], unshown_source_files=["src/big.py"])
+    assert verdict.decision == "BLOCK"
+    assert any("src/big.py" in reason for reason in verdict.reasons)  # BLOCK keeps every reason

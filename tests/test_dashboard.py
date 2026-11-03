@@ -352,3 +352,12 @@ def test_folder_picker_list_scrolls_inside_the_dialog() -> None:
     rule = re.search(r"\.dialog\.picker \{([^}]*)\}", css)
     assert rule and "display: flex" in rule.group(1) and "max-height" in rule.group(1)
     assert re.search(r"\.dirs \{[^}]*overflow: auto", css)
+
+
+def test_dialog_stays_fixed_to_the_window() -> None:
+    # `.scrim` is position: fixed, but a filling transform animation on `.page` or `.detail` makes
+    # Chrome treat that ancestor as the containing block, so the dialog scrolled away with the page.
+    css = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.css").read_text()
+    for selector in (r"\.page", r"\.detail"):
+        for rule in re.findall(selector + r" \{([^}]*animation:[^}]*)\}", css):
+            assert not re.search(r"\b(both|forwards)\b", rule), selector

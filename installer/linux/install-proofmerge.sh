@@ -137,13 +137,18 @@ printf 'Press Enter to close.'
 read -r _ || true
 EOF
 chmod +x "$INSTALL_DIR/uninstall.sh"
+# The menu icon is the app's own logo, copied out of the package so the entry does not depend on the
+# Python version's folder. If the copy fails the entry keeps a stock icon: the app still works.
+ICON=$INSTALL_DIR/proofmerge.svg
+"$VENV/bin/python" -c 'import shutil, sys, proofmerge; from pathlib import Path; shutil.copyfile(Path(proofmerge.__file__).parent / "dashboard_static" / "legacy" / "icon.svg", sys.argv[1])' "$ICON" 2>/dev/null \
+    || ICON=applications-development
 cat > "$APPS/proofmerge.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=ProofMerge
 Comment=Check a change before you merge it
 Exec="$VENV/bin/proofmerge-app"
-Icon=applications-development
+Icon=$ICON
 Terminal=false
 Categories=Development;
 EOF

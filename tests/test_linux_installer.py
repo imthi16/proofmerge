@@ -53,6 +53,9 @@ def test_installs_for_the_user_and_keeps_the_checks_on_uninstall() -> None:
     uninstall = script.split('uninstall.sh" <<EOF', 1)[1].split("\nEOF", 1)[0]
     assert 'rm -rf "$INSTALL_DIR"' in uninstall
     assert not re.search(r"rm [^\n]*ProofMerge", uninstall)  # ~/ProofMerge (the checks) stays
+    # The menu entry shows the app's logo, kept inside the install folder so uninstall removes it too.
+    assert "ICON=$INSTALL_DIR/proofmerge.svg" in script and "Icon=$ICON\nTerminal=false" in script
+    assert "dashboard_static" in script and "legacy" in script and "icon.svg" in script
 
 
 def test_python_without_venv_is_skipped_for_one_that_has_it(tmp_path: Path) -> None:

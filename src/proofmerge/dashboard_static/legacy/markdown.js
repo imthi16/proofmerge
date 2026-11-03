@@ -4,7 +4,9 @@
 (function (root) {
   "use strict";
   const SAFE_URL = /^https?:\/\//i;
-  const INLINE = /(`+)([\s\S]*?[^`])\1(?!`)|(!?)\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)|(\*\*|__)(?=\S)([\s\S]*?\S)\6|~~(?=\S)([\s\S]*?\S)~~|(\*|_)(?=[^\s*_])([\s\S]*?[^\s*_])\9(?![A-Za-z0-9])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/g;
+  // Every span has a bounded length, so a hostile description (thousands of backticks or
+  // asterisks) costs linear time instead of freezing the page while it renders.
+  const INLINE = /(`{1,3})([^`]{1,1000}?)\1(?!`)|(!?)\[([^\]]{0,500})\]\(\s*<?([^)\s>]{1,2000})>?(?:\s+"[^"]{0,200}")?\s*\)|(\*\*|__)(?=\S)([\s\S]{0,1000}?\S)\6|~~(?=\S)([\s\S]{0,1000}?\S)~~|(\*|_)(?=[^\s*_])([\s\S]{0,1000}?[^\s*_])\9(?![A-Za-z0-9])|(https?:\/\/[^\s<>()]{1,2000}[^\s<>().,;:!?'"])/g;
 
   function inline(h, text, key) {
     const out = [];
@@ -40,7 +42,7 @@
   const TABLE_SEP = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
   const cells = (row) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
 
-  function blocks(h, rows, key) {
+  function blocks(h, rows, key, depth = 0) {
     const out = [];
     let i = 0;
     const k = () => `${key}.${out.length}`;
@@ -65,7 +67,9 @@
       if (/^\s{0,3}>/.test(row)) {
         const quoted = [];
         for (; i < rows.length && /^\s{0,3}>/.test(rows[i]); i++) quoted.push(rows[i].replace(/^\s{0,3}>\s?/, ""));
-        out.push(h("blockquote", { key: k() }, ...blocks(h, quoted, k())));
+        // Nesting is capped: thousands of ">" would otherwise overflow the call stack.
+        out.push(h("blockquote", { key: k() }, ...(depth < 8 ? blocks(h, quoted, k(), depth + 1)
+          : [h("p", { key: "deep" }, quoted.join(" "))])));
         continue;
       }
       if (row.includes("|") && i + 1 < rows.length && TABLE_SEP.test(rows[i + 1]) && rows[i + 1].includes("-")) {

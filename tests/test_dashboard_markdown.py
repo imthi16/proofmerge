@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -51,3 +52,14 @@ def test_untrusted_links_images_and_html_stay_inert() -> None:
     assert "<img src=x onerror=alert(1)>" in para  # plain text; React escapes it
     assert "<a href=https://ok.example/a>https://ok.example/a</a>." in para
     assert "hidden note" not in para
+
+
+@pytest.mark.parametrize("text", [
+    "prefix " + "`" * 10000,  # Codex review on #64: the code-span pattern used to backtrack for seconds
+    "**a " * 20000, "_a " * 30000, "~~x " * 20000, "[" * 20000 + "](x", "https://a" * 5000 + ".",
+    "| a |\n|" + " -" * 20000 + " x", ">" * 5000 + " q", "- " * 20000, "#" * 20000,
+], ids=lambda text: repr(text[:12]))
+def test_hostile_descriptions_render_in_linear_time(text: str) -> None:
+    started = time.monotonic()
+    render(text)
+    assert time.monotonic() - started < 3  # Node start-up included; quadratic cases took 10 s+

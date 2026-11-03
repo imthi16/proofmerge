@@ -13,8 +13,9 @@ from proofmerge import __version__
 from proofmerge.context import ContextError, get_context
 from proofmerge.dashboard import make_server
 from proofmerge.dashboard_events import JsonlEventSink
+from proofmerge.diffbudget import view_diff
 from proofmerge.evidence import Experiment, Proof, read_evidence
-from proofmerge.hypotheses import MAX_HYPOTHESES, check_diff, generate_hypotheses
+from proofmerge.hypotheses import MAX_HYPOTHESES, generate_hypotheses
 from proofmerge.intent import extract_intent
 from proofmerge.manifest import (
     ManifestError,
@@ -348,7 +349,7 @@ def fix(
 
     typer.echo(f"suggesting fixes for {', '.join(regressions(proof))} (each is checked in the sandbox)")
     try:
-        report = suggest_fixes(proof, evidence_dir, repo, client, context.diff_text,
+        report = suggest_fixes(proof, evidence_dir, repo, client, view_diff(context.diff_text).text,
                                context.changed_files, run_probe, _head_failures(proof, evidence_dir))
     except (OSError, ValueError, FixError, SandboxError) as error:
         typer.echo(f"fix failed: {error}", err=True)
@@ -576,7 +577,6 @@ def hypotheses(
     """Print intent claims and Spark hypotheses for base..head (up to 2 real calls)."""
     try:
         context = get_context(repo, base, head)
-        check_diff(context)  # before any model call, so a refused diff costs nothing
         if not context.changed_files:
             typer.echo("no changes between base and head; nothing to check", err=True)
             return
@@ -651,7 +651,6 @@ def verify(
             raise ValueError("--events-file must be outside the evidence directory")
         engine = resolve_orchestrator(orchestrator)
         context = get_context(repo, base, head)
-        check_diff(context)
         if not context.changed_files:
             typer.echo("no changes between base and head; nothing to check", err=True)
             return
@@ -706,7 +705,6 @@ def probe(
     """Write a Spark probe per hypothesis and run it on base and head in Docker."""
     try:
         context = get_context(repo, base, head)
-        check_diff(context)
         if not context.changed_files:
             typer.echo("no changes between base and head; nothing to check", err=True)
             return

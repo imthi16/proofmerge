@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 from proofmerge import __version__, cli, pipeline
 from proofmerge.context import ContextError
 from proofmerge.evidence import Execution, Experiment, ModelUsage, Proof, TamperFinding
-from proofmerge.hypotheses import MAX_DIFF_CHARS, MAX_HYPOTHESES, Hypothesis, HypothesisSet
+from proofmerge.hypotheses import MAX_HYPOTHESES, Hypothesis, HypothesisSet
 from proofmerge.manifest import verify_manifest, write_manifest
 from proofmerge.meta import WONDER_MODEL, MetaClient, MetaError
 from proofmerge.pipeline import run_verify
@@ -356,17 +356,13 @@ def test_tamper_experiments_are_recorded_but_not_normalized(tmp_path):
     assert_bundle(proof, tmp_path / "ev")
 
 
-@pytest.mark.parametrize("problem", ["bad-ref", "huge-diff", "existing-dir"])
+@pytest.mark.parametrize("problem", ["bad-ref", "existing-dir"])
 def test_preflight_propagates_without_model_or_evidence_writes(tmp_path, monkeypatch, problem):
     repo, context = make_repo(tmp_path)
     evidence = tmp_path / "ev"
     base = context.base_sha
     if problem == "bad-ref":
         base = "missing"
-    elif problem == "huge-diff":
-        monkeypatch.setattr(pipeline, "get_context", lambda *a: context.model_copy(
-            update={"diff_text": "x" * (MAX_DIFF_CHARS + 1)}
-        ))
     else:
         evidence.mkdir()
         (evidence / "keep").write_text("untouched")

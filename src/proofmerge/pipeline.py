@@ -18,6 +18,7 @@ from typing import Annotated, Any, Protocol, TypedDict
 
 from proofmerge import __version__
 from proofmerge.context import ContextError, GitContext, get_context
+from proofmerge.diffbudget import view_diff
 from proofmerge.evidence import (
     Experiment,
     Finding,
@@ -29,7 +30,7 @@ from proofmerge.evidence import (
     VerdictInputs,
 )
 from proofmerge.findings import findings_for
-from proofmerge.hypotheses import HypothesisSet, check_diff, generate_hypotheses
+from proofmerge.hypotheses import HypothesisSet, generate_hypotheses
 from proofmerge.intent import C0, IntentContract, extract_intent
 from proofmerge.manifest import write_manifest
 from proofmerge.meta import SPARK_MODEL, WONDER_MODEL, MetaClient, MetaError
@@ -115,7 +116,6 @@ def _model_failure(error: MetaError, final_attempt: bool) -> Update:
 
 def resolve_context(state: VerifyState, deps: Deps) -> Update:
     context = get_context(state["repo"], state["base"], state["head"])
-    check_diff(context)
     return {"context": context}
 
 
@@ -254,6 +254,7 @@ def deterministic_decide(state: VerifyState, deps: Deps) -> Update:
         state["repo"], context.base_sha, context.head_sha, python_project,
         state.get("config_source", "the base commit's .proofmerge.toml"),
     )
+    shown = view_diff(context.diff_text)  # what Spark was not shown, from the same function it used
     # Recorded in proof.json so replay can recompute this verdict from the proof alone.
     inputs = VerdictInputs(
         errors=list(state["errors"]),
@@ -262,6 +263,8 @@ def deterministic_decide(state: VerifyState, deps: Deps) -> Update:
         wonder_checked=state["wonder_checked"],
         tamper_guard_language=config.language if config is not None else None,
         layout_scope_limitations=layout_notes,
+        unshown_files=shown.omitted,
+        unshown_other=shown.noted,
     )
     # Stage errors only add REVIEW reasons: hard evidence already gathered can still BLOCK.
     verdict = adjudicate(

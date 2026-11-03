@@ -168,4 +168,28 @@ def adjudicate(
             "changed tests were not re-run."
         )
     verdict.scope_limitations.extend(inputs.layout_scope_limitations)
+    if inputs.unshown_other:
+        verdict.scope_limitations.append(
+            "Test, lock, generated or binary files were not shown to the hypothesis writer: "
+            + ", ".join(inputs.unshown_other[:10])
+            + (f" and {len(inputs.unshown_other) - 10} more." if len(inputs.unshown_other) > 10 else ".")
+        )
+    if inputs.unshown_files:
+        names = ", ".join(inputs.unshown_files[:10])
+        more = len(inputs.unshown_files) - 10
+        verdict.scope_limitations.append(
+            f"{len(inputs.unshown_files)} changed source file(s) were not shown to the hypothesis writer "
+            f"(the diff was over the size limit), so no hypothesis covers them: {names}"
+            + (f" and {more} more." if more > 0 else ".")
+        )
+        if verdict.decision == "PASS":
+            # Nothing was found, but part of the change was never examined: that is not a PASS.
+            verdict = verdict.model_copy(update={
+                "decision": "REVIEW",
+                "reasons": [(
+                    f"{len(inputs.unshown_files)} changed source file(s) were too large to show to the "
+                    f"hypothesis writer ({names}), so no regression was looked for in them. "
+                    "Review them, or split the pull request."
+                )],
+            })
     return verdict

@@ -1898,6 +1898,22 @@
           "default": null,
           "title": "Tamper Guard Language"
         },
+        "unshown_files": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unshown Files",
+          "type": "array"
+        },
+        "unshown_other": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unshown Other",
+          "type": "array"
+        },
         "wonder_checked": {
           "title": "Wonder Checked",
           "type": "boolean"
@@ -1909,6 +1925,8 @@
         "intent_given",
         "layout_scope_limitations",
         "tamper_guard_language",
+        "unshown_files",
+        "unshown_other",
         "wonder_checked"
       ],
       "title": "VerdictInputs",

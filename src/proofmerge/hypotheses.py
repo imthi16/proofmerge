@@ -14,12 +14,12 @@ from importlib import resources
 from pydantic import BaseModel
 
 from proofmerge.context import GitContext
+from proofmerge.diffbudget import view_diff
 from proofmerge.intent import IntentContract
 from proofmerge.meta import SPARK_MODEL, MetaClient
 from proofmerge.project_config import ProjectConfig
 
 MAX_HYPOTHESES = 5
-MAX_DIFF_CHARS = 60_000
 PROMPT = (resources.files("proofmerge") / "prompts" / "hypotheses.md").read_text()
 GENERIC_PROMPT = (
     resources.files("proofmerge") / "prompts" / "hypotheses_generic.md"
@@ -78,12 +78,6 @@ def _problem(hypothesis: ProposedHypothesis, claim_ids: set[str], changed: set[s
     return None
 
 
-def check_diff(context: GitContext) -> None:
-    """Refuse a diff too large to send to the model."""
-    if len(context.diff_text) > MAX_DIFF_CHARS:
-        raise ValueError(f"diff is over {MAX_DIFF_CHARS} characters")
-
-
 def _hypotheses_prompt(config: ProjectConfig | None) -> str:
     """Return the developer prompt for hypothesis generation."""
     if config is None:
@@ -105,7 +99,6 @@ def generate_hypotheses(
     """Ask Spark for hypotheses about base..head and keep the ones that pass validation."""
     if not context.changed_files:
         return HypothesisSet(hypotheses=[], rejected=[])
-    check_diff(context)
     claims = json.dumps([claim.model_dump() for claim in contract.claims], indent=2)
     # Diff headers C-quote unusual names (b/"caf\303\251.py"), so give the literal paths too.
     files = json.dumps(context.changed_files, ensure_ascii=False)
@@ -113,7 +106,7 @@ def generate_hypotheses(
         f"Intent claims:\n{claims}\n\n"
         f"Changed files:\n{files}\n\n"
         f"Unified diff from base {context.base_sha} to head {context.head_sha}:\n"
-        f"{context.diff_text}"
+        f"{view_diff(context.diff_text).text}"
     )
     proposed = client.structured(
         SPARK_MODEL,

@@ -105,6 +105,10 @@ class VerdictInputs(BaseModel):
     tamper_guard_language: str | None = None  # set when the guard could not run (config runner)
     # What a trusted [python] layout did not cover (python_layout.scope_notes), from git.
     layout_scope_limitations: list[str] = []
+    # Changed files Spark was not shown (diffbudget.view_diff): source files, which block a PASS, and
+    # test, lock, generated or binary files, which are only noted.
+    unshown_files: list[str] = []
+    unshown_other: list[str] = []
 
 
 class Verdict(BaseModel):

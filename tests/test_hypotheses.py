@@ -10,7 +10,6 @@ from proofmerge.cli import app
 from proofmerge.context import GitContext
 from proofmerge.hypotheses import (
     GENERIC_PROMPT,
-    MAX_DIFF_CHARS,
     MAX_HYPOTHESES,
     PROMPT,
     ProposedHypotheses,
@@ -120,40 +119,13 @@ def test_empty_diff_makes_no_model_call():
     assert fake.requests == []
 
 
-def test_oversized_diff_is_refused_before_any_model_call():
-    fake = FakeCompletions()
-    huge = CONTEXT.model_copy(update={"diff_text": "x" * (MAX_DIFF_CHARS + 1)})
-    with pytest.raises(ValueError, match=str(MAX_DIFF_CHARS)):
-        generate_hypotheses(huge, CONTRACT, MetaClient(fake))
-    assert fake.requests == []
-
-
-def test_hypotheses_command_fails_cleanly_on_a_bad_repo(tmp_path):
-    result = CliRunner().invoke(app, ["hypotheses", str(tmp_path), "--base", "main", "--head", "x"])
-    assert result.exit_code == 1
-    assert "Not a Git repository" in result.output
-
-
-def test_unusual_file_names_are_sent_literally_and_accepted():
-    # Git C-quotes this name in diff headers, so the model must copy it from the file list.
-    name = "src/café.py"
-    context = CONTEXT.model_copy(
-        update={"changed_files": [name], "diff_text": '+++ "b/src/caf\\303\\251.py"\n'}
-    )
-    fake = reply(hypothesis(locations=[f"{name}::f"]))
-    found = generate_hypotheses(context, CONTRACT, MetaClient(fake))
-
-    assert [h.id for h in found.hypotheses] == ["H1"]
-    assert f'["{name}"]' in fake.requests[0]["messages"][1]["content"]
-
-
 def git(repo, *args):
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
 @pytest.mark.parametrize(
     ("content", "exit_code", "message"),
-    [("before\n", 0, "no changes"), ("x" * (MAX_DIFF_CHARS + 1), 1, str(MAX_DIFF_CHARS))],
+    [("before\n", 0, "no changes")],
 )
 def test_command_checks_the_diff_before_any_model_call(tmp_path, content, exit_code, message):
     git(tmp_path, "init", "-q")

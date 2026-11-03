@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
+from proofmerge.diffbudget import MAX_DIFF_CHARS as MAX_DIFF
 from proofmerge.evidence import Proof
 from proofmerge.ponytail import (
-    MAX_DIFF,
     MAX_FINDINGS,
     PonytailFinding,
     PonytailReview,

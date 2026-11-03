@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,8 @@ REPO = re.compile(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}")
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")
 LOGIN_SECONDS = 900  # GitHub device codes expire after 15 minutes
 CLONE_SECONDS = 900
+# The page polls status every 1.5 s while it waits; each `gh api user` costs about a second.
+WHO_SECONDS = 30
 UNREACHABLE = "Could not reach GitHub. Check the internet connection, then try again."
 # Lets git use gh's sign-in for github.com for one command, without changing the user's git config.
 GH_CREDENTIALS = ["-c", "credential.https://github.com.helper=",
@@ -54,6 +57,7 @@ class GitHub:
         self._process: Any = None
         self.login: dict[str, Any] | None = None
         self.clone: dict[str, Any] | None = None
+        self._signed_in: tuple[str, float] | None = None  # (login, when gh confirmed it)
 
     def _gh(self, *argv: str, timeout: int = 20) -> Any:
         return self._run(["gh", *argv], capture_output=True, text=True, encoding="utf-8",
@@ -61,7 +65,11 @@ class GitHub:
 
     def _who(self) -> tuple[bool, str | None]:
         """(gh installed, signed-in login or None). Raises when GitHub cannot be reached,
-        so a network problem is never shown as "signed out"."""
+        so a network problem is never shown as "signed out". A signed-in answer is reused for
+        WHO_SECONDS; a signed-out one never is, so signing in elsewhere shows at once."""
+        cached = self._signed_in
+        if cached is not None and time.monotonic() - cached[1] < WHO_SECONDS:
+            return True, cached[0]
         try:
             result = self._gh("api", "user", "--jq", ".login", timeout=15)
         except FileNotFoundError:
@@ -70,16 +78,17 @@ class GitHub:
             raise GitHubError(UNREACHABLE) from None
         name = (result.stdout or "").strip()
         if result.returncode == 0 and LOGIN.fullmatch(name):
+            self._signed_in = (name, time.monotonic())
             return True, name
         # gh exits 4 when nobody is signed in; a revoked token answers HTTP 401.
         if result.returncode == 4 or "HTTP 401" in (result.stderr or ""):
+            self._signed_in = None
             return True, None
         raise GitHubError(UNREACHABLE)
 
     def status(self) -> dict[str, Any]:
         waiting = self.login is not None and self.login["state"] == "waiting"
         error = None
-        # shortcut: one `gh api user` call per status read; cache it if polling gets slow.
         try:
             installed, user = (True, None) if waiting else self._who()
         except GitHubError as problem:
@@ -141,6 +150,7 @@ class GitHub:
         if result.returncode != 0:
             raise GitHubError("Could not sign out of GitHub.")
         self.login = None
+        self._signed_in = None
 
     # Repositories -----------------------------------------------------------------------
     def repos(self) -> list[dict[str, Any]]:

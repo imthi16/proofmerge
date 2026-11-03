@@ -44,25 +44,30 @@ esac
 if ! printf '%s' "$REF" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$'; then
     fail "PROOFMERGE_REF '$REF' is not a branch, tag or commit name."
 fi
-# Desktop entry Exec lines give these characters a meaning; refuse rather than escape them.
+# Desktop entry Exec lines give these characters a meaning (% is a field code even inside
+# quotes); refuse rather than escape them.
 case $VENV in
-    *[\"\`\$\\]*) fail "The install folder $VENV has a quote, \$ or backslash in it." ;;
+    *[\"\`\$\\%]*) fail "The install folder $VENV has a quote, \$, % or backslash in it." ;;
 esac
 
 printf '\n  ProofMerge installer\n  Checks a code change before you merge it, with evidence.\n'
 
 step 'Step 1 of 7: Python'
 PYTHON=
+NO_VENV=
 for candidate in python3.13 python3.12 python3.11 python3; do
-    if has "$candidate" && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+    has "$candidate" && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null || continue
+    # Debian and Ubuntu ship venv separately; ensurepip is what a venv without pip lacks.
+    if "$candidate" -c 'import ensurepip, venv' 2>/dev/null; then
         PYTHON=$candidate
         break
     fi
+    NO_VENV=$candidate
 done
+if [ -z "$PYTHON" ] && [ -n "$NO_VENV" ]; then
+    fail "Python's venv module is missing. Install it with: $(pkg_hint python3-venv python3 python), then run this again."
+fi
 [ -n "$PYTHON" ] || fail "ProofMerge needs Python 3.11 or newer. Install it with: $(pkg_hint python3 python3 python), then run this again."
-# Debian and Ubuntu ship venv separately; ensurepip is what a venv without pip lacks.
-"$PYTHON" -c 'import ensurepip, venv' 2>/dev/null \
-    || fail "Python's venv module is missing. Install it with: $(pkg_hint python3-venv python3 python), then run this again."
 ok "Found $("$PYTHON" --version)"
 
 step 'Step 2 of 7: Git'
@@ -110,6 +115,13 @@ mkdir -p "$APPS"
 cat > "$INSTALL_DIR/uninstall.sh" <<EOF
 #!/bin/sh
 # Remove ProofMerge. Your checks in ~/ProofMerge stay where they are.
+# Stop this install's running app first: deleting its files does not stop the server.
+for proc in /proc/[0-9]*; do
+    case "\$(tr '\\0' ' ' 2>/dev/null < "\$proc/cmdline")" in
+        *"$VENV/bin/"*) kill "\${proc#/proc/}" 2>/dev/null ;;
+    esac
+done
+sleep 1
 rm -f "$APPS/proofmerge.desktop" "$APPS/proofmerge-uninstall.desktop"
 rm -rf "$INSTALL_DIR"
 echo 'ProofMerge removed. Your checks in ~/ProofMerge stay where they are.'

@@ -509,6 +509,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 .bench { padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; }
 .matrix th, .matrix td { padding: .6rem .8rem; text-align: right; border-bottom: 1px solid var(--rule); }
 .matrix td { font-family: var(--mono); }
+.matrix td:not(:first-child) { white-space: nowrap; }
 .matrix th:first-child, .matrix td:first-child { text-align: left; font-family: var(--sans); }
 .matrix td.hit { font-weight: 700; color: var(--pass); }
 .matrix td.miss { color: var(--block); font-weight: 700; }
@@ -661,4 +662,12 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary" "evidence"; grid-template-rows: none; }
   .runs-split > .detail { position: static; max-height: none; }
   .runs-split .runs { max-height: none; }
+}
+/* Phones: the benchmark tables and the PR list fit the width instead of pushing the page sideways. */
+.bench { min-width: 0; overflow-x: auto; }
+@media (max-width: 40rem) {
+  .matrix th, .matrix td { padding: .5rem .4rem; }
+  .bench { padding: 1rem .9rem; }
+  .pr-table td:nth-child(2) { min-width: 0; }
+  .pr-table td, .pr-table th { padding-left: .6rem; padding-right: .6rem; }
 }

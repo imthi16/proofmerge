@@ -722,3 +722,12 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - The run detail is now two panels in a grid: the summary (verdict, reasons, commits, models, actions) sits under the run list and stays in view while scrolling; the evidence (hypotheses and probes, test-tamper guard, intent claims) takes the right column. The narrow list keeps verdict, name and regressions; the SHAs and the call count are in the summary. Below 64rem everything stacks: list, summary, evidence.
 - Checked in Chrome at 1440×900, 1280×800 and 390×844 with the real Claude run `pr-75-479d672`: no horizontal scroll; after scrolling 1,500 px the summary stays 24 px from the top on both wide sizes. `docs/assets/app-runs.png` re-captured in this layout (copies of the committed demo runs, as in T72).
 - `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.
+
+### 2026-11-03 — T74 Every app page checked at three sizes (Claude)
+- Audit: Home, Runs, Pull requests, Benchmarks and Setup in Chrome at 1440×900, 1280×800 and 390×844, dark and light (30 captures), with copies of the demo runs, the run 3 benchmark and the real Claude run, and this repository's PRs. Each capture measured page overflow and elements wider than their box.
+- Desktop: no overflow on any page. Phone fixes:
+  - The top bar pushed Theme and Quit off screen: the brand text was a bare text node, so the rule that hides it on phones never matched; it is now a span.
+  - Benchmarks scrolled the page sideways by 31 px: the tables now use tighter cells on phones, the panel scrolls inside itself if it must, and "16 / 16" no longer wraps.
+  - Pull requests hid the verdict column: the title's 12rem minimum now applies above phone width only.
+- After the fixes all 30 captures measure zero overflow.
+- `pytest -q tests/test_dashboard*.py`: all passed. `ruff check src tests`: all checks passed.

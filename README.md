@@ -51,8 +51,8 @@ command line does. It was built for people who never open a terminal:
    your model key (kept in memory, never written to disk) and signs you in to
    GitHub with a one-time code.
 3. **Check a change.** Pick one of your GitHub repositories and an open pull
-   request, or a folder on your computer and two branches, and press
-   **Check this change**. The page shows each step as it happens, then the
+   request and press **Verify this PR**, or pick a folder on your computer and
+   two branches and press **Check this change**. The page shows each step as it happens, then the
    verdict, the reasons and the full report.
 
 <img alt="Setup page, GitHub row while signing in: a one-time code in large type with a copy button, the line 'Open GitHub, paste the code and press Authorize. This page updates by itself.', an Open GitHub button and a Cancel button." src="docs/assets/app-github-sign-in.png" width="100%">

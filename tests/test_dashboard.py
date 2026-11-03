@@ -240,6 +240,7 @@ def test_verify_fetches_into_proofmerge_refs_and_runs_verify(pr_server, runs: Pa
                                "https://github.com/o/r.git"]
     assert "origin" not in fetch_call
     assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[3:5] == ["--repo", "o/r"]
+    assert next(c for c in runner.calls if c[:3] == ["gh", "pr", "list"])[5:7] == ["--state", "open"]
     assert "+refs/pull/7/head:refs/proofmerge/pr-7" in fetch_call
     assert "+refs/heads/main:refs/proofmerge/base-7" in fetch_call
     verify = next(c for c in runner.calls if "verify" in c)

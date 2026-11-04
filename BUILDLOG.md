@@ -895,3 +895,13 @@ A Windows tester chose **Claude plan** on Setup and **Test connection** said onl
 - The CLI gets a minimal environment, and its list held only Unix names (`HOME`, `XDG_*`). On Windows Claude Code finds its login under `USERPROFILE`/`APPDATA` and Node needs `SYSTEMROOT` and `TEMP`, so the call ran signed out. The list now also passes `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `SYSTEMDRIVE`, `TEMP`, `TMP`, `PATHEXT`, `COMSPEC`, `HOMEDRIVE`, `HOMEPATH` and `USERNAME`; none is a secret.
 - A failing call now shows the CLI's own JSON `result` (up to 200 characters); stderr is still never shown. Checked for real on Linux with an empty `CLAUDE_CONFIG_DIR`: `claude-cli exited with code 1: Not logged in · Please run /login`.
 - Not checked: a run on Windows. The cause is read from the code and the symptom, not reproduced there.
+
+## T99: push a verified fix to your own pull request
+
+A BLOCK run with verified fixes had **Verify the fixed commit**, which verified the pull request's current GitHub head: nothing had pushed the fix (it lives only under the local `refs/proofmerge/fix/`), so it checked the same commit and gave the same BLOCK.
+
+- `proofmerge push-fix <proof.json> --pr N --repo R [--dry-run]` builds one commit from every verified fix (refused when two fixes change a file differently), parented on the head the run checked, and pushes it to the PR's branch with no force. It refuses unless the PR is open, still at the checked commit, not from a fork, and opened by the signed-in `gh` account; for anyone else's PR, post the fix instead. Each fix was checked alone by its own probe, so the output says to verify again.
+- App: **Push the fix to PR #N as @account** with a confirm that names the account, and the old button now reads **Verify PR #N again** (its tooltip says it checks the current GitHub head). Jobs that had no title (approve, Ponytail, push-fix) showed "undefined: failed"; they have titles now.
+- Tests: `tests/test_push_fix.py` (combine and conflict; one non-forced fast-forward commit with the fixed content; refusals for another author, a moved head, a merged PR, a fork, a bad branch name, none of which push) and the push-fix job.
+- Checked in real Chrome on a scratch run with a verified fix: the buttons, the dialog (Escape closes it), the refusal toast with its title, no console errors.
+- Not checked: a real push to GitHub (no test pushed anything), and the Control Center (`/`).

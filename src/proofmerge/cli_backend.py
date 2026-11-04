@@ -18,9 +18,12 @@ from typing import Any
 from proofmerge.meta import MetaError
 
 TIMEOUT_SECONDS = 600
-# What a signed-in CLI needs to find its binary and login; nothing else is passed on.
+# What a signed-in CLI needs to find its binary and login; nothing else is passed on. The second
+# line is Windows: the login lives under USERPROFILE/APPDATA, and Node needs SYSTEMROOT and TEMP to run.
 _ENV_KEYS = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
-             "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "CLAUDE_CONFIG_DIR")
+             "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "CLAUDE_CONFIG_DIR",
+             "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP",
+             "PATHEXT", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "USERNAME")
 
 
 def _claude_argv(model: str, system_file: Path, schema: dict) -> list[str]:
@@ -81,15 +84,20 @@ class CliCompletions:
                 raise MetaError(f"{argv[0]} is not installed or not on PATH") from None
             except subprocess.TimeoutExpired:
                 raise MetaError(f"{self.backend} timed out after {TIMEOUT_SECONDS}s") from None
-        # stderr is not echoed: the CLI is outside ProofMerge's control.
-        if result.returncode != 0:
-            raise MetaError(f"{self.backend} exited with code {result.returncode}")
+        # stderr is not echoed: the CLI is outside ProofMerge's control. Its JSON "result" is shown
+        # on a failure, because that is where it says why (for example that it is not signed in).
         try:
             out = json.loads(result.stdout)
         except json.JSONDecodeError:
-            raise MetaError(f"{self.backend} did not print JSON") from None
+            out = None
+        reason = out.get("result") if isinstance(out, dict) else None
+        why = f": {reason.strip()[:200]}" if isinstance(reason, str) and reason.strip() else ""
+        if result.returncode != 0:
+            raise MetaError(f"{self.backend} exited with code {result.returncode}{why}")
+        if out is None:
+            raise MetaError(f"{self.backend} did not print JSON")
         if not isinstance(out, dict) or out.get("is_error"):
-            raise MetaError(f"{self.backend} reported an error")
+            raise MetaError(f"{self.backend} reported an error{why}")
         content, prompt_tokens, completion_tokens = read_reply(out)
         text = content if isinstance(content, str) else json.dumps(content)
         return SimpleNamespace(

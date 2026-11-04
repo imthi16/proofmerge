@@ -136,6 +136,18 @@ def test_cli_failures_are_model_errors_without_stderr(runner, message):
     assert "SECRET" not in str(error.value)
 
 
+def test_a_failing_cli_says_why_from_its_json_result_and_windows_keeps_its_login_env(monkeypatch):
+    out = json.dumps({"type": "result", "is_error": True, "result": "Not logged in · Please run /login"})
+    with pytest.raises(MetaError, match="exited with code 1: Not logged in · Please run /login") as error:
+        ask(MetaClient(CliCompletions("claude-cli", FakeRunner(out, returncode=1))))
+    assert "SECRET" not in str(error.value)  # stderr is still never shown
+    for name in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP"):
+        monkeypatch.setenv(name, "x")
+    runner = FakeRunner(claude_out())
+    ask(MetaClient(CliCompletions("claude-cli", runner)))
+    assert {"USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP"} <= set(runner.calls[0]["env"])
+
+
 def test_report_names_models_and_warns_on_contributor():
     proof = Proof.model_validate_json((FIXTURES / "sample_proof_block.json").read_text())
     assert "via <code>" not in render_html(proof, FIXTURES)  # older proofs record no backend

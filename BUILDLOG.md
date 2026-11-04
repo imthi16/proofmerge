@@ -905,3 +905,12 @@ A BLOCK run with verified fixes had **Verify the fixed commit**, which verified 
 - Tests: `tests/test_push_fix.py` (combine and conflict; one non-forced fast-forward commit with the fixed content; refusals for another author, a moved head, a merged PR, a fork, a bad branch name, none of which push) and the push-fix job.
 - Checked in real Chrome on a scratch run with a verified fix: the buttons, the dialog (Escape closes it), the refusal toast with its title, no console errors.
 - Not checked: a real push to GitHub (no test pushed anything), and the Control Center (`/`).
+
+## T102: the Windows installer can put `proofmerge` on the terminal's PATH
+
+A Windows tester found that after the installer, `proofmerge` did not run in a terminal: the installer left PATH untouched, so only the Start menu app worked, and the Agent Skill (which runs `proofmerge verify`) could not.
+
+- After the shortcuts the installer asks "Add the proofmerge command to your terminal too (your user PATH)?". On yes it writes `%LOCALAPPDATA%\ProofMerge\bin\proofmerge.cmd`, which calls the venv's `proofmerge.exe`, and appends `%LOCALAPPDATA%\ProofMerge\bin` to the user PATH. Only that folder: the venv's `Scripts` folder would put its `python.exe` and `pip` ahead of the user's own. It reads the raw registry value and writes it back as REG_EXPAND_SZ, so `%VAR%` entries survive (`SetEnvironmentVariable` would expand them), never touches the machine PATH, and tells Windows the environment changed so a new terminal sees it.
+- The uninstaller takes the entry off the user PATH first. In its batch line `%%` stands for one `%`, so cmd does not expand the entry before PowerShell compares it with the raw value.
+- `tests/test_windows_installer.py` pins this (the old test pinned "PATH is never written") and counts the new question.
+- Not checked: any of it on Windows; PowerShell is not available here, so the new block was read, not run.

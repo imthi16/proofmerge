@@ -234,6 +234,25 @@ def test_ponytail_post_refuses_a_moved_pr_and_remembers_the_review_it_posted(mon
     assert load_report_file(file).posted_url == "https://github.com/o/r/pull/7#review"
 
 
+def test_ponytail_post_rejects_an_already_posted_report(monkeypatch, tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    from proofmerge import cli
+
+    report = pony_report(("shop.py:L2-4", "yagni", "Base class.", "Inline it."),
+                         posted_url="https://github.com/o/r/pull/7#review")
+    file = tmp_path / "pr-7.json"
+    file.write_text(report.model_dump_json())
+
+    def gh(argv, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli.subprocess, "run", gh)
+    args = ["ponytail-post", str(file), "--pr", "7", "--repo", str(tmp_path)]
+    ok = CliRunner().invoke(cli.app, args)
+    assert ok.exit_code == 1 and "already posted" in ok.output
+
+
 def test_possible_bugs_are_posted_as_their_own_comments_and_say_no_test_was_run() -> None:
     from proofmerge.ponytail import PonytailBug
     from proofmerge.pr_review import build_ponytail_review

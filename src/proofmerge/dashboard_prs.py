@@ -176,6 +176,8 @@ class PullRequests:
         with self._lock:
             if self.pony and self.pony["status"] == "running":
                 raise PrError(f"The Ponytail review of PR #{self.pony['number']} is still running.")
+            if self.pony_post and self.pony_post["status"] == "running" and self.pony_post["number"] == number:
+                raise PrError("A post to GitHub is still running for this PR; wait for it to finish before reviewing again.")
             self.pony = {"number": number, "status": "running", "step": "Fetching the PR",
                          "head_sha": pr["head_sha"], "level": level, "error": None, "created": time.time()}
         threading.Thread(target=self._ponytail, args=(pr,), daemon=True).start()
@@ -196,6 +198,11 @@ class PullRequests:
             if fetched.returncode != 0:
                 finish("failed", "git fetch failed", "Could not fetch the pull request from GitHub.")
                 return
+            # The cached pr['head_sha'] can be stale; key the review by the SHA git just fetched.
+            resolved = self._step(["git", "-C", str(self.repo), "rev-parse", head], 10)
+            if resolved.returncode == 0 and resolved.stdout.strip():
+                pr = {**pr, "head_sha": resolved.stdout.strip()}
+                job["head_sha"] = pr["head_sha"]
             job["step"] = "Reading the diff (one model call)"
             out = self.ponytail_path(pr)
             with tempfile.TemporaryDirectory(prefix="proofmerge-pony-") as tmp:
@@ -226,13 +233,15 @@ class PullRequests:
         if pr["state"] != "OPEN":
             raise PrError(f"PR #{number} is {pr['state'].lower()}; only open pull requests can be commented on.")
         report = self.ponytail_report(pr)
-        if report is None or (not report["findings"] and not report.get("bugs")):
-            raise PrError("Review the pull request first; there are no findings to post.")
-        if report.get("posted_url"):
-            raise PrError("These findings were already posted. Review the pull request again to post new ones.")
         with self._lock:
+            if self.pony and self.pony["status"] == "running" and self.pony["number"] == number:
+                raise PrError("The Ponytail review is still running for this PR; wait for it to finish before posting.")
             if self.pony_post and self.pony_post["status"] == "running":
                 raise PrError("A post to GitHub is still running.")
+            if report is None or (not report["findings"] and not report.get("bugs")):
+                raise PrError("Review the pull request first; there are no findings to post.")
+            if report.get("posted_url"):
+                raise PrError("These findings were already posted. Review the pull request again to post new ones.")
             self.pony_post = {"number": number, "status": "running", "step": "Posting to GitHub",
                               "error": None, "created": time.time()}
         threading.Thread(target=self._ponytail_post, args=(pr,), daemon=True).start()

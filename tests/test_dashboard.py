@@ -404,6 +404,13 @@ def test_repo_picker_declares_every_hook_before_its_early_returns() -> None:
     assert not re.search(r"\buse(State|Effect|Ref|Callback|Memo|Context)\(", after)
 
 
+def test_setup_lists_every_github_account_and_marks_the_active_one() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    row = js.split("function GitHubRow(", 1)[1].split("\n  function ", 1)[0]
+    assert 'aria-label="GitHub accounts"' in row and 'aria-current=${a.active ? "true" : undefined}' in row
+    assert "Active" in row and "Use this account" in row and "/api/github/switch" in row and "/api/github/add" in row
+
+
 def post_json(base: str, token: str, path: str, body: dict) -> tuple[int, dict]:
     sent = {"Content-Type": "application/json", "Origin": base, "X-ProofMerge-Token": token}
     status, _, reply = fetch(base + path, "POST", sent, json.dumps(body).encode())

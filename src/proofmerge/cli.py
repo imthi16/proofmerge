@@ -474,6 +474,8 @@ def ponytail_post(
         report = load_report_file(report_file)
         if report is None:
             raise ReviewError("That review could not be read.")
+        if report.posted_url:
+            raise ReviewError("These findings were already posted. Review the pull request again to post new ones.")
         name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
                               cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
         view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid"],

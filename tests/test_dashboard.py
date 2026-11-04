@@ -528,3 +528,75 @@ def test_the_runs_page_tags_runs_that_have_a_ponytail_review_and_links_to_it() -
     js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
     assert 'class="pony-tag"' in js and "See it on PR #" in js
     assert 'ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })' in js
+
+
+def test_ponytail_review_and_post_are_serialized_for_the_same_pr(tmp_path: Path) -> None:
+    """Regenerating a report while it is being posted would race on the same file."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    gate = threading.Event()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": "a" * 40, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+
+    def runner(argv, **kwargs):
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if "ponytail-post" in argv:
+            gate.wait(5)
+            return SimpleNamespace(returncode=0, stdout="posted", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, tmp_path, runner)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    (tmp_path / "ponytail").mkdir()
+    (tmp_path / "ponytail" / "pr-7-aaaaaaa.json").write_text(json.dumps({
+        "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "x", "replacement": "y"}],
+        "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": "a" * 40, "calls": 1}))
+
+    assert prs.start_ponytail_post(7)["status"] == "running"
+    with pytest.raises(PrError, match="post to GitHub is still running"):
+        prs.start_ponytail(7)
+    gate.set()
+    wait_for(lambda: prs.pony_post["status"] != "running")
+
+
+def test_ponytail_post_cannot_start_while_review_is_running_for_the_same_pr(tmp_path: Path) -> None:
+    """Posting must wait for the review that produces the report it posts."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    gate = threading.Event()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": "a" * 40, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+
+    def runner(argv, **kwargs):
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if "ponytail-diff" in argv:
+            gate.wait(5)
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "x", "replacement": "y"}],
+                "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": "a" * 40, "calls": 1}))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, tmp_path, runner)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    assert prs.start_ponytail(7)["status"] == "running"
+    with pytest.raises(PrError, match="Ponytail review is still running"):
+        prs.start_ponytail_post(7)
+    gate.set()
+    wait_for(lambda: prs.pony["status"] != "running")

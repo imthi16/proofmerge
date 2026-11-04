@@ -627,7 +627,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 /* Runs: the list is a rail. One run reads top to bottom beside it: its verdict with the facts next to
    it, the actions, then the evidence. */
 .runs-split { grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-  grid-template-areas: "list summary" "list evidence"; grid-template-rows: auto 1fr; gap: 1rem; align-items: start; }
+  grid-template-areas: "list summary"; gap: 1rem; align-items: start; }
 .runs-split > :first-child { grid-area: list; }
 .runs-split > .detail { grid-area: summary; }
 /* With room for it, the facts sit beside the verdict instead of under it. */
@@ -638,7 +638,6 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
   .runs-split > .detail > .facts { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; padding-top: 0; border-top: 0; align-self: start; }
   .runs-split > .detail > :not(.detail-head, .reasons, .facts) { grid-column: 1 / -1; }
 }
-.runs-split > .evidence { grid-area: evidence; padding: 1.6rem 1.75rem; min-width: 0; }
 /* The facts show the SHAs and the call count, so the narrow rail keeps verdict, name and regressions. */
 .runs-split .runs { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); }
 .runs-split .runs .hide-sm { display: none; }
@@ -650,7 +649,7 @@ blockquote { margin: .4rem 0; padding: .45rem .8rem; background: var(--raised); 
 @keyframes evidence-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .evidence { animation: evidence-in .5s var(--ease) .08s both; }
 @media (max-width: 64rem) {
-  .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary" "evidence"; grid-template-rows: none; }
+  .runs-split { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "summary"; }
   .runs-split .runs { position: static; max-height: 40vh; }
 }
 /* Phones: the benchmark tables and the PR list fit the width instead of pushing the page sideways. */
@@ -689,12 +688,6 @@ pre.diff .hunk { color: var(--brand); }
 .post-mode > span { display: grid; gap: .15rem; font-size: .9rem; }
 .post-mode .muted { font-size: .82rem; }
 
-/* Ponytail review: its own block under the actions. */
-.ponytail { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
-.ponytail h4 { margin: 0 0 .4rem; font-size: .95rem; }
-.ponytail h4 .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }
-
-/* GitHub accounts on Setup: the other signed-in accounts as switch buttons. */
 
 /* Closable alerts and the close button on a recent check. */
 .error-box.alert { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
@@ -729,3 +722,54 @@ pre.diff .hunk { color: var(--brand); }
   .gh-acct { grid-template-columns: auto minmax(0, 1fr); row-gap: .5rem; }
   .gh-acct > button { grid-column: 2; justify-self: start; }
 }
+
+/* Ponytail review: progress while it runs, a status in the list, findings that read as rows. */
+.pony-progress { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .9rem;
+  padding: .7rem .9rem; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--raised); font-size: .88rem; }
+.pony-progress ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+.pony-progress li { display: inline-flex; align-items: center; gap: .5rem; color: var(--faint); }
+.pony-progress li.now { color: var(--fg); font-weight: 600; }
+.pony-progress li.done { color: var(--muted); }
+.pony-mark { display: inline-grid; place-items: center; width: 1rem; height: 1rem; color: var(--pass); }
+.pony-progress .spinner.small { margin-left: 0; }
+.pony-chip { display: flex; align-items: center; gap: .4rem; margin-top: .35rem; font-size: .78rem; color: var(--muted); }
+.pony-chip .spinner.small { margin-left: 0; }
+.pony-chip.done { color: var(--fg); }
+.pony-tag { color: var(--fg); font-weight: 500; white-space: nowrap; }
+.ponytail { margin-top: 1rem; padding: .95rem 1.05rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
+.ponytail .pony-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .75rem; }
+.ponytail .pony-head h4 { margin: 0; font-size: .95rem; }
+.ponytail .pony-head .muted { font-size: .8rem; }
+.pony-summary { margin: .55rem 0 0; font-size: .9rem; }
+.pony-list { list-style: none; margin: .85rem 0 0; padding: 0; }
+.pony-item { padding: .75rem 0; border-top: 1px solid var(--rule); }
+.pony-where { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .6rem; }
+.pony-where code { overflow-wrap: anywhere; font-size: .82rem; }
+.pony-what { margin: .4rem 0 0; font-size: .9rem; line-height: 1.5; }
+.pony-instead { margin: .25rem 0 0; font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }
+.pony-picker { margin-top: .75rem; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--raised); overflow: hidden;
+  animation: pony-in .14s cubic-bezier(.2, .8, .2, 1) backwards; }
+@keyframes pony-in { from { opacity: 0; transform: translateY(-4px); } }
+.pony-picker-title { margin: 0; padding: .7rem 1rem .55rem; font-size: .88rem; font-weight: 600; }
+.pony-picker ul { list-style: none; margin: 0; padding: 0; }
+.pony-opt { display: grid; grid-template-columns: 6.5rem 1fr; align-items: baseline; gap: .1rem 1rem; width: 100%; text-align: left;
+  padding: .7rem 1rem; border: 0; border-top: 1px solid var(--rule); background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.pony-opt:hover { background: color-mix(in oklab, var(--fg) 6%, var(--raised)); }
+.pony-opt:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; background: color-mix(in oklab, var(--fg) 6%, var(--raised)); }
+.pony-opt-name { display: flex; flex-direction: column; font-weight: 600; }
+.pony-opt-last { font-size: .72rem; font-weight: 400; color: var(--faint); }
+.pony-opt-hint { color: var(--muted); font-size: .88rem; line-height: 1.45; }
+.pony-picker-note { margin: 0; padding: .6rem 1rem; border-top: 1px solid var(--rule); font-size: .8rem; color: var(--muted); }
+@media (max-width: 30rem) { .pony-opt { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .pony-picker { animation: none; } }
+.pony-sub { margin: 1.1rem 0 0; font-size: .9rem; }
+.pony-sub .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }
+.pony-post { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; margin-top: .9rem; padding-top: .85rem;
+  border-top: 1px solid var(--rule); font-size: .88rem; }
+.fixes { margin-top: 1.5rem; }
+.fixes h3 { margin-top: 0; }
+
+/* "as @account" on the buttons that act on GitHub for the person. */
+.as-account { margin-left: .15rem; font-weight: 400; opacity: .8; font-size: .85em; }
+.acting { margin: -.25rem 0 .75rem; padding: .45rem .7rem; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--raised); font-size: .9rem; }
+.acting strong { color: var(--fg); }

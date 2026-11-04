@@ -17,6 +17,7 @@ a path. All evidence text is untrusted and is rendered as text by the page.
 
 import json
 import mimetypes
+import re
 import secrets
 import subprocess
 import threading
@@ -32,11 +33,12 @@ from proofmerge.dashboard_events import sse_stream
 from proofmerge.dashboard_github import GitHub, GitHubError
 from proofmerge.dashboard_jobs import JobError, Jobs, branches, browse, git_project
 from proofmerge.dashboard_models import ApiError, VerificationRequest
-from proofmerge.dashboard_prs import PrError, PullRequests
+from proofmerge.dashboard_prs import PrError, PullRequests, Runner
 from proofmerge.evidence import Proof
 from proofmerge.fixes import load_report
 from proofmerge.manifest import verify_manifest
 from proofmerge.ponytail import load_report as load_ponytail
+from proofmerge.ponytail import load_report_file
 from proofmerge.rederive import rederive
 from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
 
@@ -168,6 +170,22 @@ def _disagrees(decision: str | None, benchmark: dict[str, Any] | None) -> bool:
     return decision != "BLOCK" if benchmark["label"] == "BLOCK" else decision == "BLOCK"
 
 
+PR_RUN = re.compile(r"^pr-(\d+)-([0-9a-f]{7})-\d+$")
+
+
+def _pony_of_run(root: Path, run_id: str) -> dict[str, Any] | None:
+    """The saved Ponytail review of the pull request this run checked, at the same commit.
+
+    Runs started from the Pull requests page are named pr-<number>-<sha>-<time>; the review sits
+    in <runs>/ponytail/pr-<number>-<sha>.json. Other runs have none."""
+    match = PR_RUN.match(run_id.rsplit("/", 1)[-1])
+    report = match and load_report_file(root / "ponytail" / f"pr-{match[1]}-{match[2]}.json")
+    if not report:
+        return None
+    return {"pr": int(match[1]), "findings": len(report.findings), "net_lines": report.net_lines,
+            "bugs": len(report.bugs)}
+
+
 def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
     try:
         proof = CACHE.proof(run_dir / "proof.json")
@@ -242,6 +260,24 @@ def _runs_by_head(runs: dict[str, Path]) -> dict[str, list[str]]:
             continue
         by_head.setdefault(str(head), []).append(run_id)
     return by_head
+
+
+def _run_belongs_to_repo(run_id: str, repo: Path, root: Path, runner: Runner) -> bool:
+    """The run's proof commits must exist in the repository that would verify it."""
+    run_dir = root / run_id
+    try:
+        run_dir = run_dir.resolve()
+        if not run_dir.is_relative_to(root.resolve()):
+            return False
+        proof = Proof.model_validate_json((run_dir / "proof.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    for sha in (proof.base_sha, proof.head_sha):
+        done = runner(["git", "-C", str(repo), "cat-file", "-t", sha],
+                      capture_output=True, text=True, timeout=10, check=False)
+        if done.returncode != 0 or done.stdout.strip() != "commit":
+            return False
+    return True
 
 
 def _detail(run_id: str, run_dir: Path) -> dict[str, Any]:
@@ -343,7 +379,10 @@ class _Handler(BaseHTTPRequestHandler):
                     project = git_project(query.get("project", [""])[0], self.runner)
                     self._json(branches(project, self.runner))
                 else:
-                    self._json({"job": self.jobs.progress()})
+                    if self.prs and self.prs.job and self.prs.job["status"] == "running":
+                        self._json({"job": self.prs.job})
+                    else:
+                        self._json({"job": self.jobs.progress()})
             except (JobError, GitHubError) as error:
                 self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         elif url.path.startswith("/api/v1/"):
@@ -373,11 +412,13 @@ class _Handler(BaseHTTPRequestHandler):
                 prefix = f"pr-{pr['number']}-"
                 return [i for i in runs if i.rsplit("/", 1)[-1].startswith(prefix) and i not in current]
 
-            self._json({"prs": [p | {"runs": by_head.get(p["head_sha"], []), "older_runs": older(p)}
-                                for p in prs], "job": self.prs.job})
+            self._json({"prs": [p | {"runs": by_head.get(p["head_sha"], []), "older_runs": older(p),
+                                     "ponytail": self.prs.ponytail_report(p)}
+                                for p in prs], "job": self.prs.job, "ponytail_job": self.prs.pony,
+                                "ponytail_post_job": self.prs.pony_post})
         elif url.path == "/api/index":
             runs = scan(self.root)
-            self._json({"root": self.root.name, "runs": [_summary(k, v) for k, v in runs.items()],
+            self._json({"root": self.root.name, "runs": [_summary(k, v) | {"ponytail": _pony_of_run(self.root, k)} for k, v in runs.items()],
                         "benchmarks": _benchmarks(self.root)})
         elif url.path in ("/api/run", "/report"):
             run_dir = scan(self.root).get(query.get("id", [""])[0])
@@ -387,7 +428,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._report(run_dir)
             else:
                 try:
-                    self._json(_detail(query["id"][0], run_dir))
+                    detail = _detail(query["id"][0], run_dir)
+                    detail["summary"]["ponytail"] = _pony_of_run(self.root, query["id"][0])
+                    self._json(detail)
                 except (OSError, ValueError):
                     self._json({"error": "proof.json could not be read"}, HTTPStatus.UNPROCESSABLE_ENTITY)
         else:
@@ -508,16 +551,16 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return
         path = urlsplit(self.path).path
-        routes = ("/api/v1/verifications", "/api/verify", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit",
+        routes = ("/api/v1/verifications", "/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/jobs", "/api/jobs/stop", "/api/settings", "/api/quit",
                   *GITHUB_ACTIONS)
-        if path not in routes or (path in ("/api/verify", "/api/v1/verifications") and self.prs is None):
+        if path not in routes or (path in ("/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/v1/verifications") and self.prs is None):
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         if not self._post_allowed():
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= (1024 if path in ("/api/verify", "/api/v1/verifications") else MAX_BODY):
+            if not 0 < length <= (1024 if path in ("/api/verify", "/api/ponytail", "/api/ponytail/post", "/api/v1/verifications") else MAX_BODY):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
@@ -525,17 +568,43 @@ class _Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             self._json({"error": "send a JSON object"}, HTTPStatus.BAD_REQUEST)
             return
-        if path in ("/api/verify", "/api/v1/verifications"):
+        if path == "/api/ponytail/post":
             try:
                 number = VerificationRequest.model_validate(body).number
+            except ValidationError:
+                self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                self._json(self.prs.start_ponytail_post(number), HTTPStatus.ACCEPTED)
+            except PrError as error:
+                self._json({"error": str(error)}, HTTPStatus.CONFLICT)
+            return
+        if path == "/api/ponytail":
+            try:
+                number = VerificationRequest.model_validate({"number": body.get("number")}).number
+            except ValidationError:
+                self._json({"error": "send {\"number\": <PR number>, \"level\": \"low\"}"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                self._json(self.prs.start_ponytail(number, body.get("level", "low")), HTTPStatus.ACCEPTED)
+            except PrError as error:
+                self._json({"error": str(error)}, HTTPStatus.CONFLICT)
+            return
+        if path in ("/api/verify", "/api/v1/verifications"):
+            try:
+                request = VerificationRequest.model_validate(body)
             except ValidationError:
                 self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
                 return
             if self.jobs.job and self.jobs.job["status"] == "running":
                 self._json({"error": "Another action is still running."}, HTTPStatus.CONFLICT)
                 return
+            if request.run and not _run_belongs_to_repo(request.run, self.prs.repo, self.root, self.runner):
+                self._json({"error": "That run does not belong to the selected project. Switch to the run's project first."},
+                           HTTPStatus.CONFLICT)
+                return
             try:
-                job = self.prs.start(number)
+                job = self.prs.start(request.number)
                 if path == "/api/verify":
                     self._json(job, HTTPStatus.ACCEPTED)
                 else:
@@ -550,7 +619,7 @@ class _Handler(BaseHTTPRequestHandler):
                     self.github.start_clone(body.get("repo"))
                 elif path == "/api/github/switch":
                     if (self.jobs.job and self.jobs.job["status"] == "running") or (
-                            self.prs and self.prs.job and self.prs.job["status"] == "running"):
+                            self.prs and any(j and j["status"] == "running" for j in (self.prs.job, self.prs.pony, self.prs.pony_post))):
                         raise GitHubError("Wait for the running check to finish before switching accounts.")
                     self.github.switch_account(body.get("user"))
                     if self.prs:

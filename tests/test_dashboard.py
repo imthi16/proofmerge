@@ -153,6 +153,8 @@ class FakeRunner:
         self.head_sha, self.verify_code, self.calls = head_sha, verify_code, []
         self.done = threading.Event()
         self.gate: threading.Event | None = None  # when set, verify waits for it
+        self.pony_code = 0
+        self.post_code = 0
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -171,6 +173,19 @@ class FakeRunner:
             (evidence / "proof.json").write_text("{}")
             self.done.set()
             return SimpleNamespace(returncode=self.verify_code, stdout="verdict: BLOCK\n", stderr="")
+        if "ponytail-post" in argv:
+            self.post_argv = argv
+            return SimpleNamespace(returncode=self.post_code, stdout="posted", stderr="post failed: boom")
+        if "ponytail-diff" in argv:
+            self.pony_argv = argv
+            self.pony_intent = Path(argv[argv.index("--intent-file") + 1]).read_text()
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "One-implementation base class.",
+                              "replacement": "Inline it."}],
+                "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": self.head_sha, "calls": 1}))
+            return SimpleNamespace(returncode=self.pony_code, stdout="", stderr="ponytail failed: boom")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
@@ -394,3 +409,305 @@ def test_setup_lists_every_github_account_and_marks_the_active_one() -> None:
     row = js.split("function GitHubRow(", 1)[1].split("\n  function ", 1)[0]
     assert 'aria-label="GitHub accounts"' in row and 'aria-current=${a.active ? "true" : undefined}' in row
     assert "Active" in row and "Use this account" in row and "/api/github/switch" in row and "/api/github/add" in row
+
+
+def post_json(base: str, token: str, path: str, body: dict) -> tuple[int, dict]:
+    sent = {"Content-Type": "application/json", "Origin": base, "X-ProofMerge-Token": token}
+    status, _, reply = fetch(base + path, "POST", sent, json.dumps(body).encode())
+    return status, json.loads(reply)
+
+
+def wait_for(predicate, seconds: float = 5.0) -> None:
+    deadline = time.time() + seconds
+    while not predicate():
+        assert time.time() < deadline, "timed out"
+        time.sleep(0.02)
+
+
+def test_the_pull_requests_page_runs_a_ponytail_review_without_a_verify_run(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert json.loads(fetch(base + "/api/prs")[2])["prs"][0]["ponytail"] is None
+    status, job = post_json(base, token, "/api/ponytail", {"number": 7})
+    assert status == 202 and job["status"] == "running"
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    assert pr["ponytail"]["findings"][0]["tag"] == "yagni" and pr["ponytail"]["net_lines"] == 9
+    assert PRS[0]["title"] in runner.pony_intent  # the PR title and body are the intent
+    assert not any("verify" in call for call in runner.calls)  # no run, no sandbox
+    assert any(call[:1] == ["git"] and "fetch" in call for call in runner.calls)
+
+
+def test_a_failed_ponytail_review_says_why_and_a_closed_pr_is_refused(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    runner.pony_code = 1
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "failed")
+    assert "boom" in json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["error"]
+    PRS[0]["state"] = "MERGED"
+    try:
+        wait_for(lambda: json.loads(fetch(base + "/api/prs?refresh=1")[2])["prs"][0]["state"] == "MERGED")
+        status, reply = post_json(base, token, "/api/ponytail", {"number": 7})
+        assert status == 409 and "only open pull requests" in reply["error"]
+    finally:
+        PRS[0]["state"] = "OPEN"
+
+
+def test_ponytail_review_uses_fetched_head_sha_not_cached_one(tmp_path: Path, runs: Path) -> None:
+    """If a new commit lands after pulls() cached its metadata, the review is keyed by the fetched SHA."""
+    cached_sha = "cached000000000000000000000000000000000"
+    fetched_sha = "fetched00000000000000000000000000000000"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": cached_sha, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if argv[:4] == ["git", "-C", str(repo.resolve()), "rev-parse"]:
+            return SimpleNamespace(returncode=0, stdout=fetched_sha + "\n", stderr="")
+        if "ponytail-diff" in argv:
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [], "net_lines": 0, "run_id": "pr-7",
+                "base_sha": "a" * 40, "head_sha": fetched_sha, "calls": 1}))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, runs, runner)
+    prs.start_ponytail(7)
+    wait_for(lambda: prs.pony["status"] != "running")
+    assert prs.pony["status"] == "done"
+    assert prs.pony["head_sha"] == fetched_sha
+    saved = list((runs / "ponytail").glob("pr-7-*.json"))
+    assert len(saved) == 1
+    assert saved[0].name == f"pr-7-{fetched_sha[:7]}.json"
+
+
+def test_the_ponytail_review_shows_its_progress_its_status_in_the_list_and_findings_as_rows() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    for part in ("function PonyProgress(", "function PonyChip(", "function PonytailBlock("):
+        assert part in js
+    page = js.split("function PonyProgress(", 1)[1].split("\n  function ", 1)[0]
+    assert 'role="status"' in page and "Fetch the pull request" in page and "Read the diff with the model" in page
+    assert "<${PonyChip}" in js and "<${PonyProgress}" in js
+    assert "seconds=${60}" in js  # a failed review stays long enough to be read
+
+def test_the_runs_page_leaves_the_evidence_to_the_full_report() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
+    assert 'class="panel evidence"' not in detail and "<${Hypothesis}" not in detail
+    assert "/report?id=" in detail and 'aria-label="Suggested fixes"' in detail  # the report link and the fixes stay
+
+
+def test_posting_and_approving_say_which_github_account_they_act_as() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
+    assert "useGitHub()" in detail  # read with the other hooks, before any early return
+    assert detail.count('class="as-account"') == 2  # the Post and the Approve buttons name the account
+    assert js.count("<${ActingAs}") == 3 and "Use another account" in js  # and so do the three confirm dialogs (post, approve, Ponytail)
+
+
+def test_ponytail_findings_can_be_posted_to_the_pr_once_they_exist(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    status, reply = post_json(base, token, "/api/ponytail/post", {"number": 7})
+    assert status == 409 and "Review the pull request first" in reply["error"]  # nothing to post yet
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["status"] == "done")
+    argv = runner.post_argv
+    assert argv[3:5] == ["ponytail-post", argv[4]] and argv[argv.index("--pr") + 1] == "7"
+    assert argv[4].endswith(".json") and "/ponytail/pr-7-" in argv[4]
+
+
+def test_a_failed_post_says_why_and_posted_findings_are_not_posted_twice(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    runner.post_code = 1
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["status"] == "failed")
+    assert "boom" in json.loads(fetch(base + "/api/prs")[2])["ponytail_post_job"]["error"]
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    path = next(Path(runner.pony_argv[runner.pony_argv.index("--out") + 1]).parent.glob("pr-7-*.json"))
+    path.write_text(json.dumps(pr["ponytail"] | {"posted_url": "https://github.com/o/r/pull/7#review"}))
+    status, reply = post_json(base, token, "/api/ponytail/post", {"number": 7})
+    assert status == 409 and "already posted" in reply["error"]
+
+
+def test_the_ponytail_block_can_post_its_findings_after_a_confirm_that_names_the_account() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    block = js.split("function PonytailBlock(", 1)[1].split("\n  function ", 1)[0]
+    assert "onPost" in block and "posted_url" in block and 'class="as-account"' in block
+    dialog = js.split("function ConfirmPonyPost(", 1)[1].split("\n  function ", 1)[0]
+    assert "<${ActingAs}" in dialog and "never approves or requests changes" in dialog
+    assert "/api/ponytail/post" in js and "useGitHub()" in js.split("function PullsView(", 1)[1].split("if (error && !data)", 1)[0]
+
+
+def test_a_pr_run_carries_the_ponytail_review_of_its_own_commit(tmp_path) -> None:
+    from proofmerge.dashboard import _pony_of_run
+    from proofmerge.ponytail import PonytailFinding, PonytailReport
+
+    finding = PonytailFinding(location="a.py:L1-3", tag="shrink", what="w", replacement="r")
+    review = PonytailReport(findings=[finding, finding], net_lines=12, run_id="pr-7", base_sha="b", head_sha="abcdef0123")
+    (tmp_path / "ponytail").mkdir()
+    (tmp_path / "ponytail" / "pr-7-abcdef0.json").write_text(review.model_dump_json())
+    assert _pony_of_run(tmp_path, "pr-7-abcdef0-1793719841") == {"pr": 7, "findings": 2, "net_lines": 12, "bugs": 0}
+    assert _pony_of_run(tmp_path, "owner/repo/pr-7-abcdef0-1793719841")["pr"] == 7  # ids can be nested
+    assert _pony_of_run(tmp_path, "pr-7-1234567-1793719841") is None  # a different commit
+    assert _pony_of_run(tmp_path, "tenant-cache-take2") is None  # not started from a pull request
+
+
+def test_the_runs_page_tags_runs_that_have_a_ponytail_review_and_links_to_it() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert 'class="pony-tag"' in js and "See it on PR #" in js
+    assert 'ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })' in js
+
+
+def test_ponytail_review_and_post_are_serialized_for_the_same_pr(tmp_path: Path) -> None:
+    """Regenerating a report while it is being posted would race on the same file."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    gate = threading.Event()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": "a" * 40, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+
+    def runner(argv, **kwargs):
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if "ponytail-post" in argv:
+            gate.wait(5)
+            return SimpleNamespace(returncode=0, stdout="posted", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, tmp_path, runner)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    (tmp_path / "ponytail").mkdir()
+    (tmp_path / "ponytail" / "pr-7-aaaaaaa.json").write_text(json.dumps({
+        "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "x", "replacement": "y"}],
+        "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": "a" * 40, "calls": 1}))
+
+    assert prs.start_ponytail_post(7)["status"] == "running"
+    with pytest.raises(PrError, match="post to GitHub is still running"):
+        prs.start_ponytail(7)
+    gate.set()
+    wait_for(lambda: prs.pony_post["status"] != "running")
+
+
+def test_ponytail_post_cannot_start_while_review_is_running_for_the_same_pr(tmp_path: Path) -> None:
+    """Posting must wait for the review that produces the report it posts."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    gate = threading.Event()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": "a" * 40, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+
+    def runner(argv, **kwargs):
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if "ponytail-diff" in argv:
+            gate.wait(5)
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [{"location": "shop.py:L3", "tag": "yagni", "what": "x", "replacement": "y"}],
+                "net_lines": 9, "run_id": "pr-7", "base_sha": "a" * 40, "head_sha": "a" * 40, "calls": 1}))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, tmp_path, runner)
+    prs._remote = ("o/r", "https://github.com/o/r")
+    assert prs.start_ponytail(7)["status"] == "running"
+    with pytest.raises(PrError, match="Ponytail review is still running"):
+        prs.start_ponytail_post(7)
+    gate.set()
+    wait_for(lambda: prs.pony["status"] != "running")
+
+
+def test_the_ponytail_level_reaches_the_review_and_a_bad_level_is_refused(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    status, reply = post_json(base, token, "/api/ponytail", {"number": 7, "level": "extreme"})
+    assert status == 409 and "low, medium, high" in reply["error"] and not hasattr(runner, "pony_argv")
+    assert post_json(base, token, "/api/ponytail", {"number": 7, "level": "high"})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    assert runner.pony_argv[runner.pony_argv.index("--level") + 1] == "high"
+    assert json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["level"] == "high"
+
+
+def test_the_pull_requests_page_has_a_ponytail_level_and_a_separate_list_of_possible_bugs() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert "<${PonyPicker}" in js and "How closely should Ponytail look?" in js and 'store.set("pm-pony-level"' in js
+    assert "<${PonyLevel}" not in js  # the choice opens from the Ponytail button; it is not always on the page
+    assert "JSON.stringify({ number: pr.number, level })" in js
+    assert "Possible bugs" in js and "No test was run, so check each one." in js
+    assert "pr.ponytail.bugs?.length" in js  # the list chip and the post button count the bugs too
+
+
+def test_the_pull_request_detail_never_shows_a_pull_request_the_search_hides() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert "const pr = prs.find((p) => p.number === Number(selected)) || prs[0];" in js  # prs is the filtered list
+    assert "data.prs.find((p) => p.number === Number(selected))" not in js
+    assert "The repository has none yet." in js and "once the search finds one." in js  # a search with no match is not an empty repository
+
+
+def test_bug_only_ponytail_report_can_be_posted(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    # Replace the saved review with one that has only possible bugs.
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    path = next(Path(runner.pony_argv[runner.pony_argv.index("--out") + 1]).parent.glob("pr-7-*.json"))
+    path.write_text(json.dumps({
+        **pr["ponytail"],
+        "findings": [],
+        "bugs": [{"location": "shop.py:L3", "tag": "logic", "what": "Off by one.", "fix": "Use <=."}],
+    }))
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+
+
+def test_pr_verify_returns_job_directly_and_api_job_follows_it(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    runner.gate = threading.Event()
+    status, job = post_json(base, token, "/api/verify", {"number": 7})
+    assert status == 202 and job["status"] == "running" and job["number"] == 7
+    status, _, body = fetch(base + "/api/job", headers={"X-ProofMerge-Token": token})
+    assert status == 200 and json.loads(body)["job"]["number"] == 7
+    runner.gate.set()
+
+
+def test_pr_verify_rejects_a_run_from_a_different_project(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    # A demo run's commits are not in the test repository, so the request must be refused.
+    status, reply = post_json(base, token, "/api/verify", {"number": 7, "run": "tenant-cache-take2"})
+    assert status == 409 and "does not belong to the selected project" in reply["error"]
+    assert not any("fetch" in call for call in runner.calls)

@@ -174,6 +174,7 @@ class VerificationRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     number: StrictInt = Field(gt=0)  # "7" is refused, as in the legacy /api/verify
+    run: str | None = None  # optional run id: binds a fixed-commit verify to that run's repository
 
 
 class VerificationEvent(BaseModel):

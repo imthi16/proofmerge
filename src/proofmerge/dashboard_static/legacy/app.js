@@ -170,6 +170,7 @@
                 <div class="run-name">${run.id}</div>
                 <div class="run-sub">
                   ${run.integrity ? html`<${Seal} integrity=${run.integrity} />` : null}
+                  ${run.ponytail ? html`, <span class="pony-tag" title=${ponyTitle(run.ponytail)}>Ponytail: ${run.ponytail.findings + (run.ponytail.bugs || 0) || "lean"}</span>` : null}
                   ${run.benchmark ? html`, label ${run.benchmark.label}${run.benchmark.held_out ? ", held out" : ""}${disagrees(run)
                     ? html`, <span class="disagree">disagrees</span>` : null}` : null}
                   ${run.error ? run.error : null}
@@ -260,7 +261,10 @@
     const [state, setState] = useState({ loading: true });
     const [posting, setPosting] = useState(false);
     const [approving, setApproving] = useState(false);
-    const fixDone = (ctx.job?.command === "fix" || ctx.job?.command === "ponytail") && ctx.job.status !== "running" ? ctx.job.finished : 0;
+    const { gh } = useGitHub();  // who a post or an approval would be made as
+    const account = gh?.user || "";
+    const accountCount = gh?.accounts?.length || 0;
+    const fixDone = ctx.job?.command === "fix" && ctx.job.status !== "running" ? ctx.job.finished : 0;
     useEffect(() => {
       if (!id) return;
       let live = true;
@@ -270,10 +274,10 @@
         .catch((error) => live && setState({ error: error.message }));
       return () => { live = false; };
     }, [id, fixDone]);
-    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict, probes and evidence show here.</aside>`;
+    if (!id) return html`<aside class="panel detail empty"><strong>Pick a run</strong>Its verdict and a link to its full report show here.</aside>`;
     if (state.error) return html`<aside class="panel detail"><div class="error-box">Could not load this run: ${state.error}</div></aside>`;
     if (state.loading) return html`<aside class="panel detail muted">Loading ${id}…</aside>`;
-    const { summary, proof, probes, failures, logs, fix, ponytail } = state.data;
+    const { summary, proof, fix } = state.data;
     // Runs started from the Pull requests page are named pr-<number>-<sha>-<time>.
     const prNumber = Number((/^pr-(\d+)-[0-9a-f]{7}-\d+$/.exec(id) || [])[1]) || 0;
     const decision = proof.verdict.decision;
@@ -295,6 +299,8 @@
             ? html`<span class="muted">${summary.integrity.problems.length} problem(s)</span>` : null}</dd>
         <dt>base</dt><dd><code>${short(proof.base_sha)}</code><${Copy} text=${proof.base_sha} label="base SHA" /></dd>
         <dt>head</dt><dd><code>${short(proof.head_sha)}</code><${Copy} text=${proof.head_sha} label="head SHA" /></dd>
+        ${summary.ponytail ? html`<dt>ponytail</dt><dd>${ponyTitle(summary.ponytail)}.
+          <button class="link" type="button" onClick=${() => ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })}>See it on PR #${summary.ponytail.pr}</button></dd>` : null}
         <dt>model calls</dt><dd>${usage.calls} calls, ${usage.prompt_tokens + usage.completion_tokens} tokens</dd>
         <dt>models</dt><dd>${models}${usage.endpoint ? html` via <code>${usage.endpoint}</code>` : null}</dd>
         ${summary.benchmark ? html`<dt>label</dt><dd>${summary.benchmark.label}${summary.benchmark.held_out ? ", held out" : ""}
@@ -309,58 +315,39 @@
         <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
           onClick=${() => ctx.start({ command: "rerun", run: id, project: ctx.settings.project })}
           title=${ctx.settings.project ? "Runs the recorded probes again in the sandbox" : "Choose the project on Home first"}><${Icon} name="refresh" />Run the tests again</button>
-        <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
-          onClick=${() => ctx.start({ command: "ponytail", run: id, project: ctx.settings.project })}
-          title=${ctx.settings.project ? "The model reads the diff and lists what could be deleted or shortened. The verdict does not change." : "Choose the project on Home first"}><${Icon} name="spark" />${ponytail ? "Ponytail review again" : "Ponytail review"}</button>
       </div>
-      ${ponytail ? html`<section class="ponytail" aria-label="Ponytail review">
-        <h4>Ponytail review <span class="muted">over-engineering only, the verdict is unchanged</span></h4>
-        ${ponytail.findings.length ? html`<ul class="reasons">${ponytail.findings.map((f, i) => html`<li key=${i}>
-          <code>${f.location}</code> <span class="kind">${f.tag}</span> ${f.what} <span class="muted">${f.replacement}</span></li>`)}</ul>
-          <p class="muted fix-note">net: -${ponytail.net_lines} lines possible.</p>`
-          : html`<p class="muted">Lean already. Ship.</p>`}
-        ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long; only its first part was reviewed.</p>` : null}
-      </section>` : null}
       ${decision === "BLOCK" ? html`<div class="fix-actions">
         <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
           onClick=${() => ctx.start({ command: "fix", run: id, project: ctx.settings.project })}
           title=${ctx.settings.project ? "The model writes a fix for each verified regression; ProofMerge re-runs the failing probe on it in the sandbox" : "Choose the project on Home first"}>
           <${Icon} name="spark" />${fix ? "Suggest the fix again" : "Suggest a fix"}</button>
         ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
-          title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}</button>` : null}
+          title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>` : null}
+        ${prNumber && fix && fix.fixes.some((f) => f.verified) ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => ctx.startPrVerify(prNumber, id)}
+          title=${ctx.settings.project ? "Verify the pull request again at its current head, after the fix is applied" : "Choose the project on Home first"}>
+          <${Icon} name="refresh" />Verify the fixed commit</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
       </div>` : null}
       ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
         <button class="primary" type="button" disabled=${ctx.busy || !ctx.settings.project || summary.integrity.status === "changed"}
           onClick=${() => setApproving(true)}
           title=${ctx.settings.project ? "Approves the pull request on GitHub as you, after you confirm" : "Choose the project on Home first"}>
-          <${Icon} name="shield" />Approve PR #${prNumber}</button>
+          <${Icon} name="shield" />Approve PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>
         <span class="muted fix-note">PASS means no regression was found in the tested scope, not that the change is correct.</span>
       </div>` : null}
+      ${fix && fix.fixes.length ? html`<section class="fixes" aria-label="Suggested fixes">
+        <h3>Suggested fixes</h3>
+        ${fix.fixes.map((f) => html`<div key=${f.hypothesis_id}>
+          <p class="meta"><code>${f.hypothesis_id}</code> ${proof.hypotheses.hypotheses.find((h) => h.id === f.hypothesis_id)?.title || ""}</p>
+          <${FixView} fix=${f} /></div>`)}
+      </section>` : null}
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
-    <section class="panel evidence" aria-label=${"Evidence for run " + id}>
-      <h2>Hypotheses and probes</h2>
-      ${proof.hypotheses.hypotheses.length ? proof.hypotheses.hypotheses.map((h) => html`
-        <${Hypothesis} key=${h.id} h=${h} proof=${proof} probe=${probes[h.id]} failure=${failures[h.id]} logs=${logs || {}}
-          fix=${fix?.fixes.find((f) => f.hypothesis_id === h.id)} />`)
-        : html`<p class="muted">No hypotheses were recorded for this run.</p>`}
-      <h2>Test-tamper guard</h2>
-      ${proof.tamper_findings.length ? html`<ul class="reasons">${proof.tamper_findings.map((t, i) => html`<li key=${i}>
-        <code>${t.test_path}</code>${t.test_name ? html` :: <code>${t.test_name}</code>` : null} — ${t.kind}${t.base_test_on_head_outcome ? `, base test on head: ${t.base_test_on_head_outcome}` : ""}</li>`)}</ul>`
-        : html`<p class="muted">No tamper finding was recorded.</p>`}
-      <h2>Intent claims</h2>
-      ${proof.intent.claims.map((c) => html`<div key=${c.id} style=${{ marginBottom: ".6rem" }}>
-        <code>${c.id}</code> <span class=${"kind " + c.kind}>${c.kind}</span>
-        ${proof.contested_claim_ids.includes(c.id) ? html` <span class="kind">contested by ${checker}</span>` : null}
-        <div>${c.statement}</div>
-        ${c.source_quote ? html`<blockquote>${c.source_quote}</blockquote>` : html`<div class="muted">implicit claim — not stated in the intent text</div>`}
-      </div>`)}
-    </section>
-    ${approving ? html`<${ConfirmApprove} pr=${prNumber} onCancel=${() => setApproving(false)}
+    ${approving ? html`<${ConfirmApprove} pr=${prNumber} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setApproving(false)}
       onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
-    ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} onCancel=${() => setPosting(false)}
+    ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setPosting(false)}
       onConfirm=${(mode) => { setPosting(false); ctx.start({ command: "post", run: id, project: ctx.settings.project, pr: prNumber, mode }); }} />` : null}<//>`;
   }
 
@@ -378,7 +365,36 @@
     </section>`;
   }
 
-  function ConfirmPost({ pr, fix, onConfirm, onCancel }) {
+  function ConfirmPonyPost({ pr, count, account, accounts, onSetup, onConfirm, onCancel }) {
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="ponypost-title">
+        <h3 id="ponypost-title">Post ${count} finding${count === 1 ? "" : "s"} to PR #${pr.number}?</h3>
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge posts one review on the pull request. Each finding becomes a comment on its lines when GitHub's diff has them; the others go in the review summary.</p>
+        <p class="note">It is a comment only: it never approves or requests changes. If the pull request has new commits since the review, nothing is posted.</p>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${onConfirm}>Post to PR #${pr.number}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Which GitHub account the action is made as, and a way to change it when there are several.
+  function ActingAs({ account, accounts, onSetup }) {
+    return html`<p class="acting">${account
+      ? html`Acting as <strong>@${account}</strong>${accounts > 1 ? html` <button class="copy" type="button" onClick=${onSetup}>Use another account</button>` : null}`
+      : "Acting as your signed-in GitHub account."}</p>`;
+  }
+
+  function ConfirmPost({ pr, fix, account, accounts, onSetup, onConfirm, onCancel }) {
     const [mode, setMode] = useState("inline");
     const cancel = useRef(null);
     useEffect(() => {
@@ -392,7 +408,8 @@
     return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
       <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="post-title">
         <h3 id="post-title">Post to PR #${pr}?</h3>
-        <p>ProofMerge posts one review comment as your GitHub account: the verdict, its reasons${fix ? " and the suggested fixes" : ""}.
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge posts one review comment: the verdict, its reasons${fix ? " and the suggested fixes" : ""}.
           It never approves or requests changes.</p>
         ${fix ? null : html`<p class="note">No fix has been suggested for this run, so only the verdict is posted.</p>`}
         <div class="post-modes" role="radiogroup" aria-label="Where to post">${options.map(([value, label, note]) => html`
@@ -407,7 +424,7 @@
     </div>`;
   }
 
-  function ConfirmApprove({ pr, onConfirm, onCancel }) {
+  function ConfirmApprove({ pr, account, accounts, onSetup, onConfirm, onCancel }) {
     const cancel = useRef(null);
     useEffect(() => {
       cancel.current?.focus();
@@ -418,7 +435,8 @@
     return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
       <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="approve-title">
         <h3 id="approve-title">Approve PR #${pr}?</h3>
-        <p>ProofMerge approves the pull request as your GitHub account, on the commit it checked. If the pull request
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge approves the pull request on the commit it checked. If the pull request
           has changed since this run, nothing is posted.</p>
         <p class="note">PASS means no regression was found within the tested scope. It does not prove the change correct.</p>
         <div class="actions">
@@ -613,10 +631,19 @@
       .catch((e) => { setError(e.message); setTick((t) => t + 1); }), []);
     useEffect(() => { load(false); }, [load]);
     const job = data?.job;
+    const pony = data?.ponytail_job;
+    const postJob = data?.ponytail_post_job;
+    const [ponyGone, setPonyGone] = useState(0);
+    const [postGone, setPostGone] = useState(0);
+    const [postAsk, setPostAsk] = useState(false);
+    const [lastLevel, setLastLevel] = useState(() => PONY_LEVELS.some((l) => l.id === store.get("pm-pony-level", "low")) ? store.get("pm-pony-level", "low") : "low");
+    const [pickFor, setPickFor] = useState(0);  // the pull request whose Ponytail level is being chosen
+    const { gh } = useGitHub();  // read with the other hooks: who the post would be made as
+    const goSetup = () => { location.hash = "tab=setup"; };
     useEffect(() => {
       if (lastStatus.current === "running" && job && job.status !== "running") onRunsChanged();
       lastStatus.current = job?.status;
-      if (job?.status !== "running") return;
+      if (job?.status !== "running" && pony?.status !== "running" && postJob?.status !== "running") return;
       const timer = setTimeout(() => load(false), 2000);
       return () => clearTimeout(timer);
     }, [data, tick]);
@@ -628,7 +655,8 @@
     const verdictOf = (id) => index.runs.find((r) => r.id === id)?.decision;
     const q = query.trim().toLowerCase();
     const prs = data.prs.filter((p) => !q || `#${p.number} ${p.title} ${p.author} ${p.head}`.toLowerCase().includes(q));
-    const pr = data.prs.find((p) => p.number === Number(selected)) || prs[0];
+    // The detail follows the search: a pull request the search hides is not shown beside a list that lacks it.
+    const pr = prs.find((p) => p.number === Number(selected)) || prs[0];
     const start = () => {
       setAsking(false); setPosting("");
       fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
@@ -637,6 +665,26 @@
         .then(() => load(false)).catch((e) => setPosting(e.message));
     };
     const running = job?.status === "running";
+    const ponyRunning = pony?.status === "running";
+    const ponyOnThis = ponyRunning && pr && pony.number === pr.number;
+    const postOnThis = postJob?.status === "running" && pr && postJob.number === pr.number;
+    const startPost = () => {
+      setPostAsk(false); setPosting("");
+      fetch("/api/ponytail/post", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
+        body: JSON.stringify({ number: pr.number }) })
+        .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
+        .then(() => load(false)).catch((e) => setPosting(e.message));
+    };
+    const startPony = (level) => {
+      setPosting("");
+      setPickFor(0);
+      setLastLevel(level);
+      store.set("pm-pony-level", level);
+      fetch("/api/ponytail", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
+        body: JSON.stringify({ number: pr.number, level }) })
+        .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
+        .then(() => load(false)).catch((e) => setPosting(e.message));
+    };
     const command = pr ? `git fetch origin +refs/pull/${pr.number}/head:refs/proofmerge/pr-${pr.number} +refs/heads/${pr.base}:refs/proofmerge/base-${pr.number}\nproofmerge verify . --base refs/proofmerge/base-${pr.number} --head refs/proofmerge/pr-${pr.number} --intent-file intent.md --evidence-dir ${index.root}/pr-${pr.number}` : "";
     return html`
       <div class="filters">
@@ -660,7 +708,8 @@
                 <td class="hide-sm mono" style=${{ fontSize: ".8rem" }}>${p.head} → ${p.base}</td>
                 <td>${verdict ? html`<span class=${"pill " + verdict}>${verdict}</span>`
                   : running && job.number === p.number ? html`<span class="pill">RUNNING</span>`
-                  : html`<span class="muted" style=${{ fontSize: ".85rem" }}>not verified</span>`}</td>
+                  : html`<span class="muted" style=${{ fontSize: ".85rem" }}>not verified</span>`}
+                  <${PonyChip} pr=${p} pony=${pony} /></td>
               </tr>`;
             })}</tbody></table>` : html`<div class="empty"><strong>No pull request matches</strong>Change the search.</div>`}
         </div>
@@ -676,8 +725,20 @@
             <button class="primary" type="button" disabled=${running || pr.state !== "OPEN"} onClick=${() => setAsking(true)}
               title=${pr.state !== "OPEN" ? "Only open pull requests can be verified" : undefined}>
               ${running ? `Verifying PR #${job.number}…` : "Verify this PR"}</button>
+            <button class="ghost" type="button" disabled=${ponyRunning || pr.state !== "OPEN"}
+              aria-expanded=${pickFor === pr.number} aria-controls="pony-picker" onClick=${() => setPickFor(pickFor === pr.number ? 0 : pr.number)}
+              title="One model call reads the diff. You choose how closely it looks. No sandbox, and no verdict.">
+              <${Icon} name="spark" />${ponyOnThis ? "Reviewing…" : pr.ponytail ? "Review again" : "Ponytail review"}</button>
             <a class="ghost" href=${pr.url} target="_blank" rel="noopener noreferrer">Open on GitHub</a>
           </div>
+          ${pickFor === pr.number && !ponyRunning ? html`<${PonyPicker} last=${lastLevel} onPick=${startPony} onClose=${() => setPickFor(0)} />` : null}
+          ${ponyOnThis ? html`<${PonyProgress} job=${pony} />` : null}
+          ${pony?.status === "failed" && pony.number === pr.number && pony.error && ponyGone !== pony.created
+            ? html`<${Alert} message=${"The Ponytail review did not finish. " + pony.error} seconds=${60} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
+          ${postJob?.status === "failed" && postJob.number === pr.number && postJob.error && postGone !== postJob.created
+            ? html`<${Alert} message=${"Nothing was posted. " + postJob.error} seconds=${60} onClose=${() => setPostGone(postJob.created)} style=${{ marginTop: ".75rem" }} />` : null}
+          ${pr.ponytail && !ponyOnThis ? html`<${PonytailBlock} ponytail=${pr.ponytail} pr=${pr} posting=${postOnThis}
+            account=${gh?.user || ""} onPost=${() => setPostAsk(true)} />` : null}
           ${pr.state !== "OPEN" ? html`<p class="muted" style=${{ fontSize: ".88rem" }}>This pull request is ${(STATE[pr.state] || pr.state).toLowerCase()}, so its base already contains it. Only open pull requests can be verified.</p>` : null}
           ${posting ? html`<${Alert} message=${posting} onClose=${() => setPosting("")} style=${{ marginTop: ".75rem" }} />` : null}
           <h2>ProofMerge runs at this commit</h2>
@@ -696,9 +757,13 @@
           ${pr.body ? html`<div class="md">${window.ProofMergeMarkdown(React.createElement, pr.body)}</div>`
             : html`<p class="muted">The pull request has no description, so the intent is its title only.</p>`}
           <details><summary>Run it yourself</summary><pre>${command}</pre><${Copy} text=${command} label="commands" /></details>
-        </aside>` : html`<aside class="panel detail empty"><strong>No pull requests</strong>The repository has none yet.</aside>`}
+        </aside>` : html`<aside class="panel detail empty">${data.prs.length
+          ? html`<strong>Pick a pull request</strong>Its details show here once the search finds one.`
+          : html`<strong>No pull requests</strong>The repository has none yet.`}</aside>`}
       </div>
-      ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}`;
+      ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}
+      ${postAsk && pr?.ponytail ? html`<${ConfirmPonyPost} pr=${pr} count=${pr.ponytail.findings.length + (pr.ponytail.bugs?.length || 0)} account=${gh?.user || ""}
+        accounts=${gh?.accounts?.length || 0} onSetup=${goSetup} onConfirm=${startPost} onCancel=${() => setPostAsk(false)} />` : null}`;
   }
 
   // ---------------------------------------------------------------- the app shell
@@ -923,6 +988,95 @@
         : html`<h2>Done</h2><pre>${text}</pre>`}
       <div class="actions"><button class="primary" type="button" onClick=${ctx.dismiss}>Check another change</button></div>
     </section>`;
+  }
+
+  // The Ponytail review of a pull request: what to delete or shorten. It reads the diff and changes no verdict.
+  function PonytailBlock({ ponytail, pr, posting, account, onPost }) {
+    const n = ponytail.findings.length;
+    const bugs = ponytail.bugs || [];
+    const total = n + bugs.length;
+    const noun = `finding${total === 1 ? "" : "s"}`;
+    return html`<section class="ponytail" aria-label="Ponytail review">
+      <div class="pony-head">
+        <h4>Ponytail review</h4>
+        <span class="muted">${bugs.length || ponytail.level !== "low" ? "Over-engineering and possible bugs." : "Over-engineering only."} It reads the diff and runs nothing.</span>
+      </div>
+      <p class="pony-summary">${total
+        ? html`${n ? html`<strong>${n} finding${n === 1 ? "" : "s"}</strong>${ponytail.net_lines ? `, about ${ponytail.net_lines} line${ponytail.net_lines === 1 ? "" : "s"} could go` : ""}` : null}${n && bugs.length ? ". " : ""}${bugs.length ? html`<strong>${bugs.length} possible bug${bugs.length === 1 ? "" : "s"}</strong>` : null}.`
+        : html`<strong>${ponytail.level === "low" ? "Lean already." : "Nothing found."}</strong> ${ponytail.level === "low" ? "There is nothing to cut in this diff." : "There is nothing to cut and no likely bug in this diff."}`}
+        <span class="muted"> Reviewed at <code>${short(ponytail.head_sha)}</code>, level ${ponytail.level}.</span></p>
+      ${n ? html`<ol class="pony-list">${ponytail.findings.map((f, i) => html`<li key=${i} class="pony-item">
+        <div class="pony-where"><span class="kind">${f.tag}</span><code>${f.location}</code></div>
+        <p class="pony-what">${f.what}</p>
+        <p class="pony-instead"><span class="muted">${/^nothing\.?$/i.test(f.replacement.trim()) ? "Nothing replaces it." : "Instead:"}</span>${/^nothing\.?$/i.test(f.replacement.trim()) ? "" : " " + f.replacement}</p>
+      </li>`)}</ol>` : null}
+      ${bugs.length ? html`<h5 class="pony-sub">Possible bugs <span class="muted">Read from the diff. No test was run, so check each one.</span></h5>
+        <ol class="pony-list">${bugs.map((b, i) => html`<li key=${i} class="pony-item">
+        <div class="pony-where"><span class="kind">${b.tag}</span><code>${b.location}</code></div>
+        <p class="pony-what">${b.what}</p>
+        <p class="pony-instead"><span class="muted">Try:</span> ${b.fix}</p>
+      </li>`)}</ol>` : null}
+      ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long, so part of it was not reviewed.</p>` : null}
+      ${total && pr ? html`<div class="pony-post">${ponytail.posted_url
+        ? html`<span class="muted">Posted to the pull request.</span> <a href=${ponytail.posted_url} target="_blank" rel="noopener noreferrer">View the review on GitHub</a>`
+        : html`<button class="primary btn-small" type="button" disabled=${posting || pr.state !== "OPEN"} onClick=${onPost}
+            title="Posts these findings to the pull request as review comments, after you confirm.">
+            ${posting ? "Posting…" : total === 1 ? "Post the finding to the PR" : `Post ${total} ${noun} to the PR`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
+          <span class="muted">Each one goes on its lines when they are in the diff.</span>`}</div>` : null}
+    </section>`;
+  }
+
+  const PONY_LEVELS = [
+    { id: "low", name: "Low", hint: "Over-engineering only: what to delete or shorten." },
+    { id: "medium", name: "Medium", hint: "Also small bugs on the lines the pull request adds." },
+    { id: "high", name: "High", hint: "Also risky code: security, data loss and races." },
+  ];
+  // Opens from the Ponytail button: choosing a level starts the review at once. Escape or the button closes it.
+  function PonyPicker({ last, onPick, onClose }) {
+    const first = useRef(null);
+    useEffect(() => {
+      first.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onClose(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="pony-picker" id="pony-picker" role="group" aria-labelledby="pony-picker-title">
+      <p class="pony-picker-title" id="pony-picker-title">How closely should Ponytail look?</p>
+      <ul>${PONY_LEVELS.map((l) => html`<li key=${l.id}><button type="button" class="pony-opt" ref=${l.id === last ? first : null}
+        onClick=${() => onPick(l.id)}>
+        <span class="pony-opt-name">${l.name}${l.id === last ? html`<span class="pony-opt-last">last used</span>` : null}</span>
+        <span class="pony-opt-hint">${l.hint}</span></button></li>`)}</ul>
+      <p class="pony-picker-note">Bugs are read from the diff and no test is run, so check each one.</p>
+    </div>`;
+  }
+
+  // While a review runs: the two real steps, and how long it has taken.
+  function PonyProgress({ job }) {
+    const [now, setNow] = useState(() => Date.now() / 1000);
+    useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
+    const reading = /^Reading/.test(job.step || "");
+    const steps = [["Fetch the pull request", reading], ["Read the diff with the model", false]];  // [label, finished]
+    const current = reading ? 1 : 0;
+    return html`<section class="pony-progress" role="status" aria-live="polite" aria-label="Ponytail review in progress">
+      <ol>${steps.map(([label, finished], i) => html`<li key=${i} class=${finished ? "done" : i === current ? "now" : "next"}>
+        <span class="pony-mark">${finished ? html`<${Icon} name="check" size=${13} />` : i === current ? html`<span class="spinner small"></span>` : null}</span>${label}</li>`)}</ol>
+      <span class="muted">${Math.max(0, Math.round(now - (job.created || now)))} s</span>
+    </section>`;
+  }
+
+  // One line for a saved Ponytail review: what the Runs list and a run's facts say about it.
+  const ponyTitle = ({ findings, net_lines, bugs = 0 }) => findings + bugs
+    ? `${findings + bugs} Ponytail finding${findings + bugs === 1 ? "" : "s"}${findings && net_lines ? `, about ${net_lines} line${net_lines === 1 ? "" : "s"} could go` : ""}${bugs ? `, ${bugs} possible bug${bugs === 1 ? "" : "s"}` : ""}`
+    : "Ponytail found nothing to cut";
+
+  // The list's view of a pull request's Ponytail review.
+  function PonyChip({ pr, pony }) {
+    if (pony?.status === "running" && pony.number === pr.number) {
+      return html`<div class="pony-chip"><span class="spinner small"></span>Reviewing</div>`;
+    }
+    if (!pr.ponytail) return null;
+    const n = pr.ponytail.findings.length + (pr.ponytail.bugs?.length || 0);
+    return html`<div class="pony-chip done" title=${n ? `${n} Ponytail finding${n === 1 ? "" : "s"}` : "Ponytail found nothing to cut"}>Ponytail: ${n || "lean"}</div>`;
   }
 
   // A transient error: it can be closed, and it closes itself, so it never sits on the page for good.
@@ -1381,12 +1535,15 @@
     useEffect(() => { if (!quitArmed) return; const t = setTimeout(() => setQuitArmed(false), 3000); return () => clearTimeout(t); }, [quitArmed]);
     const start = (body) => post("/api/jobs", body).then((d) => { setJob(d.job); setNotice(""); })
       .catch((e) => setNotice(e.message));
+    const startPrVerify = (number, run) => post("/api/verify", { number, run })
+      .then((d) => { setJob(d); setNotice(""); })
+      .catch((e) => setNotice(e.message));
     const stop = () => post("/api/jobs/stop", {}).then((d) => setJob(d.job)).catch((e) => setNotice(e.message));
     const saveSettings = (body) => post("/api/settings", body).then((d) => {
       setSession((s) => ({ ...s, settings: d.settings, prs: d.prs })); return d;
     });
     const dismiss = () => { if (job) { setDismissed(job.started); store.set("pm-dismissed", String(job.started)); } };
-    const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, stop, go,
+    const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, startPrVerify, stop, go,
       saveSettings, reloadHealth, dismiss, dismissed, tab: route.tab, token: session.token };
     const project = session.settings?.project || "";
     const nextTheme = { auto: "light", light: "dark", dark: "auto" }[theme];

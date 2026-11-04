@@ -525,4 +525,5 @@ export interface Session {
  */
 export interface VerificationRequest {
   number: number;
+  run: string | null;
 }

@@ -16,10 +16,13 @@ from typing import Any
 
 from proofmerge.evidence import Proof
 from proofmerge.fixes import FixReport, FixResult
+from proofmerge.ponytail import PonytailReport
 
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 REPO = re.compile(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}")
 MARK = "<!-- proofmerge-review -->"
+PONY_MARK = "<!-- proofmerge-ponytail -->"
+LOCATION = re.compile(r"^(?P<path>.+?):L?(?P<first>\d+)(?:\s*[-\u2013]\s*L?(?P<last>\d+))?$")
 Runner = Callable[..., Any]
 
 
@@ -159,6 +162,69 @@ def build_review(
         "event": "COMMENT",
         "body": "\n".join(body),
     }
+    if comments:
+        review["comments"] = comments
+    return review
+
+
+def _pony_anchor(location: str, anchors: dict[str, set[int]]) -> tuple[str, int, int] | None:
+    """(path, first line, last line) on the head side when GitHub can anchor a comment there."""
+    found = LOCATION.match(location.strip())
+    if not found:
+        return None
+    path, first = found["path"], int(found["first"])
+    last = int(found["last"] or first)
+    first, last = min(first, last), max(first, last)
+    lines = anchors.get(path, set())
+    inside = [n for n in range(first, min(last, first + 400) + 1) if n in lines]
+    if not inside:
+        return None
+    if len(inside) == last - first + 1 and first != last:
+        return path, first, last  # the whole range is in the diff
+    return path, inside[-1], inside[-1]
+
+
+def build_ponytail_review(report: PonytailReport, diff_text: str) -> dict[str, Any]:
+    """The JSON body for POST /repos/{repo}/pulls/{n}/reviews: one comment per finding or possible bug
+    on its lines when the pull request's diff has them, and the rest in the review summary.
+    Event COMMENT only."""
+    if not report.findings and not report.bugs:
+        raise ReviewError("There are no findings to post.")
+    anchors = commentable_lines(diff_text)
+    comments: list[dict[str, Any]] = []
+    loose: list[str] = []
+    items = []
+    for finding in report.findings:
+        instead = "" if re.fullmatch(r"nothing\.?", finding.replacement.strip(), re.IGNORECASE) else f"\n\nInstead: {_quiet(finding.replacement)}"
+        items.append((finding.location, f"**Ponytail: {finding.tag}.** {_quiet(finding.what)}{instead}"))
+    for bug in report.bugs:
+        # Read from the diff alone, so the comment says that no test backs it.
+        text = (f"**Ponytail: possible bug ({bug.tag}).** {_quiet(bug.what)}\n\n"
+                f"Try: {_quiet(bug.fix)}\n\n<sub>Read from the diff. No test was run.</sub>")
+        items.append((bug.location, text))
+    for location, text in items:
+        spot = _pony_anchor(location, anchors)
+        if spot is None:
+            loose.append(f"- `{location}`: {text}")
+            continue
+        comment: dict[str, Any] = {"path": spot[0], "line": spot[2], "side": "RIGHT", "body": text}
+        if spot[1] < spot[2]:
+            comment |= {"start_line": spot[1], "start_side": "RIGHT"}
+        comments.append(comment)
+    count, bugs = len(report.findings), len(report.bugs)
+    parts = ([f"{count} finding{'s' if count != 1 else ''}"] if count else []) + (
+        [f"{bugs} possible bug{'s' if bugs != 1 else ''}"] if bugs else [])
+    body = [PONY_MARK, f"### Ponytail review: {', '.join(parts)}", ""]
+    if report.net_lines and count:
+        body += [f"About {report.net_lines} line{'s' if report.net_lines != 1 else ''} could go.", ""]
+    if loose:
+        body += ["Not on a line of this pull request's diff:", "", *loose, ""]
+    judged = "over-engineering, not behavior" if not bugs else "over-engineering; the possible bugs are read from the diff and were not run"
+    body.append(
+        f"<sub>Head `{report.head_sha[:7]}`. A diff-only review by ProofMerge: it ran no code and judges "
+        f"{judged}. Rules adapted from the ponytail-review skill.</sub>"
+    )
+    review: dict[str, Any] = {"commit_id": report.head_sha, "event": "COMMENT", "body": "\n".join(body)}
     if comments:
         review["comments"] = comments
     return review

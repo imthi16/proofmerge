@@ -261,6 +261,7 @@
     const [state, setState] = useState({ loading: true });
     const [posting, setPosting] = useState(false);
     const [approving, setApproving] = useState(false);
+    const [pushing, setPushing] = useState(false);
     const { gh } = useGitHub();  // who a post or an approval would be made as
     const account = gh?.user || "";
     const accountCount = gh?.accounts?.length || 0;
@@ -324,9 +325,13 @@
         ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
           title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>` : null}
         ${prNumber && fix && fix.fixes.some((f) => f.verified) ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => setPushing(true)}
+          title="Pushes the verified fixes onto your pull request's branch as one commit, after you confirm">
+          <${Icon} name="pull" />Push the fix to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>
+          <button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
           onClick=${() => ctx.startPrVerify(prNumber, id)}
-          title=${ctx.settings.project ? "Verify the pull request again at its current head, after the fix is applied" : "Choose the project on Home first"}>
-          <${Icon} name="refresh" />Verify the fixed commit</button>` : null}
+          title=${ctx.settings.project ? "Verifies the pull request at its current head on GitHub. Until the fix is pushed, that is the same commit." : "Choose the project on Home first"}>
+          <${Icon} name="refresh" />Verify PR #${prNumber} again</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
       </div>` : null}
       ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
@@ -345,6 +350,8 @@
       <details class="cli"><summary><${Icon} name="terminal" size=${15} />Terminal command</summary>
         <pre>${replay}</pre><${Copy} text=${replay} label="replay command" /></details>
     </aside>
+    ${pushing ? html`<${ConfirmPushFix} pr=${prNumber} fix=${fix} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setPushing(false)}
+      onConfirm=${() => { setPushing(false); ctx.start({ command: "push-fix", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
     ${approving ? html`<${ConfirmApprove} pr=${prNumber} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setApproving(false)}
       onConfirm=${() => { setApproving(false); ctx.start({ command: "approve", run: id, project: ctx.settings.project, pr: prNumber }); }} />` : null}
     ${posting ? html`<${ConfirmPost} pr=${prNumber} fix=${fix} account=${account} accounts=${accountCount} onSetup=${() => ctx.go({ tab: "setup" })} onCancel=${() => setPosting(false)}
@@ -441,6 +448,30 @@
         <p class="note">PASS means no regression was found within the tested scope. It does not prove the change correct.</p>
         <div class="actions">
           <button class="primary" type="button" onClick=${onConfirm}>Approve PR #${pr}</button>
+          <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function ConfirmPushFix({ pr, fix, account, accounts, onSetup, onConfirm, onCancel }) {
+    const cancel = useRef(null);
+    useEffect(() => {
+      cancel.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    const ids = fix.fixes.filter((f) => f.verified).map((f) => f.hypothesis_id).join(", ");
+    return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="dialog panel" role="dialog" aria-modal="true" aria-labelledby="push-title">
+        <h3 id="push-title">Push the fix to PR #${pr}?</h3>
+        <${ActingAs} account=${account} accounts=${accounts} onSetup=${onSetup} />
+        <p>ProofMerge adds one commit with the verified fixes (${ids}) to the pull request's branch. It never
+          force-pushes, and it only pushes to an open pull request you opened, still at the commit this run checked.</p>
+        <p class="note">Each fix was checked alone, by its own probe. Verify the pull request again after the push.</p>
+        <div class="actions">
+          <button class="primary" type="button" onClick=${onConfirm}>Push to PR #${pr}</button>
           <button ref=${cancel} class="ghost" type="button" onClick=${onCancel}>Cancel</button>
         </div>
       </div>
@@ -773,6 +804,7 @@
     replay: "Checking the evidence", rerun: "Running the tests again", smoke: "Testing the model connection",
     setup: "Building the sandbox image",
     fix: "Suggesting and checking a fix", post: "Posting to the pull request",
+    approve: "Approving the pull request", ponytail: "Ponytail review", "push-fix": "Pushing the fix to the pull request",
   };
   const MODES = [
     ["verify", "Full check", "Writes tests that try to break the change, runs them in the sandbox and gives PASS, REVIEW or BLOCK."],

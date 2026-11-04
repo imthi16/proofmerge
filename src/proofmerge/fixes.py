@@ -160,7 +160,9 @@ def check_proposal(proposal: ProposedFix, allowed: dict[str, str]) -> list[FileF
     return changed
 
 
-def commit_fix(repo: Path, head_sha: str, files: list[FileFix], ref: str) -> str:
+def commit_fix(
+    repo: Path, head_sha: str, files: list[FileFix], ref: str, message: str = "ProofMerge suggested fix"
+) -> str:
     """Build head + files as a commit under refs/proofmerge/fix/, without a checkout."""
     if not SHA.fullmatch(head_sha) or not ref.startswith("refs/proofmerge/fix/"):
         raise FixError("Refusing an unexpected commit or ref.")
@@ -186,13 +188,28 @@ def commit_fix(repo: Path, head_sha: str, files: list[FileFix], ref: str) -> str
         tree = _git(repo, "write-tree", env=env).decode().strip()
         sha = (
             _git(
-                repo, "commit-tree", tree, "-p", head_sha, "-m", "ProofMerge suggested fix", env=env
+                repo, "commit-tree", tree, "-p", head_sha, "-m", message, env=env
             )
             .decode()
             .strip()
         )
     _git(repo, "update-ref", ref, sha)
     return sha
+
+
+def verified_files(report: FixReport) -> tuple[list[str], list[FileFix]]:
+    """(hypothesis ids, files) of every verified fix, as one change; FixError if two disagree on a file.
+
+    Each fix was checked alone, so the combined change still needs a verify run."""
+    done = [r for r in report.fixes if r.verified and r.files]
+    if not done:
+        raise FixError("This run has no verified fix to push.")
+    files: dict[str, str] = {}
+    for result in done:
+        for file in result.files:
+            if files.setdefault(file.path, file.content) != file.content:
+                raise FixError(f"Two fixes change {file.path} differently; apply them by hand.")
+    return [r.hypothesis_id for r in done], [FileFix(path=p, content=c) for p, c in files.items()]
 
 
 def _outcomes(experiment: Experiment, revision: str) -> str:

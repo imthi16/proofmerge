@@ -21,12 +21,27 @@ def test_one_double_clickable_file_with_windows_line_endings() -> None:
     assert "ReadAllText" in batch and "pause" in batch
 
 
-def test_installs_proofmerge_for_the_user_without_touching_path() -> None:
+def test_installs_proofmerge_for_the_user() -> None:
     script = text()
     assert "$env:LOCALAPPDATA 'ProofMerge'" in script
     assert '"proofmerge @ git+$Repo@$Ref"' in script and "https://github.com/imthi16/proofmerge" in script
     assert "proofmerge-app.exe" in script
-    assert "SetEnvironmentVariable" not in script  # PATH is read, never written
+
+
+def test_only_the_proofmerge_command_goes_on_the_user_path_and_only_on_a_yes() -> None:
+    script = text()
+    add = script.split("function Add-Command", 1)[1].split("\r\n}\r\n", 1)[0]
+    # One shim in its own folder: the venv's Scripts folder (python.exe, pip) never goes on PATH.
+    assert "$PathEntry = '%LOCALAPPDATA%\\ProofMerge\\bin'" in script
+    assert "'@\"%LOCALAPPDATA%\\ProofMerge\\venv\\Scripts\\proofmerge.exe\" %*'" in add
+    assert "Scripts" not in script.split("$PathEntry = ", 1)[1].split("\r\n", 1)[0]
+    # The raw user value is read and written back as REG_EXPAND_SZ, so %VAR% entries survive;
+    # SetEnvironmentVariable would expand them and the machine PATH is never touched.
+    assert "GetValue('Path', '', 'DoNotExpandEnvironmentNames')" in add and "'ExpandString')" in add
+    assert "SetEnvironmentVariable" not in script and "'Machine')" not in script.replace(
+        "GetEnvironmentVariable('Path', 'Machine')", "")
+    assert add.index("-contains $PathEntry") < add.index("(Ask 'Add the proofmerge command") < add.index("SetValue")
+    assert "Add-Command" in script.split("Step 'Step 6 of 7", 1)[1].split("Step 'Step 7 of 7", 1)[0]
 
 
 def test_never_accepts_licenses_or_runs_downloaded_scripts() -> None:
@@ -36,7 +51,7 @@ def test_never_accepts_licenses_or_runs_downloaded_scripts() -> None:
     for remote_exec in ("Invoke-WebRequest", "irm ", "iwr ", "DownloadString", "| iex"):
         assert remote_exec not in script
     # Each winget install (Python, Git, GitHub CLI, Docker Desktop) sits behind a question.
-    assert script.count("Install-WithWinget '") == 4 and script.count("(Ask '") == 4
+    assert script.count("Install-WithWinget '") == 4 and script.count("(Ask '") == 5  # and the PATH question
 
 
 def test_git_stores_the_file_as_is_so_the_raw_download_keeps_crlf() -> None:
@@ -77,7 +92,8 @@ def test_ref_is_checked_before_it_reaches_pip() -> None:
 
 def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
     script = text()
-    uninstall = script[script.index("$lines = @("):script.index("Set-Content")]
+    start = script.index("$lines = @(")
+    uninstall = script[start:script.index("Set-Content", start)]
     assert 'rmdir /s /q "%LOCALAPPDATA%\\ProofMerge' in uninstall
     assert "USERPROFILE%\\ProofMerge stay" in uninstall
     assert "rmdir /s /q \"%USERPROFILE%" not in uninstall
@@ -86,6 +102,9 @@ def test_uninstaller_keeps_the_users_checks_and_can_delete_its_folder() -> None:
     assert uninstall.index("cd /d \"%TEMP%\"") < uninstall.index("$UnlinkCommand") < uninstall.index("rmdir")
     unlink = script[script.index("$UnlinkCommand = @'"):script.index("$lines = @(")]
     assert "Stop-Process" in unlink and "GetFolderPath" in unlink and '"' not in unlink
+    # It takes the command off the user PATH; in a batch line %% is one %, so cmd does not
+    # expand the entry before PowerShell compares it with the raw value.
+    assert unlink.count("'%%LOCALAPPDATA%%\\ProofMerge\\bin'") == 2 and "DoNotExpandEnvironmentNames" in unlink
     assert "$Desktop" not in uninstall
     assert "$link.WorkingDirectory = $env:TEMP" in script
     assert "Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP" in script

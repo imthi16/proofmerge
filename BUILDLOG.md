@@ -888,6 +888,41 @@ Not fixed: a changed test's outcome is recorded per test file, so a test that pa
 - With two or more accounts the Setup row showed one name and a row of small buttons, so the accounts could not be told apart. It is now a list, one row per account, the active one first: a filled monogram, the `@login`, an **Active** chip and **Sign out**; every other account is quieter, with **Use this account**. **Add another account** stays at the top right and the note about `gh` in a terminal sits under the list. The buttons keep their routes (`/api/github/switch`, `logout`, `add`); no backend change.
 - Checked in real Chrome with the author's real `gh` (two accounts) on this branch's dashboard: light, dark and 390 px wide, no horizontal overflow and no page errors; at 390 px the account button drops under the name. Not checked: clicking Use this account or Sign out, which would change the account `gh` uses on this machine.
 
+## T100: the Claude plan backend on Windows
+
+A Windows tester chose **Claude plan** on Setup and **Test connection** said only `smoke failed: claude-cli exited with code 1`.
+
+- The CLI gets a minimal environment, and its list held only Unix names (`HOME`, `XDG_*`). On Windows Claude Code finds its login under `USERPROFILE`/`APPDATA` and Node needs `SYSTEMROOT` and `TEMP`, so the call ran signed out. The list now also passes `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `SYSTEMDRIVE`, `TEMP`, `TMP`, `PATHEXT`, `COMSPEC`, `HOMEDRIVE`, `HOMEPATH` and `USERNAME`; none is a secret.
+- A failing call now shows the CLI's own JSON `result` (up to 200 characters); stderr is still never shown. Checked for real on Linux with an empty `CLAUDE_CONFIG_DIR`: `claude-cli exited with code 1: Not logged in · Please run /login`.
+- Not checked: a run on Windows. The cause is read from the code and the symptom, not reproduced there.
+
+## T99: push a verified fix to your own pull request
+
+A BLOCK run with verified fixes had **Verify the fixed commit**, which verified the pull request's current GitHub head: nothing had pushed the fix (it lives only under the local `refs/proofmerge/fix/`), so it checked the same commit and gave the same BLOCK.
+
+- `proofmerge push-fix <proof.json> --pr N --repo R [--dry-run]` builds one commit from every verified fix (refused when two fixes change a file differently), parented on the head the run checked, and pushes it to the PR's branch with no force. It refuses unless the PR is open, still at the checked commit, not from a fork, and opened by the signed-in `gh` account; for anyone else's PR, post the fix instead. Each fix was checked alone by its own probe, so the output says to verify again.
+- App: **Push the fix to PR #N as @account** with a confirm that names the account, and the old button now reads **Verify PR #N again** (its tooltip says it checks the current GitHub head). Jobs that had no title (approve, Ponytail, push-fix) showed "undefined: failed"; they have titles now.
+- Tests: `tests/test_push_fix.py` (combine and conflict; one non-forced fast-forward commit with the fixed content; refusals for another author, a moved head, a merged PR, a fork, a bad branch name, none of which push) and the push-fix job.
+- Checked in real Chrome on a scratch run with a verified fix: the buttons, the dialog (Escape closes it), the refusal toast with its title, no console errors.
+- Not checked: a real push to GitHub (no test pushed anything), and the Control Center (`/`).
+
+## T102: the Windows installer can put `proofmerge` on the terminal's PATH
+
+A Windows tester found that after the installer, `proofmerge` did not run in a terminal: the installer left PATH untouched, so only the Start menu app worked, and the Agent Skill (which runs `proofmerge verify`) could not.
+
+- After the shortcuts the installer asks "Add the proofmerge command to your terminal too (your user PATH)?". On yes it writes `%LOCALAPPDATA%\ProofMerge\bin\proofmerge.cmd`, which calls the venv's `proofmerge.exe`, and appends `%LOCALAPPDATA%\ProofMerge\bin` to the user PATH. Only that folder: the venv's `Scripts` folder would put its `python.exe` and `pip` ahead of the user's own. It reads the raw registry value and writes it back as REG_EXPAND_SZ, so `%VAR%` entries survive (`SetEnvironmentVariable` would expand them), never touches the machine PATH, and tells Windows the environment changed so a new terminal sees it.
+- The uninstaller takes the entry off the user PATH first. In its batch line `%%` stands for one `%`, so cmd does not expand the entry before PowerShell compares it with the raw value.
+- `tests/test_windows_installer.py` pins this (the old test pinned "PATH is never written") and counts the new question.
+- Not checked: any of it on Windows; PowerShell is not available here, so the new block was read, not run.
+
+## T103: the app finds Claude Code on Windows
+
+On a Windows PC with Claude Code working in a terminal, the app's Setup did not detect it. The app started `claude --version`, and model calls started `claude -p ...`, by name; on Windows that finds only `.exe` files, and an npm install of Claude Code is `claude.cmd`. A batch file would also have cmd.exe re-read the JSON schema argument.
+
+- `cli_backend.claude_command()` resolves Claude Code on Windows only (elsewhere it stays `claude`): the full path from PATH, else Claude Code's own installer (`%USERPROFILE%\.local\bin\claude.exe`) or npm (`%APPDATA%\npm\claude.cmd`), for an app opened from the Start menu with an older PATH. An npm shim is replaced by what it starts: the package's `bin/claude.exe` (npm `@anthropic-ai/claude-code` 2.1.318 lists `"bin": {"claude": "bin/claude.exe"}`), or `node cli.js` for older releases. Setup's check and the model calls both use it.
+- Test: npm shim on PATH, the 2.1.x `claude.exe`, the fallbacks, and nothing found.
+- Not checked: on Windows.
+
 ## T98: the skill installs in Muse Code, Grok, Gemini CLI, OpenCode and Cursor
 
 Muse Code 1.4.14 reads the Claude plugin manifest (`muse plugins validate .`: valid, compatibility full), but its marketplace reader takes `.agents/plugins/marketplace.json` first and skipped our entry: "Codex marketplace url source `./` is not a supported Git source", so `plugins=0`. The entry's source is now `{"source": "local", "path": "./"}`.

@@ -17,9 +17,10 @@ exit /b %PM_CODE%
 #   1. finds Python 3.11 or newer, or offers to install it with winget
 #   2. finds Git, or offers to install it with winget
 #   3. offers to install the GitHub CLI, which lets the app sign in to GitHub (optional)
-#   4. installs ProofMerge into %LOCALAPPDATA%\ProofMerge\venv (no admin rights, PATH untouched)
+#   4. installs ProofMerge into %LOCALAPPDATA%\ProofMerge\venv (no admin rights)
 #   5. offers to install Docker Desktop, which runs the tests in a sandbox
-#   6. adds ProofMerge and Uninstall ProofMerge to the Start menu, and ProofMerge to the desktop
+#   6. adds ProofMerge and Uninstall ProofMerge to the Start menu, and ProofMerge to the desktop;
+#      if you say yes, adds the proofmerge command to your user PATH for terminals and coding agents
 #   7. opens ProofMerge in the browser
 # Winget shows each package's license and asks you to accept it; this script never accepts for you.
 
@@ -44,6 +45,38 @@ function Say($text) { Write-Host "    $text" }
 function Ok($text) { Write-Host "    $text" -ForegroundColor Green }
 function Has($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 function Ask($question) { (Read-Host "    $question [Y/n]") -notmatch '^\s*(n|no)\s*$' }
+
+# Only %LOCALAPPDATA%\ProofMerge\bin goes on PATH, holding one proofmerge.cmd: never the venv's
+# Scripts folder, whose python.exe and pip would hide the user's own.
+$PathEntry = '%LOCALAPPDATA%\ProofMerge\bin'
+
+function Notify-Environment {
+    # Terminals opened after this read the new PATH without signing out. Best effort.
+    try {
+        Add-Type -Namespace ProofMerge -Name Win32 -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
+        $result = [UIntPtr]::Zero
+        [ProofMerge.Win32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null
+    } catch { }
+}
+
+function Add-Command {
+    $bin = Join-Path $InstallDir 'bin'
+    New-Item -ItemType Directory -Force -Path $bin | Out-Null
+    Set-Content -Path (Join-Path $bin 'proofmerge.cmd') -Value '@"%LOCALAPPDATA%\ProofMerge\venv\Scripts\proofmerge.exe" %*' -Encoding ASCII
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    try {
+        # The raw value, so entries such as %USERPROFILE%\bin stay as they are.
+        $userPath = [string]$key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+        if (($userPath -split ';') -contains $PathEntry) { Ok 'The proofmerge command is on your PATH.'; return }
+        if (-not (Ask 'Add the proofmerge command to your terminal too (your user PATH)?')) {
+            Say "Skipped. The command is $bin\proofmerge.cmd"
+            return
+        }
+        $key.SetValue('Path', ((@($userPath.TrimEnd(';'), $PathEntry) -ne '') -join ';'), 'ExpandString')
+    } finally { $key.Close() }
+    Notify-Environment
+    Ok 'Added. Open a new terminal and run: proofmerge --help'
+}
 
 function Refresh-Path {
     # winget installs update PATH for new windows only; pick the change up here too.
@@ -178,10 +211,11 @@ try {
 
     Step 'Step 6 of 7: Shortcuts'
     $uninstaller = Join-Path $InstallDir 'Uninstall ProofMerge.cmd'
-    # Run by the uninstaller: stop only this install's processes (they lock the files), wait,
-    # then remove the shortcuts from folders looked up at that moment.
+    # Run by the uninstaller: take the command off the user PATH, stop only this install's
+    # processes (they lock the files), wait, then remove the shortcuts from folders looked up at
+    # that moment. It sits in a batch line, where %% stands for one %.
     $UnlinkCommand = @'
-$own = (Join-Path $env:LOCALAPPDATA 'ProofMerge') + '\'; Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($own, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -PassThru -ErrorAction SilentlyContinue | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue; foreach ($f in 'Programs','Desktop') { Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath($f)) 'ProofMerge.lnk') -ErrorAction SilentlyContinue }; Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Uninstall ProofMerge.lnk') -ErrorAction SilentlyContinue
+$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true); $p = [string]$k.GetValue('Path', '', 'DoNotExpandEnvironmentNames'); if (($p -split ';') -contains '%%LOCALAPPDATA%%\ProofMerge\bin') { $k.SetValue('Path', ((@($p -split ';') | Where-Object { $_ -and $_ -ne '%%LOCALAPPDATA%%\ProofMerge\bin' }) -join ';'), 'ExpandString') }; $k.Close(); $own = (Join-Path $env:LOCALAPPDATA 'ProofMerge') + '\'; Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($own, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -PassThru -ErrorAction SilentlyContinue | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue; foreach ($f in 'Programs','Desktop') { Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath($f)) 'ProofMerge.lnk') -ErrorAction SilentlyContinue }; Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Uninstall ProofMerge.lnk') -ErrorAction SilentlyContinue
 '@
     # The uninstaller holds no paths of its own: folders are looked up when it runs, so a
     # non-ASCII user or desktop folder cannot be garbled by the batch file's code page.
@@ -201,6 +235,7 @@ $own = (Join-Path $env:LOCALAPPDATA 'ProofMerge') + '\'; Get-Process -ErrorActio
     Write-Shortcut $StartMenu 'Uninstall ProofMerge' $uninstaller '' 'Remove ProofMerge; your checks stay'
     Write-Shortcut $Desktop 'ProofMerge' $AppExe '' 'Check a change before you merge it'
     Ok 'Added ProofMerge to the Start menu and the desktop.'
+    Add-Command
 
     Step 'Step 7 of 7: Open ProofMerge'
     Start-Process -FilePath $AppExe -WorkingDirectory $env:TEMP

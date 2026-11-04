@@ -341,8 +341,11 @@ The installer finds or offers to install Python 3.11+, Git, the GitHub CLI
 (optional, for signing in to GitHub) and Docker Desktop through winget; you
 accept each license yourself. It installs ProofMerge for your user only in
 `%LOCALAPPDATA%\ProofMerge`, adds ProofMerge and Uninstall ProofMerge to the
-Start menu and ProofMerge to the desktop, then opens it. Run it again to update.
-Uninstalling keeps your checks in `%USERPROFILE%\ProofMerge`.
+Start menu and ProofMerge to the desktop, then opens it. If you say yes, it also
+puts the `proofmerge` command on your user PATH (only that command, in
+`%LOCALAPPDATA%\ProofMerge\bin`), so a new terminal or a coding agent can run
+`proofmerge verify`. Run it again to update.
+Uninstalling takes the command off PATH and keeps your checks in `%USERPROFILE%\ProofMerge`.
 
 ### Linux, one script
 

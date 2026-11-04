@@ -136,6 +136,18 @@ def test_cli_failures_are_model_errors_without_stderr(runner, message):
     assert "SECRET" not in str(error.value)
 
 
+def test_a_failing_cli_says_why_from_its_json_result_and_windows_keeps_its_login_env(monkeypatch):
+    out = json.dumps({"type": "result", "is_error": True, "result": "Not logged in · Please run /login"})
+    with pytest.raises(MetaError, match="exited with code 1: Not logged in · Please run /login") as error:
+        ask(MetaClient(CliCompletions("claude-cli", FakeRunner(out, returncode=1))))
+    assert "SECRET" not in str(error.value)  # stderr is still never shown
+    for name in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP"):
+        monkeypatch.setenv(name, "x")
+    runner = FakeRunner(claude_out())
+    ask(MetaClient(CliCompletions("claude-cli", runner)))
+    assert {"USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP"} <= set(runner.calls[0]["env"])
+
+
 def test_report_names_models_and_warns_on_contributor():
     proof = Proof.model_validate_json((FIXTURES / "sample_proof_block.json").read_text())
     assert "via <code>" not in render_html(proof, FIXTURES)  # older proofs record no backend
@@ -147,3 +159,29 @@ def test_report_names_models_and_warns_on_contributor():
     page = render_html(proof, FIXTURES)
     assert "spark CLI default, wonder &lt;b&gt;x&lt;/b&gt; via <code>cli:claude-cli</code>" in page
     assert "may be used for training" in page
+
+
+def test_claude_is_found_on_windows_where_only_exe_files_start_by_name(tmp_path):
+    from proofmerge.cli_backend import claude_command
+
+    assert claude_command(windows=False) == ["claude"]  # elsewhere the name is enough
+    npm = tmp_path / "AppData" / "Roaming" / "npm"
+    script = npm / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js"
+    script.parent.mkdir(parents=True)
+    script.write_text("")
+    (npm / "claude.cmd").write_text("")
+    on_path = {"claude": str(npm / "claude.cmd"), "node": r"C:\node\node.exe"}
+    # An npm shim on PATH runs as node + cli.js, so cmd.exe never parses the JSON arguments.
+    assert claude_command(windows=True, which=on_path.get, home=tmp_path) == [r"C:\node\node.exe", str(script)]
+    # Not on the app's PATH (opened from the Start menu before PATH changed): the usual places.
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path, appdata=str(npm.parent)) == [
+        str(npm / "node.exe"), str(script)]
+    exe = script.parent / "bin" / "claude.exe"  # what the npm package ships since 2.1.x
+    exe.parent.mkdir()
+    exe.write_text("")
+    assert claude_command(windows=True, which=on_path.get, home=tmp_path) == [str(exe)]
+    native = tmp_path / ".local" / "bin" / "claude.exe"
+    native.parent.mkdir(parents=True)
+    native.write_text("")
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path, appdata="") == [str(native)]
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path / "none", appdata="") == ["claude"]

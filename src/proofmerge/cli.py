@@ -459,6 +459,74 @@ def approve(
     typer.echo(f"approved {name}#{pr}: review {url}")
 
 
+@app.command("push-fix")
+def push_fix(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    dry_run: Annotated[bool, typer.Option(help="Print what would be pushed instead of pushing")] = False,
+) -> None:
+    """Push the verified fixes onto your own pull request's branch as one commit, never forced.
+
+    Only for an open PR you opened, from a branch of the same repository, still at the commit the run
+    checked. Each fix was checked alone, so verify the pull request again after the push."""
+    from proofmerge.dashboard_github import GH_CREDENTIALS
+    from proofmerge.fixes import FixError, commit_fix, load_report, verified_files
+
+    evidence_dir = proof_json.parent
+    if verify_manifest(evidence_dir):
+        typer.echo("The evidence changed since the run; check it with replay before pushing.", err=True)
+        raise typer.Exit(1)
+
+    def gh(*args: str) -> str:
+        done = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        if done.returncode:
+            raise FixError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        return done.stdout.strip()
+
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        report = load_report(evidence_dir)
+        if report is None or report.head_sha != proof.head_sha:
+            raise FixError("This run has no suggested fix yet. Suggest a fix first.")
+        ids, files = verified_files(report)
+        name = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+        current = json.loads(gh("pr", "view", str(pr), "--repo", name, "--json",
+                                "state,headRefOid,headRefName,isCrossRepository,author"))
+        me = gh("api", "user", "--jq", ".login")
+        branch, author = current["headRefName"], current["author"]["login"]
+        if current["state"] != "OPEN":
+            raise FixError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to push to.")
+        if current["headRefOid"] != proof.head_sha:
+            raise FixError(f"PR #{pr} changed since this run (head {current['headRefOid'][:7]}, "
+                           f"checked {proof.head_sha[:7]}). Verify it again.")
+        if current["isCrossRepository"]:
+            raise FixError(f"PR #{pr} comes from a fork; post the fix to the pull request instead.")
+        if author != me:
+            raise FixError(f"PR #{pr} was opened by @{author} and you are signed in as @{me}. ProofMerge "
+                           "only pushes to your own pull requests; post the fix to it instead.")
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", branch) or branch.startswith("-"):
+            raise FixError(f"Refusing the branch name {branch!r}.")
+        message = f"Fix {', '.join(ids)} found by ProofMerge\n\n" + "\n\n".join(
+            f"{r.hypothesis_id}: {r.explanation}" for r in report.fixes if r.hypothesis_id in ids)
+        sha = commit_fix(repo, proof.head_sha, files, f"refs/proofmerge/fix/{proof.head_sha[:12]}/push", message)
+        if dry_run:
+            typer.echo(f"would push {sha[:7]} ({', '.join(ids)}: {', '.join(f.path for f in files)}) "
+                       f"to {name} {branch} as @{me}")
+            return
+        # No --force: the fix's parent is the PR head, so anything else on the branch makes the push fail.
+        pushed = subprocess.run(["git", "-C", str(repo), *GH_CREDENTIALS, "push", f"https://github.com/{name}.git",
+                                 f"{sha}:refs/heads/{branch}"], capture_output=True, text=True, timeout=120, check=False)
+        if pushed.returncode:
+            raise FixError(f"git push failed: {pushed.stderr.strip()[-300:]}")
+    except (OSError, ValueError, KeyError, FixError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"push-fix failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"pushed {sha[:7]} ({', '.join(ids)}) to {name} {branch}. "
+               "Each fix was checked alone: verify the pull request again.")
+
+
 @app.command("ponytail-post")
 def ponytail_post(
     report_file: Annotated[Path, typer.Argument(help="A review written by ponytail-diff")],

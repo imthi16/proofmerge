@@ -8,6 +8,7 @@ minimal environment, so ProofMerge's own secrets never reach the CLI.
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -18,15 +19,43 @@ from typing import Any
 from proofmerge.meta import MetaError
 
 TIMEOUT_SECONDS = 600
-# What a signed-in CLI needs to find its binary and login; nothing else is passed on.
+# What a signed-in CLI needs to find its binary and login; nothing else is passed on. The second
+# line is Windows: the login lives under USERPROFILE/APPDATA, and Node needs SYSTEMROOT and TEMP to run.
 _ENV_KEYS = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
-             "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "CLAUDE_CONFIG_DIR")
+             "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "CLAUDE_CONFIG_DIR",
+             "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP",
+             "PATHEXT", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "USERNAME")
+
+
+def claude_command(windows: bool = os.name == "nt", which: Callable[[str], str | None] = shutil.which,
+                   home: Path | None = None, appdata: str | None = None) -> list[str]:
+    """How to start Claude Code. On Windows, starting a program by name finds only .exe files, but
+    an npm install is claude.cmd; and cmd.exe would mangle the JSON arguments of a batch file. So
+    there it is resolved to a full path, and an npm shim is replaced by the program it starts: the
+    package's bin/claude.exe (2.1.x), or node with cli.js (older releases)."""
+    if not windows:
+        return ["claude"]
+    found = which("claude")
+    if found is None:
+        npm = Path(appdata or os.environ.get("APPDATA") or "") / "npm" / "claude.cmd"
+        native = (home or Path.home()) / ".local" / "bin" / "claude.exe"  # Claude Code's own installer
+        found = next((str(p) for p in (native, npm) if p.is_absolute() and p.is_file()), None)
+    if found is None:
+        return ["claude"]
+    shim = Path(found)
+    if shim.suffix.lower() in (".cmd", ".bat"):
+        package = shim.parent / "node_modules" / "@anthropic-ai" / "claude-code"
+        if (package / "bin" / "claude.exe").is_file():
+            return [str(package / "bin" / "claude.exe")]
+        if (package / "cli.js").is_file():
+            return [which("node") or str(shim.parent / "node.exe"), str(package / "cli.js")]
+    return [found]
 
 
 def _claude_argv(model: str, system_file: Path, schema: dict) -> list[str]:
     # Canary-checked with Claude Code 2.1.314: `--tools ""` leaves only structured output.
     argv = [
-        "claude", "-p", "--output-format", "json", "--tools", "", "--strict-mcp-config",
+        *claude_command(), "-p", "--output-format", "json", "--tools", "", "--strict-mcp-config",
         "--setting-sources", "", "--no-session-persistence",
         "--system-prompt-file", str(system_file), "--json-schema", json.dumps(schema),
     ]
@@ -81,15 +110,20 @@ class CliCompletions:
                 raise MetaError(f"{argv[0]} is not installed or not on PATH") from None
             except subprocess.TimeoutExpired:
                 raise MetaError(f"{self.backend} timed out after {TIMEOUT_SECONDS}s") from None
-        # stderr is not echoed: the CLI is outside ProofMerge's control.
-        if result.returncode != 0:
-            raise MetaError(f"{self.backend} exited with code {result.returncode}")
+        # stderr is not echoed: the CLI is outside ProofMerge's control. Its JSON "result" is shown
+        # on a failure, because that is where it says why (for example that it is not signed in).
         try:
             out = json.loads(result.stdout)
         except json.JSONDecodeError:
-            raise MetaError(f"{self.backend} did not print JSON") from None
+            out = None
+        reason = out.get("result") if isinstance(out, dict) else None
+        why = f": {reason.strip()[:200]}" if isinstance(reason, str) and reason.strip() else ""
+        if result.returncode != 0:
+            raise MetaError(f"{self.backend} exited with code {result.returncode}{why}")
+        if out is None:
+            raise MetaError(f"{self.backend} did not print JSON")
         if not isinstance(out, dict) or out.get("is_error"):
-            raise MetaError(f"{self.backend} reported an error")
+            raise MetaError(f"{self.backend} reported an error{why}")
         content, prompt_tokens, completion_tokens = read_reply(out)
         text = content if isinstance(content, str) else json.dumps(content)
         return SimpleNamespace(

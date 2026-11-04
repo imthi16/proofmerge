@@ -548,3 +548,10 @@ def test_the_pull_requests_page_has_a_ponytail_level_and_a_separate_list_of_poss
     assert "JSON.stringify({ number: pr.number, level })" in js
     assert "Possible bugs" in js and "No test was run, so check each one." in js
     assert "pr.ponytail.bugs?.length" in js  # the list chip and the post button count the bugs too
+
+
+def test_the_pull_request_detail_never_shows_a_pull_request_the_search_hides() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert "const pr = prs.find((p) => p.number === Number(selected)) || prs[0];" in js  # prs is the filtered list
+    assert "data.prs.find((p) => p.number === Number(selected))" not in js
+    assert "The repository has none yet." in js and "once the search finds one." in js  # a search with no match is not an empty repository

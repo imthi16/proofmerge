@@ -655,7 +655,8 @@
     const verdictOf = (id) => index.runs.find((r) => r.id === id)?.decision;
     const q = query.trim().toLowerCase();
     const prs = data.prs.filter((p) => !q || `#${p.number} ${p.title} ${p.author} ${p.head}`.toLowerCase().includes(q));
-    const pr = data.prs.find((p) => p.number === Number(selected)) || prs[0];
+    // The detail follows the search: a pull request the search hides is not shown beside a list that lacks it.
+    const pr = prs.find((p) => p.number === Number(selected)) || prs[0];
     const start = () => {
       setAsking(false); setPosting("");
       fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
@@ -756,7 +757,9 @@
           ${pr.body ? html`<div class="md">${window.ProofMergeMarkdown(React.createElement, pr.body)}</div>`
             : html`<p class="muted">The pull request has no description, so the intent is its title only.</p>`}
           <details><summary>Run it yourself</summary><pre>${command}</pre><${Copy} text=${command} label="commands" /></details>
-        </aside>` : html`<aside class="panel detail empty"><strong>No pull requests</strong>The repository has none yet.</aside>`}
+        </aside>` : html`<aside class="panel detail empty">${data.prs.length
+          ? html`<strong>Pick a pull request</strong>Its details show here once the search finds one.`
+          : html`<strong>No pull requests</strong>The repository has none yet.`}</aside>`}
       </div>
       ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}
       ${postAsk && pr?.ponytail ? html`<${ConfirmPonyPost} pr=${pr} count=${pr.ponytail.findings.length + (pr.ponytail.bugs?.length || 0)} account=${gh?.user || ""}

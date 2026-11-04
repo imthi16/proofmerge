@@ -869,3 +869,7 @@ review saved before levels still loads as low. `ponytail-diff` and `ponytail` ta
   `/api/prs` reply patched to carry a review with bugs, the picker, the list and the post button.
 - Not checked: how often a real model finds a real bug at medium or high, or how often it is wrong. Nothing
   was posted to GitHub.
+
+## T96: the pull request detail follows the search
+
+With a pull request selected (its number is in the page address), searching for another one left the first one's detail beside a list that no longer had it: searching for one pull request's number showed that row in the list and the detail of the earlier selection. The detail now picks the selected pull request from the filtered list, and falls back to the first match. When nothing matches, the detail no longer says the repository has no pull requests. Checked in real Chrome against a live dashboard (search, switch, clear); not checked on the Control Center (`/`).

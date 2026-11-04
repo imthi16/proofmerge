@@ -51,12 +51,13 @@ def test_claude_and_codex_plugins_ship_this_skill_at_the_package_version() -> No
     assert (ROOT / codex["skills"] / SKILL.parent.name / "SKILL.md") == SKILL
     assert (ROOT / claude["icon"]).is_file()
 
-    # The repo is its own marketplace for both: one entry, pointing at the repo root.
+    # The repo is its own marketplace for all three: one entry, pointing at the repo root.
+    # Muse Code reads .agents/ first and skips a "url" source, so the root is a "local" path (Codex takes both).
     claude_market, codex_market = manifest(".claude-plugin/marketplace.json"), manifest(".agents/plugins/marketplace.json")
     assert [p["name"] for p in claude_market["plugins"]] == [SKILL.parent.name]
     assert claude_market["plugins"][0]["source"] == "./"
     assert [p["name"] for p in codex_market["plugins"]] == [SKILL.parent.name]
-    assert codex_market["plugins"][0]["source"] == {"source": "url", "url": "./"}
+    assert codex_market["plugins"][0]["source"] == {"source": "local", "path": "./"}
 
 
 def test_skill_puts_the_hard_rules_before_the_steps() -> None:

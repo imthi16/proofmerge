@@ -883,3 +883,13 @@ A tester (a Grok agent given the repository and a written test plan) ran ProofMe
 - `ORIGINALITY.md` named the wrong vendor folder and still said the video was not made. It now names `dashboard_static/legacy/vendor/` and the 4 min 20 s walkthrough.
 
 Not fixed: a changed test's outcome is recorded per test file, so a test that passes on its own can be listed under a file that failed. It does not change the verdict (the evidence is wrong, not the rule); it is a known limit of how `tamper.py` runs base tests, not changed here.
+
+## T98: the skill installs in Muse Code, Grok, Gemini CLI, OpenCode and Cursor
+
+Muse Code 1.4.14 reads the Claude plugin manifest (`muse plugins validate .`: valid, compatibility full), but its marketplace reader takes `.agents/plugins/marketplace.json` first and skipped our entry: "Codex marketplace url source `./` is not a supported Git source", so `plugins=0`. The entry's source is now `{"source": "local", "path": "./"}`.
+
+- Checked on local git copies in scratch homes: Muse `marketplace add` + `plugins install proofmerge@proofmerge` installed it and `muse skills list --source plugin` shows `plugin:proofmerge:proofmerge` active. Codex CLI 0.166.0 (`codex plugin marketplace add` + `codex plugin add`, isolated `CODEX_HOME`) installs both the old and the new entry. Claude Code reads `.claude-plugin/marketplace.json`, which is unchanged.
+- README lists the Muse Code install. `tests/test_skill.py` pins the new source.
+- Not checked: the install from GitHub itself (needs this on main), and a Muse session that picks the skill up on its own.
+- Grok CLI 1.0.70 and Gemini CLI 0.49.0 needed no change. In scratch homes, from the GitHub URL on main: `grok plugin install https://github.com/imthi16/proofmerge --trust` installed `proofmerge v0.1.0` with 1 skill dir (it reads `.claude-plugin/`), and `gemini skills install https://github.com/imthi16/proofmerge --path skills/proofmerge` installed it, listed as Enabled.
+- OpenCode and Cursor have no plugin route for a skill-only bundle we can use: OpenCode's `plugin add` takes JS packages and Cursor's marketplace needs review. Both load `~/.agents/skills/<name>/SKILL.md` (opencode.ai/docs/skills, cursor.com/docs/context/skills), so the README copy now goes there. Not checked by running either agent.

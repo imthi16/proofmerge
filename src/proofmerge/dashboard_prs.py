@@ -193,6 +193,11 @@ class PullRequests:
             if fetched.returncode != 0:
                 finish("failed", "git fetch failed", "Could not fetch the pull request from GitHub.")
                 return
+            # The cached pr['head_sha'] can be stale; key the review by the SHA git just fetched.
+            resolved = self._step(["git", "-C", str(self.repo), "rev-parse", head], 10)
+            if resolved.returncode == 0 and resolved.stdout.strip():
+                pr = {**pr, "head_sha": resolved.stdout.strip()}
+                job["head_sha"] = pr["head_sha"]
             job["step"] = "Reading the diff (one model call)"
             out = self.ponytail_path(pr)
             with tempfile.TemporaryDirectory(prefix="proofmerge-pony-") as tmp:

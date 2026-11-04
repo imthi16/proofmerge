@@ -794,3 +794,20 @@ def test_config_language_skips_tamper_and_adds_scope_limitation(tmp_path, monkey
     assert [e.outcome for e in proof.experiments[0].executions] == ["PASS"] * 3 + ["FAIL"] * 3
     assert Proof.model_validate_json((evidence / "proof.json").read_text()) == proof
     assert proof.verdict.decision in (evidence / "report.html").read_text()
+
+
+def test_an_empty_existing_evidence_folder_is_used_and_anything_else_in_the_way_is_refused(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    pipeline.new_folder(empty)
+    pipeline.new_folder(tmp_path / "fresh" / "nested")
+    assert empty.is_dir() and (tmp_path / "fresh" / "nested").is_dir()
+    full = tmp_path / "full"
+    full.mkdir()
+    (full / "keep").write_text("old log")
+    afile = tmp_path / "afile"
+    afile.write_text("x")
+    for blocked in (full, afile):
+        with pytest.raises(ValueError, match="Choose a new folder"):
+            pipeline.new_folder(blocked)
+    assert [p.name for p in full.iterdir()] == ["keep"]  # nothing was mixed in or removed

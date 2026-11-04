@@ -874,6 +874,16 @@ review saved before levels still loads as low. `ponytail-diff` and `ponytail` ta
 
 With a pull request selected (its number is in the page address), searching for another one left the first one's detail beside a list that no longer had it: searching for one pull request's number showed that row in the list and the detail of the earlier selection. The detail now picks the selected pull request from the filtered list, and falls back to the first match. When nothing matches, the detail no longer says the repository has no pull requests. Checked in real Chrome against a live dashboard (search, switch, clear); not checked on the Control Center (`/`).
 
+## T97: fixes from an outside test run
+
+A tester (a Grok agent given the repository and a written test plan) ran ProofMerge from a fresh clone with real Meta calls: install, the demo (BLOCK, exit 2), evidence replay including a resealed edit, the dashboard and a claims audit. Of its four bugs, three are fixed here:
+
+- A bare `pytest -q` failed at collection (`No module named 'tests'`), because `tests/test_backends.py` imports `tests.test_meta` and only `python -m pytest` put the repository on the path. `pyproject.toml` now sets `pythonpath = ["."]`.
+- `verify` and `probe` refused an existing empty `--evidence-dir` with a raw `[Errno 17]`. An empty folder is now used; a folder with files, or a file, is still refused, with "Choose a new folder for this run", so old logs never mix into a new run.
+- `ORIGINALITY.md` named the wrong vendor folder and still said the video was not made. It now names `dashboard_static/legacy/vendor/` and the 4 min 20 s walkthrough.
+
+Not fixed: a changed test's outcome is recorded per test file, so a test that passes on its own can be listed under a file that failed. It does not change the verdict (the evidence is wrong, not the rule); it is a known limit of how `tamper.py` runs base tests, not changed here.
+
 ### 2026-11-03 — T89 GitHub accounts as a list on Setup (Claude)
 - With two or more accounts the Setup row showed one name and a row of small buttons, so the accounts could not be told apart. It is now a list, one row per account, the active one first: a filled monogram, the `@login`, an **Active** chip and **Sign out**; every other account is quieter, with **Use this account**. **Add another account** stays at the top right and the note about `gh` in a terminal sits under the list. The buttons keep their routes (`/api/github/switch`, `logout`, `add`); no backend change.
 - Checked in real Chrome with the author's real `gh` (two accounts) on this branch's dashboard: light, dark and 390 px wide, no horizontal overflow and no page errors; at 390 px the account button drops under the name. Not checked: clicking Use this account or Sign out, which would change the account `gh` uses on this machine.

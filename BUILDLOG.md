@@ -834,3 +834,25 @@ A run started from the Pull requests page now shows the Ponytail review of its o
 "Ponytail: N" (or "lean") tag in the Runs list and a fact row in the run's detail that links to the
 pull request. The findings stay on the Pull requests page, so they are not shown twice. The backend
 matches `pr-<number>-<sha>-<time>` runs to `<runs>/ponytail/pr-<number>-<sha>.json`.
+
+## T94: Fix then verify again must use the current PR head
+
+Reproduced: after a BLOCK run, `Suggest a fix` produced a verified fix, the fix was applied to
+the PR head, but a dashboard `Verify this PR` started from the cached PR list named the new run
+for the old `head_sha`. The run folder and its `proof.json` disagreed on the commit, so the PASS
+verdict did not appear under the current commit in the Pull requests tab.
+
+Changed:
+- `src/proofmerge/dashboard_prs.py`: `PullRequests.start()` now calls `self.pulls(refresh=True)`
+  before it creates the run id, so every verify uses GitHub's current `headRefOid`.
+- `src/proofmerge/dashboard_static/legacy/app.js`: the run detail now shows **Verify the fixed
+  commit** on BLOCK runs that have a verified fix and a PR number, calling `/api/verify` directly
+  so the user does not have to leave the run to re-verify.
+- `tests/test_dashboard_prs_cache.py`: a fake-`gh`/fake-git unit test fails before the cache fix
+  and passes after it.
+- `tests/test_fix_then_pass.py`: an offline end-to-end test reproduces BLOCK -> verified fix ->
+  apply fix -> verify again -> PASS using fake model and runner.
+
+Checked: `PYTHONPATH=src python -m pytest -q` passes (full suite); `ruff check src tests` clean.
+Not checked: a real GitHub PR cycle with actual `gh`, Docker sandbox, or the Control Center (`/`).
+No verdict rule, evidence sealing, or BLOCK condition was changed.

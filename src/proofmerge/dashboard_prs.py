@@ -124,7 +124,8 @@ class PullRequests:
         return prs
 
     def start(self, number: int) -> dict[str, Any]:
-        pr = next((p for p in self.pulls() if p["number"] == number), None)
+        # Refresh the list so a verify started after a fix is applied uses the current head.
+        pr = next((p for p in self.pulls(refresh=True) if p["number"] == number), None)
         if pr is None:
             raise PrError(f"PR #{number} is not in the list.")
         if pr["state"] != "OPEN":

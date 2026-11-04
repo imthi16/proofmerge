@@ -323,6 +323,10 @@
           <${Icon} name="spark" />${fix ? "Suggest the fix again" : "Suggest a fix"}</button>
         ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
           title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>` : null}
+        ${prNumber && fix && fix.fixes.some((f) => f.verified) ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
+          onClick=${() => ctx.startPrVerify(prNumber)}
+          title=${ctx.settings.project ? "Verify the pull request again at its current head, after the fix is applied" : "Choose the project on Home first"}>
+          <${Icon} name="refresh" />Verify the fixed commit</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
       </div>` : null}
       ${decision === "PASS" && prNumber ? html`<div class="fix-actions">
@@ -1481,12 +1485,15 @@
     useEffect(() => { if (!quitArmed) return; const t = setTimeout(() => setQuitArmed(false), 3000); return () => clearTimeout(t); }, [quitArmed]);
     const start = (body) => post("/api/jobs", body).then((d) => { setJob(d.job); setNotice(""); })
       .catch((e) => setNotice(e.message));
+    const startPrVerify = (number) => post("/api/verify", { number })
+      .then((d) => { setJob(d.job); setNotice(""); })
+      .catch((e) => setNotice(e.message));
     const stop = () => post("/api/jobs/stop", {}).then((d) => setJob(d.job)).catch((e) => setNotice(e.message));
     const saveSettings = (body) => post("/api/settings", body).then((d) => {
       setSession((s) => ({ ...s, settings: d.settings, prs: d.prs })); return d;
     });
     const dismiss = () => { if (job) { setDismissed(job.started); store.set("pm-dismissed", String(job.started)); } };
-    const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, stop, go,
+    const ctx = { settings: session.settings || {}, health, job, busy: job?.status === "running", start, startPrVerify, stop, go,
       saveSettings, reloadHealth, dismiss, dismissed, tab: route.tab, token: session.token };
     const project = session.settings?.project || "";
     const nextTheme = { auto: "light", light: "dark", dark: "auto" }[theme];

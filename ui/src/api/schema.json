@@ -2062,10 +2062,23 @@
           "exclusiveMinimum": 0,
           "title": "Number",
           "type": "integer"
+        },
+        "run": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run"
         }
       },
       "required": [
-        "number"
+        "number",
+        "run"
       ],
       "title": "VerificationRequest",
       "type": "object"

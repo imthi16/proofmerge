@@ -803,3 +803,73 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `adjudicate` replaced `decide()`'s PASS with REVIEW when source files were not shown, a second decision authority next to the rule that every verdict comes from `decide()`. The policy now lives in `decide()` (`unshown_source_files`): it adds a reason, so a PASS becomes REVIEW and a BLOCK stays BLOCK with every reason kept. `adjudicate` only passes the list in and adds the scope note. A REVIEW or BLOCK now also carries that reason, which the first version did not add.
 - The omission note named every excluded path and was not counted against the 60,000-character budget: one 59,000-character source change plus 5,000 generated files gave a 954,247-character prompt. The selection now reserves 3,000 characters for the note and the note names at most 15 paths per list; the complete lists stay in `DiffView` and in the proof's inputs.
 - Tests: `test_the_prompt_stays_within_the_limit_however_many_files_were_left_out` (5,000 long vendor paths), `test_a_regression_still_blocks_when_source_was_not_shown`.
+
+### 2026-11-03 — T87 Ponytail review moves to the Pull requests page (Claude)
+- The Ponytail review was a button on a finished run, so it needed a `verify` first (Docker, model calls) although it only reads the diff. It is now a button on every open pull request on the Pull requests page: it fetches the PR into `refs/proofmerge/`, then `proofmerge ponytail-diff` makes one model call on the diff (the PR title and body are the intent) and the findings show under the PR's actions. The result is saved per head commit in `<runs folder>/ponytail/pr-<n>-<sha>.json`, so a PR that changed gets a fresh review. It has its own job state, apart from verify's, and no confirm dialog (one call, nothing runs). The button and findings were removed from the Runs page; `proofmerge ponytail <proof.json>` stays for a finished run.
+- Real run in Chrome (system Chrome through Playwright, Claude Code backend) on the author's repository: PR #75 (+83/-1) finished in 19 s and PR #74 (+14,984/-712, far over the diff budget) in 12 s, both showing findings with no page errors.
+- Tests: two dashboard tests (the review runs without any verify call and its result is listed on the PR; a failed review says why and a merged PR is refused). Account switching is also refused while a Ponytail review runs.
+- Not checked: the Control Center (`/`) Pull requests page, which has no Ponytail button; the Docker sandbox tests locally.
+
+### 2026-11-03 — T91 Ponytail review: progress, list status and findings as rows (Claude)
+- While a review runs, a status row under the PR's actions shows its two real steps (fetch the pull request, read the diff with the model), a spinner on the current one, and the seconds so far; the button reads "Reviewing…". In the PR list each reviewed pull request shows "Ponytail: N" (or "Ponytail: lean") under its verify status, and "Reviewing" while it runs. The result is a summary line (findings, about how many lines could go, the commit reviewed) and one row per finding: tag and `file:line`, what is wrong, and "Instead: …" (or "Nothing replaces it."). A failed review keeps its alert for 60 s instead of 10. The button reads "Review again" once there is a result.
+- Checked in real Chrome with the real model (Claude Code backend) on the author's PR #75: progress with the first step done and the second running, the list chip going Reviewing to "Ponytail: 2", two finding rows, "Review again", no horizontal overflow at 390 px, no page errors. Two layout bugs were found in that run and fixed: the step marks were inverted and the list chip sat against the verify text.
+- Not checked: dark mode of the result at phone width, and the Control Center (`/`), which has no Ponytail review.
+### 2026-11-03 — T88 Runs page: the evidence stays in the full report (Claude)
+- The author asked for the detail on the right of the Runs tab to go, since the full report already has it. The evidence panel (hypotheses and probes, tamper guard, intent claims) is removed from the Runs page; `report.html` and its **Open full report** button are unchanged. Suggested fixes were shown inside the hypotheses, so they now have their own "Suggested fixes" block under the actions and stay visible. The run's verdict, reasons and facts stay.
+- Checked in real Chrome on a copy of the demo runs with a fix result written beside one run: no evidence panel and no hypothesis cards, the report button and the fix block present, no horizontal overflow at 1600 and 390 px, no page errors.
+- Not checked: the Control Center (`/`) Runs page, which is separate code.
+
+### 2026-11-03 — T90 Post and Approve say which GitHub account they act as (Claude)
+- On the Runs page nothing said which of the signed-in GitHub accounts **Post to PR** or **Approve PR** would use. Both buttons now end with "as @account" (the active `gh` account, read from `/api/github` when the run opens), and both confirm dialogs start with an "Acting as @account" line with **Use another account** (to Setup) when more than one account is signed in. Without a known account the line says "your signed-in GitHub account".
+- Checked in real Chrome against this branch's dashboard with the author's real `gh`: the button read "Post to PR #7 as @mdimthi" (the account that was active then), the dialog showed the line and the link, no page errors; the account appeared about 1 s after the run opened. Cancelled without posting. Not checked: the Approve dialog (no PASS run in that test), and the Pull requests page, whose Verify uses the account only to read.
+
+### 2026-11-03 — T92 Post Ponytail findings to the pull request as review comments (Claude)
+- The Ponytail findings could be read but not acted on. The block now has **Post N findings to the PR** (with "as @account"), then a confirm dialog that names the account (**Acting as @account**, **Use another account**) and says it is a comment only. `proofmerge ponytail-post <review.json> --pr N --repo R [--dry-run]` builds one GitHub review (event COMMENT): each finding becomes a comment on its lines (a range when the whole range is in the PR's diff, else the last line of it that is), and findings outside the diff go in the review summary. Model text has `@` defused so nobody is pinged. It refuses a closed PR, a PR whose head moved since the review, and a review with no findings. After a post the review file records `posted_url`, the block shows "Posted to the pull request" with the link instead of the button, and **Review again** starts clean, so one review cannot be posted twice. Route `/api/ponytail/post`, its own job state; account switching is refused while it runs.
+- Checked: `ponytail-post --dry-run` on the real saved review of the author's PR #75 with the real `gh` built two line comments (ranges 26-77 and 48-77) and a summary; in real Chrome the button read "Post 2 findings to the PR as @mdimthi", the dialog named the account, and a faked failing request showed the failure alert, no page errors.
+- Not checked: a real post to GitHub (nothing was posted in any test), how GitHub shows the comments, and the Control Center (`/`).
+
+## T93: Ponytail on the Runs page
+
+A run started from the Pull requests page now shows the Ponytail review of its own commit: a
+"Ponytail: N" (or "lean") tag in the Runs list and a fact row in the run's detail that links to the
+pull request. The findings stay on the Pull requests page, so they are not shown twice. The backend
+matches `pr-<number>-<sha>-<time>` runs to `<runs>/ponytail/pr-<number>-<sha>.json`.
+
+## T94: Fix then verify again must use the current PR head
+
+Reproduced: after a BLOCK run, `Suggest a fix` produced a verified fix, the fix was applied to
+the PR head, but a dashboard `Verify this PR` started from the cached PR list named the new run
+for the old `head_sha`. The run folder and its `proof.json` disagreed on the commit, so the PASS
+verdict did not appear under the current commit in the Pull requests tab.
+
+Changed:
+- `src/proofmerge/dashboard_prs.py`: `PullRequests.start()` now calls `self.pulls(refresh=True)`
+  before it creates the run id, so every verify uses GitHub's current `headRefOid`.
+- `src/proofmerge/dashboard_static/legacy/app.js`: the run detail now shows **Verify the fixed
+  commit** on BLOCK runs that have a verified fix and a PR number, calling `/api/verify` directly
+  so the user does not have to leave the run to re-verify.
+- `tests/test_dashboard_prs_cache.py`: a fake-`gh`/fake-git unit test fails before the cache fix
+  and passes after it.
+- `tests/test_fix_then_pass.py`: an offline end-to-end test reproduces BLOCK -> verified fix ->
+  apply fix -> verify again -> PASS using fake model and runner.
+
+Checked: `PYTHONPATH=src python -m pytest -q` passes (full suite); `ruff check src tests` clean.
+Not checked: a real GitHub PR cycle with actual `gh`, Docker sandbox, or the Control Center (`/`).
+No verdict rule, evidence sealing, or BLOCK condition was changed.
+
+## T95: Ponytail levels and possible bugs
+
+Clicking Ponytail review on the Pull requests page opens a choice of level, and picking one starts the review. Low (over-engineering only, as before), medium (also small
+bugs on the lines the pull request adds) and high (also security, data loss and races). The bugs are a
+separate "Possible bugs" list, marked as read from the diff with no test run, and they post as their own
+review comments saying so. Low never keeps a bug the model volunteers; medium keeps at most 5, high 10. A
+review saved before levels still loads as low. `ponytail-diff` and `ponytail` take `--level`.
+
+- Checked offline: levels, caps, the comments and the summary in tests; in real Chrome with the
+  `/api/prs` reply patched to carry a review with bugs, the picker, the list and the post button.
+- Not checked: how often a real model finds a real bug at medium or high, or how often it is wrong. Nothing
+  was posted to GitHub.
+
+## T96: the pull request detail follows the search
+
+With a pull request selected (its number is in the page address), searching for another one left the first one's detail beside a list that no longer had it: searching for one pull request's number showed that row in the list and the detail of the earlier selection. The detail now picks the selected pull request from the filtered list, and falls back to the first match. When nothing matches, the detail no longer says the repository has no pull requests. Checked in real Chrome against a live dashboard (search, switch, clear); not checked on the Control Center (`/`).

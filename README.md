@@ -120,22 +120,18 @@ tested scope; it does not prove the change correct.
 
 ### Walkthrough video
 
-<a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
+<a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, Verify PR #1 is confirmed in a dialog, the PR shows RUNNING while Muse Spark's probes run in the sandbox (sped up), then the PR's ProofMerge column turns BLOCK." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
 
-[Watch the full walkthrough](docs/assets/walkthrough.mp4) (4 min 20 s, no
-sound, captions on screen). It was recorded before the app's 2026-11-03 visual
-refresh, so the colours and the Home layout differ from the screenshots above. It covers every use case in order: setup, GitHub
-sign-in, picking a repository, verifying a pull request, the evidence and the
-report, checking a local branch, runs and benchmarks, then the terminal
-(`verify`, `replay`) and the Agent Skill.
+[Watch the full walkthrough](docs/assets/walkthrough.mp4) (1 min 26 s, no
+sound, captions on screen), recorded on 2026-11-04 in the current app: Setup, the
+pull requests of [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr),
+**Verify this PR** on PR #1, the BLOCK verdict and its report, **Suggest a fix**,
+and the **Push the fix** confirm (cancelled, nothing was pushed).
 
-> [!NOTE]
-> The walkthrough uses a simulated outside world, so it shows no real account or
-> key: the GitHub account, its repositories and pull requests, and the progress of
-> each check are faked, and no model is called. The verdicts, reports and evidence
-> are the real recorded demo run in `demo/runs/2026-10-29`, and the terminal
-> output is real. For real runs on GitHub, see the three pull requests in
-> [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr).
+> Nothing in it is simulated: a real GitHub account and repository, real Muse
+> Spark and Muse Wonder calls (the verify made 7, BLOCK; the fix verified both
+> regressions) and real sandbox runs. The two waits, for the verify and for the
+> fix, are sped up 12x and 6x and say so on screen.
 
 ## What a run looks like
 

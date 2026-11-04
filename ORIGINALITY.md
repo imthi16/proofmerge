@@ -15,7 +15,7 @@ The general idea of AI-generated code review/verification was considered before 
 - Reproducible proof bundle and manifest
 - Synthetic demo fixtures, benchmark, metrics and a walkthrough video
 
-Each item counts as built only when a dated `BUILDLOG.md` entry records its commits and checks. On 2026-10-29 the first five were built and the benchmark had a first recorded run. The walkthrough video (4 min 20 s, in `docs/assets/walkthrough.mp4`) was added on 2026-11-02; see `BUILDLOG.md`.
+Each item counts as built only when a dated `BUILDLOG.md` entry records its commits and checks. On 2026-10-29 the first five were built and the benchmark had a first recorded run. The walkthrough video (`docs/assets/walkthrough.mp4`) was added on 2026-11-02 and re-recorded on real runs on 2026-11-04 (1 min 26 s); see `BUILDLOG.md`.
 
 ## Rules
 - All code demonstrated as original ProofMerge functionality must be authored in this event window.

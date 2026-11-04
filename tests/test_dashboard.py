@@ -515,8 +515,8 @@ def test_posting_and_approving_say_which_github_account_they_act_as() -> None:
     js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
     detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]
     assert "useGitHub()" in detail  # read with the other hooks, before any early return
-    assert detail.count('class="as-account"') == 2  # the Post and the Approve buttons name the account
-    assert js.count("<${ActingAs}") == 3 and "Use another account" in js  # and so do the three confirm dialogs (post, approve, Ponytail)
+    assert detail.count('class="as-account"') == 3  # the Post, Push the fix and Approve buttons name the account
+    assert js.count("<${ActingAs}") == 4 and "Use another account" in js  # and so do the confirm dialogs (post, push, approve, Ponytail)
 
 
 def test_ponytail_findings_can_be_posted_to_the_pr_once_they_exist(pr_server) -> None:

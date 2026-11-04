@@ -887,3 +887,13 @@ Not fixed: a changed test's outcome is recorded per test file, so a test that pa
 ### 2026-11-03 — T89 GitHub accounts as a list on Setup (Claude)
 - With two or more accounts the Setup row showed one name and a row of small buttons, so the accounts could not be told apart. It is now a list, one row per account, the active one first: a filled monogram, the `@login`, an **Active** chip and **Sign out**; every other account is quieter, with **Use this account**. **Add another account** stays at the top right and the note about `gh` in a terminal sits under the list. The buttons keep their routes (`/api/github/switch`, `logout`, `add`); no backend change.
 - Checked in real Chrome with the author's real `gh` (two accounts) on this branch's dashboard: light, dark and 390 px wide, no horizontal overflow and no page errors; at 390 px the account button drops under the name. Not checked: clicking Use this account or Sign out, which would change the account `gh` uses on this machine.
+
+## T99: push a verified fix to your own pull request
+
+A BLOCK run with verified fixes had **Verify the fixed commit**, which verified the pull request's current GitHub head: nothing had pushed the fix (it lives only under the local `refs/proofmerge/fix/`), so it checked the same commit and gave the same BLOCK.
+
+- `proofmerge push-fix <proof.json> --pr N --repo R [--dry-run]` builds one commit from every verified fix (refused when two fixes change a file differently), parented on the head the run checked, and pushes it to the PR's branch with no force. It refuses unless the PR is open, still at the checked commit, not from a fork, and opened by the signed-in `gh` account; for anyone else's PR, post the fix instead. Each fix was checked alone by its own probe, so the output says to verify again.
+- App: **Push the fix to PR #N as @account** with a confirm that names the account, and the old button now reads **Verify PR #N again** (its tooltip says it checks the current GitHub head). Jobs that had no title (approve, Ponytail, push-fix) showed "undefined: failed"; they have titles now.
+- Tests: `tests/test_push_fix.py` (combine and conflict; one non-forced fast-forward commit with the fixed content; refusals for another author, a moved head, a merged PR, a fork, a bad branch name, none of which push) and the push-fix job.
+- Checked in real Chrome on a scratch run with a verified fix: the buttons, the dialog (Escape closes it), the refusal toast with its title, no console errors.
+- Not checked: a real push to GitHub (no test pushed anything), and the Control Center (`/`).

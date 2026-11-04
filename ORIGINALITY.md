@@ -13,9 +13,9 @@ The general idea of AI-generated code review/verification was considered before 
 - Isolated base-vs-head differential execution and deterministic classification
 - Evidence-based independent Meta Muse Wonder adjudication
 - Reproducible proof bundle and manifest
-- Synthetic demo fixtures, benchmark, metrics and 3-minute video
+- Synthetic demo fixtures, benchmark, metrics and a walkthrough video
 
-Each item counts as built only when a dated `BUILDLOG.md` entry records its commits and checks. On 2026-10-29 the first five are built; the benchmark has a first recorded run, and the video is not made yet.
+Each item counts as built only when a dated `BUILDLOG.md` entry records its commits and checks. On 2026-10-29 the first five were built and the benchmark had a first recorded run. The walkthrough video (4 min 20 s, in `docs/assets/walkthrough.mp4`) was added on 2026-11-02; see `BUILDLOG.md`.
 
 ## Rules
 - All code demonstrated as original ProofMerge functionality must be authored in this event window.
@@ -24,7 +24,7 @@ Each item counts as built only when a dated `BUILDLOG.md` entry records its comm
 - Keep incremental commits and a dated `BUILDLOG.md`.
 
 ## Third-party components
-- The dashboard vendors React 18.3.1 and React DOM 18.3.1 (MIT) and htm 3.1.1 (Apache-2.0) unchanged in `src/proofmerge/dashboard_static/vendor/`, with their license files. The tarballs' SHA-512 matched the npm registry's published integrity values.
+- The dashboard vendors React 18.3.1 and React DOM 18.3.1 (MIT) and htm 3.1.1 (Apache-2.0) unchanged in `src/proofmerge/dashboard_static/legacy/vendor/`, with their license files. The tarballs' SHA-512 matched the npm registry's published integrity values.
 - The logo (`docs/assets/brand/`, `src/proofmerge/dashboard_static/legacy/icon.svg`) was generated with an AI image tool by the author and is used as the app icon.
 - The Ponytail review (`src/proofmerge/ponytail.py`, `prompts/ponytail.md`) adapts the rules of the ponytail-review skill (MIT, Copyright (c) 2026 DietrichGebert, https://github.com/DietrichGebert/ponytail) into a model prompt. The rules and tag names are theirs; the code that runs, stores and shows the review is new.
 - Python dependencies are pinned in `pyproject.toml`.

@@ -803,3 +803,13 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - `adjudicate` replaced `decide()`'s PASS with REVIEW when source files were not shown, a second decision authority next to the rule that every verdict comes from `decide()`. The policy now lives in `decide()` (`unshown_source_files`): it adds a reason, so a PASS becomes REVIEW and a BLOCK stays BLOCK with every reason kept. `adjudicate` only passes the list in and adds the scope note. A REVIEW or BLOCK now also carries that reason, which the first version did not add.
 - The omission note named every excluded path and was not counted against the 60,000-character budget: one 59,000-character source change plus 5,000 generated files gave a 954,247-character prompt. The selection now reserves 3,000 characters for the note and the note names at most 15 paths per list; the complete lists stay in `DiffView` and in the proof's inputs.
 - Tests: `test_the_prompt_stays_within_the_limit_however_many_files_were_left_out` (5,000 long vendor paths), `test_a_regression_still_blocks_when_source_was_not_shown`.
+
+## T97: fixes from an outside test run
+
+A tester (a Grok agent given the repository and a written test plan) ran ProofMerge from a fresh clone with real Meta calls: install, the demo (BLOCK, exit 2), evidence replay including a resealed edit, the dashboard and a claims audit. Of its four bugs, three are fixed here:
+
+- A bare `pytest -q` failed at collection (`No module named 'tests'`), because `tests/test_backends.py` imports `tests.test_meta` and only `python -m pytest` put the repository on the path. `pyproject.toml` now sets `pythonpath = ["."]`.
+- `verify` and `probe` refused an existing empty `--evidence-dir` with a raw `[Errno 17]`. An empty folder is now used; a folder with files, or a file, is still refused, with "Choose a new folder for this run", so old logs never mix into a new run.
+- `ORIGINALITY.md` named the wrong vendor folder and still said the video was not made. It now names `dashboard_static/legacy/vendor/` and the 4 min 20 s walkthrough.
+
+Not fixed: a changed test's outcome is recorded per test file, so a test that passes on its own can be listed under a file that failed. It does not change the verdict (the evidence is wrong, not the rule); it is a known limit of how `tamper.py` runs base tests, not changed here.

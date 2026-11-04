@@ -24,7 +24,7 @@ from proofmerge.manifest import (
     write_manifest,
 )
 from proofmerge.meta import SPARK_MODEL, MetaClient, MetaError
-from proofmerge.pipeline import resolve_orchestrator, run_verify
+from proofmerge.pipeline import new_folder, resolve_orchestrator, run_verify
 from proofmerge.probes import MAX_BASE_RUNS, probe_hypotheses
 from proofmerge.project_config import (
     ProjectConfig,
@@ -708,7 +708,7 @@ def probe(
         if not context.changed_files:
             typer.echo("no changes between base and head; nothing to check", err=True)
             return
-        evidence_dir.mkdir(parents=True)  # fails on an existing dir, so old logs never mix in
+        new_folder(evidence_dir)
         intent = intent_file.read_text() if intent_file else None
         client = MetaClient(max_calls=2 + MAX_HYPOTHESES * MAX_BASE_RUNS)
         contract = extract_intent(intent, client)

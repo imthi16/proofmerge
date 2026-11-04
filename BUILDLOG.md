@@ -873,3 +873,13 @@ review saved before levels still loads as low. `ponytail-diff` and `ponytail` ta
 ## T96: the pull request detail follows the search
 
 With a pull request selected (its number is in the page address), searching for another one left the first one's detail beside a list that no longer had it: searching for one pull request's number showed that row in the list and the detail of the earlier selection. The detail now picks the selected pull request from the filtered list, and falls back to the first match. When nothing matches, the detail no longer says the repository has no pull requests. Checked in real Chrome against a live dashboard (search, switch, clear); not checked on the Control Center (`/`).
+
+## T97: fixes from an outside test run
+
+A tester (a Grok agent given the repository and a written test plan) ran ProofMerge from a fresh clone with real Meta calls: install, the demo (BLOCK, exit 2), evidence replay including a resealed edit, the dashboard and a claims audit. Of its four bugs, three are fixed here:
+
+- A bare `pytest -q` failed at collection (`No module named 'tests'`), because `tests/test_backends.py` imports `tests.test_meta` and only `python -m pytest` put the repository on the path. `pyproject.toml` now sets `pythonpath = ["."]`.
+- `verify` and `probe` refused an existing empty `--evidence-dir` with a raw `[Errno 17]`. An empty folder is now used; a folder with files, or a file, is still refused, with "Choose a new folder for this run", so old logs never mix into a new run.
+- `ORIGINALITY.md` named the wrong vendor folder and still said the video was not made. It now names `dashboard_static/legacy/vendor/` and the 4 min 20 s walkthrough.
+
+Not fixed: a changed test's outcome is recorded per test file, so a test that passes on its own can be listed under a file that failed. It does not change the verdict (the evidence is wrong, not the rule); it is a known limit of how `tamper.py` runs base tests, not changed here.

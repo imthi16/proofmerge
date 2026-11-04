@@ -40,6 +40,7 @@ packages = ["src/proofmerge"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # tests import each other as `tests.<name>`, so a bare `pytest` finds them too
 
 [tool.ruff]
 target-version = "py311"

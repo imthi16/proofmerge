@@ -135,8 +135,16 @@ def load_trusted_config(state: VerifyState, deps: Deps) -> Update:
     return {"config": config, "python_project": python_project}
 
 
+def new_folder(folder: Path) -> None:
+    """Create the folder for a run's files. An empty one that already exists is fine; anything else
+    in the way is refused, so old logs never mix into a new run."""
+    if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):
+        raise ValueError(f"{folder} already exists and is not an empty folder. Choose a new folder for this run.")
+    folder.mkdir(parents=True, exist_ok=True)
+
+
 def open_evidence_dir(state: VerifyState, deps: Deps) -> Update:
-    state["evidence_dir"].mkdir(parents=True)  # fails on an existing dir
+    new_folder(state["evidence_dir"])
     return {}
 
 

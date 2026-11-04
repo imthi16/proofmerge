@@ -443,6 +443,47 @@ def test_a_failed_ponytail_review_says_why_and_a_closed_pr_is_refused(pr_server)
         PRS[0]["state"] = "OPEN"
 
 
+def test_ponytail_review_uses_fetched_head_sha_not_cached_one(tmp_path: Path, runs: Path) -> None:
+    """If a new commit lands after pulls() cached its metadata, the review is keyed by the fetched SHA."""
+    cached_sha = "cached000000000000000000000000000000000"
+    fetched_sha = "fetched00000000000000000000000000000000"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    prs_data = [{
+        "number": 7, "title": "Cache prices", "author": {"login": "dev"}, "headRefName": "agent/x",
+        "baseRefName": "main", "headRefOid": cached_sha, "state": "OPEN",
+        "url": "https://github.com/o/r/pull/7", "updatedAt": "2026-10-30T00:00:00Z",
+        "isDraft": False, "body": "Keep prices the same."}]
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        if argv[:3] == ["gh", "repo", "view"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {"nameWithOwner": "o/r", "url": "https://github.com/o/r"}), stderr="")
+        if argv[:3] == ["gh", "pr", "list"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps(prs_data), stderr="")
+        if argv[:4] == ["git", "-C", str(repo.resolve()), "rev-parse"]:
+            return SimpleNamespace(returncode=0, stdout=fetched_sha + "\n", stderr="")
+        if "ponytail-diff" in argv:
+            out = Path(argv[argv.index("--out") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps({
+                "findings": [], "net_lines": 0, "run_id": "pr-7",
+                "base_sha": "a" * 40, "head_sha": fetched_sha, "calls": 1}))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prs = PullRequests(repo, runs, runner)
+    prs.start_ponytail(7)
+    wait_for(lambda: prs.pony["status"] != "running")
+    assert prs.pony["status"] == "done"
+    assert prs.pony["head_sha"] == fetched_sha
+    saved = list((runs / "ponytail").glob("pr-7-*.json"))
+    assert len(saved) == 1
+    assert saved[0].name == f"pr-7-{fetched_sha[:7]}.json"
+
+
 def test_the_runs_page_leaves_the_evidence_to_the_full_report() -> None:
     js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
     detail = js.split("function Detail(", 1)[1].split("\n  function ", 1)[0]

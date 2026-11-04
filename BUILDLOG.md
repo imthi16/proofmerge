@@ -905,3 +905,20 @@ A BLOCK run with verified fixes had **Verify the fixed commit**, which verified 
 - Tests: `tests/test_push_fix.py` (combine and conflict; one non-forced fast-forward commit with the fixed content; refusals for another author, a moved head, a merged PR, a fork, a bad branch name, none of which push) and the push-fix job.
 - Checked in real Chrome on a scratch run with a verified fix: the buttons, the dialog (Escape closes it), the refusal toast with its title, no console errors.
 - Not checked: a real push to GitHub (no test pushed anything), and the Control Center (`/`).
+
+## T102: the Windows installer can put `proofmerge` on the terminal's PATH
+
+A Windows tester found that after the installer, `proofmerge` did not run in a terminal: the installer left PATH untouched, so only the Start menu app worked, and the Agent Skill (which runs `proofmerge verify`) could not.
+
+- After the shortcuts the installer asks "Add the proofmerge command to your terminal too (your user PATH)?". On yes it writes `%LOCALAPPDATA%\ProofMerge\bin\proofmerge.cmd`, which calls the venv's `proofmerge.exe`, and appends `%LOCALAPPDATA%\ProofMerge\bin` to the user PATH. Only that folder: the venv's `Scripts` folder would put its `python.exe` and `pip` ahead of the user's own. It reads the raw registry value and writes it back as REG_EXPAND_SZ, so `%VAR%` entries survive (`SetEnvironmentVariable` would expand them), never touches the machine PATH, and tells Windows the environment changed so a new terminal sees it.
+- The uninstaller takes the entry off the user PATH first. In its batch line `%%` stands for one `%`, so cmd does not expand the entry before PowerShell compares it with the raw value.
+- `tests/test_windows_installer.py` pins this (the old test pinned "PATH is never written") and counts the new question.
+- Not checked: any of it on Windows; PowerShell is not available here, so the new block was read, not run.
+
+## T103: the app finds Claude Code on Windows
+
+On a Windows PC with Claude Code working in a terminal, the app's Setup did not detect it. The app started `claude --version`, and model calls started `claude -p ...`, by name; on Windows that finds only `.exe` files, and an npm install of Claude Code is `claude.cmd`. A batch file would also have cmd.exe re-read the JSON schema argument.
+
+- `cli_backend.claude_command()` resolves Claude Code on Windows only (elsewhere it stays `claude`): the full path from PATH, else Claude Code's own installer (`%USERPROFILE%\.local\bin\claude.exe`) or npm (`%APPDATA%\npm\claude.cmd`), for an app opened from the Start menu with an older PATH. An npm shim is replaced by what it starts: the package's `bin/claude.exe` (npm `@anthropic-ai/claude-code` 2.1.318 lists `"bin": {"claude": "bin/claude.exe"}`), or `node cli.js` for older releases. Setup's check and the model calls both use it.
+- Test: npm shim on PATH, the 2.1.x `claude.exe`, the fallbacks, and nothing found.
+- Not checked: on Windows.

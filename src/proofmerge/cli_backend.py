@@ -8,6 +8,7 @@ minimal environment, so ProofMerge's own secrets never reach the CLI.
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -26,10 +27,35 @@ _ENV_KEYS = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_D
              "PATHEXT", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "USERNAME")
 
 
+def claude_command(windows: bool = os.name == "nt", which: Callable[[str], str | None] = shutil.which,
+                   home: Path | None = None, appdata: str | None = None) -> list[str]:
+    """How to start Claude Code. On Windows, starting a program by name finds only .exe files, but
+    an npm install is claude.cmd; and cmd.exe would mangle the JSON arguments of a batch file. So
+    there it is resolved to a full path, and an npm shim is replaced by the program it starts: the
+    package's bin/claude.exe (2.1.x), or node with cli.js (older releases)."""
+    if not windows:
+        return ["claude"]
+    found = which("claude")
+    if found is None:
+        npm = Path(appdata or os.environ.get("APPDATA") or "") / "npm" / "claude.cmd"
+        native = (home or Path.home()) / ".local" / "bin" / "claude.exe"  # Claude Code's own installer
+        found = next((str(p) for p in (native, npm) if p.is_absolute() and p.is_file()), None)
+    if found is None:
+        return ["claude"]
+    shim = Path(found)
+    if shim.suffix.lower() in (".cmd", ".bat"):
+        package = shim.parent / "node_modules" / "@anthropic-ai" / "claude-code"
+        if (package / "bin" / "claude.exe").is_file():
+            return [str(package / "bin" / "claude.exe")]
+        if (package / "cli.js").is_file():
+            return [which("node") or str(shim.parent / "node.exe"), str(package / "cli.js")]
+    return [found]
+
+
 def _claude_argv(model: str, system_file: Path, schema: dict) -> list[str]:
     # Canary-checked with Claude Code 2.1.314: `--tools ""` leaves only structured output.
     argv = [
-        "claude", "-p", "--output-format", "json", "--tools", "", "--strict-mcp-config",
+        *claude_command(), "-p", "--output-format", "json", "--tools", "", "--strict-mcp-config",
         "--setting-sources", "", "--no-session-persistence",
         "--system-prompt-file", str(system_file), "--json-schema", json.dumps(schema),
     ]

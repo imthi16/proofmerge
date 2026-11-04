@@ -159,3 +159,29 @@ def test_report_names_models_and_warns_on_contributor():
     page = render_html(proof, FIXTURES)
     assert "spark CLI default, wonder &lt;b&gt;x&lt;/b&gt; via <code>cli:claude-cli</code>" in page
     assert "may be used for training" in page
+
+
+def test_claude_is_found_on_windows_where_only_exe_files_start_by_name(tmp_path):
+    from proofmerge.cli_backend import claude_command
+
+    assert claude_command(windows=False) == ["claude"]  # elsewhere the name is enough
+    npm = tmp_path / "AppData" / "Roaming" / "npm"
+    script = npm / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js"
+    script.parent.mkdir(parents=True)
+    script.write_text("")
+    (npm / "claude.cmd").write_text("")
+    on_path = {"claude": str(npm / "claude.cmd"), "node": r"C:\node\node.exe"}
+    # An npm shim on PATH runs as node + cli.js, so cmd.exe never parses the JSON arguments.
+    assert claude_command(windows=True, which=on_path.get, home=tmp_path) == [r"C:\node\node.exe", str(script)]
+    # Not on the app's PATH (opened from the Start menu before PATH changed): the usual places.
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path, appdata=str(npm.parent)) == [
+        str(npm / "node.exe"), str(script)]
+    exe = script.parent / "bin" / "claude.exe"  # what the npm package ships since 2.1.x
+    exe.parent.mkdir()
+    exe.write_text("")
+    assert claude_command(windows=True, which=on_path.get, home=tmp_path) == [str(exe)]
+    native = tmp_path / ".local" / "bin" / "claude.exe"
+    native.parent.mkdir(parents=True)
+    native.write_text("")
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path, appdata="") == [str(native)]
+    assert claude_command(windows=True, which=lambda _: None, home=tmp_path / "none", appdata="") == ["claude"]

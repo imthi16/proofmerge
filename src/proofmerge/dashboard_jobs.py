@@ -28,6 +28,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from proofmerge import __version__
+from proofmerge.cli_backend import claude_command
 
 MAX_OUTPUT = 20_000  # characters of job output kept for the page
 MAX_INTENT = 20_000
@@ -224,7 +225,7 @@ class Jobs:
             image = _which(self._run, ["docker", "image", "inspect", "--format", "{{.Id}}", RUNNER_IMAGE])
         gh = _which(self._run, ["gh", "--version"])
         provider = self.provider()
-        claude = _which(self._run, ["claude", "--version"]) if provider == "claude" else None
+        claude = _which(self._run, [*claude_command(), "--version"]) if provider == "claude" else None
         return {
             "version": __version__,
             "python": sys.version.split()[0],

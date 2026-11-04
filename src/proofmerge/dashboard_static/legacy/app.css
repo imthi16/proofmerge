@@ -689,9 +689,6 @@ pre.diff .hunk { color: var(--brand); }
 .post-mode .muted { font-size: .82rem; }
 
 
-/* GitHub accounts on Setup: the other signed-in accounts as switch buttons. */
-.gh-accounts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .6rem; }
-
 /* Closable alerts and the close button on a recent check. */
 .error-box.alert { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
 .error-box.alert .icon-btn { color: inherit; flex: none; margin: -.35rem -.5rem 0 0; }
@@ -703,6 +700,28 @@ pre.diff .hunk { color: var(--brand); }
 /* `.recent-list button` styles the whole card; the close button is not a card. */
 .recent-list button.recent-x { display: inline-flex; width: auto; padding: .3rem; border: 0; background: none; box-shadow: none; transform: none; }
 .recent-list button.recent-x:hover { background: var(--raised); border: 0; transform: none; }
+
+/* GitHub accounts on Setup: one row each, the active one marked and the others quiet. */
+.gh-block p { margin: 0; }
+.gh-list { list-style: none; margin: .85rem 0 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--r-md);
+  background: var(--surface); overflow: hidden; }
+.gh-acct { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .85rem;
+  padding: .6rem .8rem .6rem .7rem; }
+.gh-acct + .gh-acct { border-top: 1px solid var(--rule); }
+.gh-acct.on { background: var(--raised); }
+.gh-av { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; font-weight: 600; font-size: .85rem;
+  border: 1px solid var(--rule); color: var(--muted); background: var(--bg); }
+.gh-acct.on .gh-av { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.gh-id { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem .6rem; min-width: 0; overflow-wrap: anywhere; }
+.setup-text .gh-id strong { display: inline; margin: 0; color: var(--fg); font-weight: 600; }
+.gh-acct:not(.on) .gh-id strong { color: var(--muted); font-weight: 500; }
+.gh-active { padding: .05rem .5rem; border-radius: 999px; border: 1px solid var(--pass-line); background: var(--pass-bg);
+  color: var(--pass); font-size: .76rem; font-weight: 600; }
+.gh-note { margin-top: .6rem; font-size: .84rem; }
+@media (max-width: 48rem) {
+  .gh-acct { grid-template-columns: auto minmax(0, 1fr); row-gap: .5rem; }
+  .gh-acct > button { grid-column: 2; justify-self: start; }
+}
 
 /* Ponytail review: progress while it runs, a status in the list, findings that read as rows. */
 .pony-progress { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .9rem;

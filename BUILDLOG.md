@@ -884,6 +884,10 @@ A tester (a Grok agent given the repository and a written test plan) ran ProofMe
 
 Not fixed: a changed test's outcome is recorded per test file, so a test that passes on its own can be listed under a file that failed. It does not change the verdict (the evidence is wrong, not the rule); it is a known limit of how `tamper.py` runs base tests, not changed here.
 
+### 2026-11-03 — T89 GitHub accounts as a list on Setup (Claude)
+- With two or more accounts the Setup row showed one name and a row of small buttons, so the accounts could not be told apart. It is now a list, one row per account, the active one first: a filled monogram, the `@login`, an **Active** chip and **Sign out**; every other account is quieter, with **Use this account**. **Add another account** stays at the top right and the note about `gh` in a terminal sits under the list. The buttons keep their routes (`/api/github/switch`, `logout`, `add`); no backend change.
+- Checked in real Chrome with the author's real `gh` (two accounts) on this branch's dashboard: light, dark and 390 px wide, no horizontal overflow and no page errors; at 390 px the account button drops under the name. Not checked: clicking Use this account or Sign out, which would change the account `gh` uses on this machine.
+
 ## T98: the skill installs in Muse Code, Grok, Gemini CLI, OpenCode and Cursor
 
 Muse Code 1.4.14 reads the Claude plugin manifest (`muse plugins validate .`: valid, compatibility full), but its marketplace reader takes `.agents/plugins/marketplace.json` first and skipped our entry: "Codex marketplace url source `./` is not a supported Git source", so `plugins=0`. The entry's source is now `{"source": "local", "path": "./"}`.

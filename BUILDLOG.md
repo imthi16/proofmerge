@@ -856,3 +856,16 @@ Changed:
 Checked: `PYTHONPATH=src python -m pytest -q` passes (full suite); `ruff check src tests` clean.
 Not checked: a real GitHub PR cycle with actual `gh`, Docker sandbox, or the Control Center (`/`).
 No verdict rule, evidence sealing, or BLOCK condition was changed.
+
+## T95: Ponytail levels and possible bugs
+
+The Pull requests page has a Ponytail level: low (over-engineering only, as before), medium (also small
+bugs on the lines the pull request adds) and high (also security, data loss and races). The bugs are a
+separate "Possible bugs" list, marked as read from the diff with no test run, and they post as their own
+review comments saying so. Low never keeps a bug the model volunteers; medium keeps at most 5, high 10. A
+review saved before levels still loads as low. `ponytail-diff` and `ponytail` take `--level`.
+
+- Checked offline: levels, caps, the comments and the summary in tests; in real Chrome with the
+  `/api/prs` reply patched to carry a review with bugs, the selector, the list and the post button.
+- Not checked: how often a real model finds a real bug at medium or high, or how often it is wrong. Nothing
+  was posted to GitHub.

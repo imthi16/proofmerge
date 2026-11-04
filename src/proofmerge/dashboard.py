@@ -182,7 +182,8 @@ def _pony_of_run(root: Path, run_id: str) -> dict[str, Any] | None:
     report = match and load_report_file(root / "ponytail" / f"pr-{match[1]}-{match[2]}.json")
     if not report:
         return None
-    return {"pr": int(match[1]), "findings": len(report.findings), "net_lines": report.net_lines}
+    return {"pr": int(match[1]), "findings": len(report.findings), "net_lines": report.net_lines,
+            "bugs": len(report.bugs)}
 
 
 def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
@@ -559,12 +560,12 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/ponytail":
             try:
-                number = VerificationRequest.model_validate(body).number
+                number = VerificationRequest.model_validate({"number": body.get("number")}).number
             except ValidationError:
-                self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
+                self._json({"error": "send {\"number\": <PR number>, \"level\": \"low\"}"}, HTTPStatus.BAD_REQUEST)
                 return
             try:
-                self._json(self.prs.start_ponytail(number), HTTPStatus.ACCEPTED)
+                self._json(self.prs.start_ponytail(number, body.get("level", "low")), HTTPStatus.ACCEPTED)
             except PrError as error:
                 self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             return

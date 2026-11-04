@@ -161,7 +161,11 @@ class PullRequests:
         report = load_report_file(self.ponytail_path(pr))
         return None if report is None else report.model_dump(mode="json")
 
-    def start_ponytail(self, number: int) -> dict[str, Any]:
+    def start_ponytail(self, number: int, level: str = "low") -> dict[str, Any]:
+        from proofmerge.ponytail import LEVELS
+
+        if level not in LEVELS:
+            raise PrError(f"The level must be one of {', '.join(LEVELS)}.")
         pr = next((p for p in self.pulls() if p["number"] == number), None)
         if pr is None:
             raise PrError(f"PR #{number} is not in the list.")
@@ -173,7 +177,7 @@ class PullRequests:
             if self.pony and self.pony["status"] == "running":
                 raise PrError(f"The Ponytail review of PR #{self.pony['number']} is still running.")
             self.pony = {"number": number, "status": "running", "step": "Fetching the PR",
-                         "head_sha": pr["head_sha"], "error": None, "created": time.time()}
+                         "head_sha": pr["head_sha"], "level": level, "error": None, "created": time.time()}
         threading.Thread(target=self._ponytail, args=(pr,), daemon=True).start()
         return self.pony
 
@@ -200,7 +204,7 @@ class PullRequests:
                 done = self._step([
                     sys.executable, "-m", "proofmerge.cli", "ponytail-diff", str(self.repo),
                     "--base", base, "--head", head, "--intent-file", str(intent), "--label", f"pr-{n}",
-                    "--out", str(out),
+                    "--out", str(out), "--level", job["level"],
                 ], PONYTAIL_TIMEOUT, self._environment())
             if done.returncode == 0 and out.is_file():
                 finish("done", "Finished")

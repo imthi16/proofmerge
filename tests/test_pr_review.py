@@ -232,3 +232,15 @@ def test_ponytail_post_refuses_a_moved_pr_and_remembers_the_review_it_posted(mon
     ok = CliRunner().invoke(cli.app, args)
     assert ok.exit_code == 0 and len(posted) == 1
     assert load_report_file(file).posted_url == "https://github.com/o/r/pull/7#review"
+
+
+def test_possible_bugs_are_posted_as_their_own_comments_and_say_no_test_was_run() -> None:
+    from proofmerge.ponytail import PonytailBug
+    from proofmerge.pr_review import build_ponytail_review
+
+    bug = PonytailBug(location="shop.py:L3", tag="edge-case", what="An empty cart divides by zero. @owner", fix="Return early.")
+    review = build_ponytail_review(pony_report(bugs=[bug], level="medium"), DIFF)  # a review with only a bug is allowed
+    (comment,) = review["comments"]
+    assert comment["line"] == 3 and "possible bug (edge-case)" in comment["body"] and "No test was run" in comment["body"]
+    assert "@\u200bowner" in comment["body"] and "Try: Return early." in comment["body"]
+    assert "1 possible bug" in review["body"] and "were not run" in review["body"] and "finding" not in review["body"].split("\n")[2]

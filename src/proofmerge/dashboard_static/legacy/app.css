@@ -728,6 +728,18 @@ pre.diff .hunk { color: var(--brand); }
 .pony-where code { overflow-wrap: anywhere; font-size: .82rem; }
 .pony-what { margin: .4rem 0 0; font-size: .9rem; line-height: 1.5; }
 .pony-instead { margin: .25rem 0 0; font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }
+.pony-level { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; margin-top: .75rem; font-size: .85rem; }
+.pony-level-name { color: var(--muted); }
+.pony-lv-group { display: inline-flex; border: 1px solid var(--rule); border-radius: var(--r-md); overflow: hidden; }
+.pony-lv { border: 0; background: none; color: var(--muted); font: inherit; padding: .3rem .8rem; cursor: pointer; }
+.pony-lv + .pony-lv { border-left: 1px solid var(--rule); }
+.pony-lv:hover:not(:disabled) { background: var(--raised); color: var(--fg); }
+.pony-lv[aria-checked="true"] { background: var(--raised); color: var(--fg); font-weight: 600; }
+.pony-lv:disabled { cursor: default; opacity: .6; }
+.pony-lv:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.pony-level-hint { font-size: .8rem; }
+.pony-sub { margin: 1.1rem 0 0; font-size: .9rem; }
+.pony-sub .muted { font-weight: 400; font-size: .8rem; margin-left: .4rem; }
 .pony-post { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; margin-top: .9rem; padding-top: .85rem;
   border-top: 1px solid var(--rule); font-size: .88rem; }
 .fixes { margin-top: 1.5rem; }

@@ -518,7 +518,7 @@ def test_a_pr_run_carries_the_ponytail_review_of_its_own_commit(tmp_path) -> Non
     review = PonytailReport(findings=[finding, finding], net_lines=12, run_id="pr-7", base_sha="b", head_sha="abcdef0123")
     (tmp_path / "ponytail").mkdir()
     (tmp_path / "ponytail" / "pr-7-abcdef0.json").write_text(review.model_dump_json())
-    assert _pony_of_run(tmp_path, "pr-7-abcdef0-1793719841") == {"pr": 7, "findings": 2, "net_lines": 12}
+    assert _pony_of_run(tmp_path, "pr-7-abcdef0-1793719841") == {"pr": 7, "findings": 2, "net_lines": 12, "bugs": 0}
     assert _pony_of_run(tmp_path, "owner/repo/pr-7-abcdef0-1793719841")["pr"] == 7  # ids can be nested
     assert _pony_of_run(tmp_path, "pr-7-1234567-1793719841") is None  # a different commit
     assert _pony_of_run(tmp_path, "tenant-cache-take2") is None  # not started from a pull request
@@ -528,3 +528,22 @@ def test_the_runs_page_tags_runs_that_have_a_ponytail_review_and_links_to_it() -
     js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
     assert 'class="pony-tag"' in js and "See it on PR #" in js
     assert 'ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })' in js
+
+
+def test_the_ponytail_level_reaches_the_review_and_a_bad_level_is_refused(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    status, reply = post_json(base, token, "/api/ponytail", {"number": 7, "level": "extreme"})
+    assert status == 409 and "low, medium, high" in reply["error"] and not hasattr(runner, "pony_argv")
+    assert post_json(base, token, "/api/ponytail", {"number": 7, "level": "high"})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    assert runner.pony_argv[runner.pony_argv.index("--level") + 1] == "high"
+    assert json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["level"] == "high"
+
+
+def test_the_pull_requests_page_has_a_ponytail_level_and_a_separate_list_of_possible_bugs() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert 'role="radiogroup" aria-label="Ponytail level"' in js and 'store.set("pm-pony-level"' in js
+    assert "JSON.stringify({ number: pr.number, level })" in js
+    assert "Possible bugs" in js and "No test was run, so check each one." in js
+    assert "pr.ponytail.bugs?.length" in js  # the list chip and the post button count the bugs too

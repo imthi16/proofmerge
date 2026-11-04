@@ -185,33 +185,44 @@ def _pony_anchor(location: str, anchors: dict[str, set[int]]) -> tuple[str, int,
 
 
 def build_ponytail_review(report: PonytailReport, diff_text: str) -> dict[str, Any]:
-    """The JSON body for POST /repos/{repo}/pulls/{n}/reviews: one comment per finding on its lines
-    when the pull request's diff has them, and the rest in the review summary. Event COMMENT only."""
-    if not report.findings:
+    """The JSON body for POST /repos/{repo}/pulls/{n}/reviews: one comment per finding or possible bug
+    on its lines when the pull request's diff has them, and the rest in the review summary.
+    Event COMMENT only."""
+    if not report.findings and not report.bugs:
         raise ReviewError("There are no findings to post.")
     anchors = commentable_lines(diff_text)
     comments: list[dict[str, Any]] = []
     loose: list[str] = []
+    items = []
     for finding in report.findings:
         instead = "" if re.fullmatch(r"nothing\.?", finding.replacement.strip(), re.IGNORECASE) else f"\n\nInstead: {_quiet(finding.replacement)}"
-        text = f"**Ponytail: {finding.tag}.** {_quiet(finding.what)}{instead}"
-        spot = _pony_anchor(finding.location, anchors)
+        items.append((finding.location, f"**Ponytail: {finding.tag}.** {_quiet(finding.what)}{instead}"))
+    for bug in report.bugs:
+        # Read from the diff alone, so the comment says that no test backs it.
+        text = (f"**Ponytail: possible bug ({bug.tag}).** {_quiet(bug.what)}\n\n"
+                f"Try: {_quiet(bug.fix)}\n\n<sub>Read from the diff. No test was run.</sub>")
+        items.append((bug.location, text))
+    for location, text in items:
+        spot = _pony_anchor(location, anchors)
         if spot is None:
-            loose.append(f"- `{finding.location}`: {text}")
+            loose.append(f"- `{location}`: {text}")
             continue
         comment: dict[str, Any] = {"path": spot[0], "line": spot[2], "side": "RIGHT", "body": text}
         if spot[1] < spot[2]:
             comment |= {"start_line": spot[1], "start_side": "RIGHT"}
         comments.append(comment)
-    count = len(report.findings)
-    body = [PONY_MARK, f"### Ponytail review: {count} finding{'s' if count != 1 else ''}", ""]
-    if report.net_lines:
+    count, bugs = len(report.findings), len(report.bugs)
+    parts = ([f"{count} finding{'s' if count != 1 else ''}"] if count else []) + (
+        [f"{bugs} possible bug{'s' if bugs != 1 else ''}"] if bugs else [])
+    body = [PONY_MARK, f"### Ponytail review: {', '.join(parts)}", ""]
+    if report.net_lines and count:
         body += [f"About {report.net_lines} line{'s' if report.net_lines != 1 else ''} could go.", ""]
     if loose:
         body += ["Not on a line of this pull request's diff:", "", *loose, ""]
+    judged = "over-engineering, not behavior" if not bugs else "over-engineering; the possible bugs are read from the diff and were not run"
     body.append(
         f"<sub>Head `{report.head_sha[:7]}`. A diff-only review by ProofMerge: it ran no code and judges "
-        "over-engineering, not behavior. Rules adapted from the ponytail-review skill.</sub>"
+        f"{judged}. Rules adapted from the ponytail-review skill.</sub>"
     )
     review: dict[str, Any] = {"commit_id": report.head_sha, "event": "COMMENT", "body": "\n".join(body)}
     if comments:

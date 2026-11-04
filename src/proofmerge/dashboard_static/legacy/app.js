@@ -170,7 +170,7 @@
                 <div class="run-name">${run.id}</div>
                 <div class="run-sub">
                   ${run.integrity ? html`<${Seal} integrity=${run.integrity} />` : null}
-                  ${run.ponytail ? html`, <span class="pony-tag" title=${ponyTitle(run.ponytail)}>Ponytail: ${run.ponytail.findings || "lean"}</span>` : null}
+                  ${run.ponytail ? html`, <span class="pony-tag" title=${ponyTitle(run.ponytail)}>Ponytail: ${run.ponytail.findings + (run.ponytail.bugs || 0) || "lean"}</span>` : null}
                   ${run.benchmark ? html`, label ${run.benchmark.label}${run.benchmark.held_out ? ", held out" : ""}${disagrees(run)
                     ? html`, <span class="disagree">disagrees</span>` : null}` : null}
                   ${run.error ? run.error : null}
@@ -636,6 +636,8 @@
     const [ponyGone, setPonyGone] = useState(0);
     const [postGone, setPostGone] = useState(0);
     const [postAsk, setPostAsk] = useState(false);
+    const [level, setLevel] = useState(() => PONY_LEVELS.some((l) => l.id === store.get("pm-pony-level", "low")) ? store.get("pm-pony-level", "low") : "low");
+    const pickLevel = (id) => { setLevel(id); store.set("pm-pony-level", id); };
     const { gh } = useGitHub();  // read with the other hooks: who the post would be made as
     const goSetup = () => { location.hash = "tab=setup"; };
     useEffect(() => {
@@ -675,7 +677,7 @@
     const startPony = () => {
       setPosting("");
       fetch("/api/ponytail", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
-        body: JSON.stringify({ number: pr.number }) })
+        body: JSON.stringify({ number: pr.number, level }) })
         .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
         .then(() => load(false)).catch((e) => setPosting(e.message));
     };
@@ -724,6 +726,7 @@
               <${Icon} name="spark" />${ponyOnThis ? "Reviewing…" : pr.ponytail ? "Review again" : "Ponytail review"}</button>
             <a class="ghost" href=${pr.url} target="_blank" rel="noopener noreferrer">Open on GitHub</a>
           </div>
+          ${pr.state === "OPEN" ? html`<${PonyLevel} level=${level} onPick=${pickLevel} disabled=${ponyRunning} />` : null}
           ${ponyOnThis ? html`<${PonyProgress} job=${pony} />` : null}
           ${pony?.status === "failed" && pony.number === pr.number && pony.error && ponyGone !== pony.created
             ? html`<${Alert} message=${"The Ponytail review did not finish. " + pony.error} seconds=${60} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
@@ -752,7 +755,7 @@
         </aside>` : html`<aside class="panel detail empty"><strong>No pull requests</strong>The repository has none yet.</aside>`}
       </div>
       ${asking && pr ? html`<${ConfirmVerify} pr=${pr} onConfirm=${start} onCancel=${() => setAsking(false)} />` : null}
-      ${postAsk && pr?.ponytail ? html`<${ConfirmPonyPost} pr=${pr} count=${pr.ponytail.findings.length} account=${gh?.user || ""}
+      ${postAsk && pr?.ponytail ? html`<${ConfirmPonyPost} pr=${pr} count=${pr.ponytail.findings.length + (pr.ponytail.bugs?.length || 0)} account=${gh?.user || ""}
         accounts=${gh?.accounts?.length || 0} onSetup=${goSetup} onConfirm=${startPost} onCancel=${() => setPostAsk(false)} />` : null}`;
   }
 
@@ -983,28 +986,53 @@
   // The Ponytail review of a pull request: what to delete or shorten. It reads the diff and changes no verdict.
   function PonytailBlock({ ponytail, pr, posting, account, onPost }) {
     const n = ponytail.findings.length;
+    const bugs = ponytail.bugs || [];
+    const total = n + bugs.length;
+    const noun = `finding${total === 1 ? "" : "s"}`;
     return html`<section class="ponytail" aria-label="Ponytail review">
       <div class="pony-head">
         <h4>Ponytail review</h4>
-        <span class="muted">Over-engineering only. It reads the diff and runs nothing.</span>
+        <span class="muted">${bugs.length || ponytail.level !== "low" ? "Over-engineering and possible bugs." : "Over-engineering only."} It reads the diff and runs nothing.</span>
       </div>
-      <p class="pony-summary">${n
-        ? html`<strong>${n} finding${n === 1 ? "" : "s"}</strong>${ponytail.net_lines ? `, about ${ponytail.net_lines} line${ponytail.net_lines === 1 ? "" : "s"} could go` : ""}.`
-        : html`<strong>Lean already.</strong> There is nothing to cut in this diff.`}
-        <span class="muted"> Reviewed at <code>${short(ponytail.head_sha)}</code>.</span></p>
+      <p class="pony-summary">${total
+        ? html`${n ? html`<strong>${n} finding${n === 1 ? "" : "s"}</strong>${ponytail.net_lines ? `, about ${ponytail.net_lines} line${ponytail.net_lines === 1 ? "" : "s"} could go` : ""}` : null}${n && bugs.length ? ". " : ""}${bugs.length ? html`<strong>${bugs.length} possible bug${bugs.length === 1 ? "" : "s"}</strong>` : null}.`
+        : html`<strong>${ponytail.level === "low" ? "Lean already." : "Nothing found."}</strong> ${ponytail.level === "low" ? "There is nothing to cut in this diff." : "There is nothing to cut and no likely bug in this diff."}`}
+        <span class="muted"> Reviewed at <code>${short(ponytail.head_sha)}</code>, level ${ponytail.level}.</span></p>
       ${n ? html`<ol class="pony-list">${ponytail.findings.map((f, i) => html`<li key=${i} class="pony-item">
         <div class="pony-where"><span class="kind">${f.tag}</span><code>${f.location}</code></div>
         <p class="pony-what">${f.what}</p>
         <p class="pony-instead"><span class="muted">${/^nothing\.?$/i.test(f.replacement.trim()) ? "Nothing replaces it." : "Instead:"}</span>${/^nothing\.?$/i.test(f.replacement.trim()) ? "" : " " + f.replacement}</p>
       </li>`)}</ol>` : null}
+      ${bugs.length ? html`<h5 class="pony-sub">Possible bugs <span class="muted">Read from the diff. No test was run, so check each one.</span></h5>
+        <ol class="pony-list">${bugs.map((b, i) => html`<li key=${i} class="pony-item">
+        <div class="pony-where"><span class="kind">${b.tag}</span><code>${b.location}</code></div>
+        <p class="pony-what">${b.what}</p>
+        <p class="pony-instead"><span class="muted">Try:</span> ${b.fix}</p>
+      </li>`)}</ol>` : null}
       ${ponytail.truncated ? html`<p class="muted fix-note">The diff was long, so part of it was not reviewed.</p>` : null}
-      ${n && pr ? html`<div class="pony-post">${ponytail.posted_url
+      ${total && pr ? html`<div class="pony-post">${ponytail.posted_url
         ? html`<span class="muted">Posted to the pull request.</span> <a href=${ponytail.posted_url} target="_blank" rel="noopener noreferrer">View the review on GitHub</a>`
         : html`<button class="primary btn-small" type="button" disabled=${posting || pr.state !== "OPEN"} onClick=${onPost}
             title="Posts these findings to the pull request as review comments, after you confirm.">
-            ${posting ? "Posting…" : n === 1 ? "Post the finding to the PR" : `Post ${n} findings to the PR`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
-          <span class="muted">Each finding goes on its lines when they are in the diff.</span>`}</div>` : null}
+            ${posting ? "Posting…" : total === 1 ? "Post the finding to the PR" : `Post ${total} ${noun} to the PR`}${account && !posting ? html`<span class="as-account">as @${account}</span>` : null}</button>
+          <span class="muted">Each one goes on its lines when they are in the diff.</span>`}</div>` : null}
     </section>`;
+  }
+
+  const PONY_LEVELS = [
+    { id: "low", name: "Low", hint: "Over-engineering only: what to delete or shorten." },
+    { id: "medium", name: "Medium", hint: "Over-engineering, and small bugs on the lines the PR adds." },
+    { id: "high", name: "High", hint: "Also risky code: security, data loss and races." },
+  ];
+  // How hard Ponytail looks. The bugs are read from the diff, so a higher level can be wrong more often.
+  function PonyLevel({ level, onPick, disabled }) {
+    const now = PONY_LEVELS.find((l) => l.id === level) || PONY_LEVELS[0];
+    return html`<div class="pony-level" role="radiogroup" aria-label="Ponytail level">
+      <span class="pony-level-name">Ponytail level</span>
+      <span class="pony-lv-group">${PONY_LEVELS.map((l) => html`<button key=${l.id} type="button" role="radio" class="pony-lv"
+        aria-checked=${l.id === level} disabled=${disabled} onClick=${() => onPick(l.id)}>${l.name}</button>`)}</span>
+      <span class="muted pony-level-hint">${now.hint}</span>
+    </div>`;
   }
 
   // While a review runs: the two real steps, and how long it has taken.
@@ -1022,8 +1050,8 @@
   }
 
   // One line for a saved Ponytail review: what the Runs list and a run's facts say about it.
-  const ponyTitle = ({ findings, net_lines }) => findings
-    ? `${findings} Ponytail finding${findings === 1 ? "" : "s"}${net_lines ? `, about ${net_lines} line${net_lines === 1 ? "" : "s"} could go` : ""}`
+  const ponyTitle = ({ findings, net_lines, bugs = 0 }) => findings + bugs
+    ? `${findings + bugs} Ponytail finding${findings + bugs === 1 ? "" : "s"}${findings && net_lines ? `, about ${net_lines} line${net_lines === 1 ? "" : "s"} could go` : ""}${bugs ? `, ${bugs} possible bug${bugs === 1 ? "" : "s"}` : ""}`
     : "Ponytail found nothing to cut";
 
   // The list's view of a pull request's Ponytail review.
@@ -1032,7 +1060,7 @@
       return html`<div class="pony-chip"><span class="spinner small"></span>Reviewing</div>`;
     }
     if (!pr.ponytail) return null;
-    const n = pr.ponytail.findings.length;
+    const n = pr.ponytail.findings.length + (pr.ponytail.bugs?.length || 0);
     return html`<div class="pony-chip done" title=${n ? `${n} Ponytail finding${n === 1 ? "" : "s"}` : "Ponytail found nothing to cut"}>Ponytail: ${n || "lean"}</div>`;
   }
 

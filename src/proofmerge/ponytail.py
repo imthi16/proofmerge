@@ -18,6 +18,13 @@ from proofmerge.meta import SPARK_MODEL, MetaClient
 
 PROMPT = (resources.files("proofmerge") / "prompts" / "ponytail.md").read_text()
 MAX_FINDINGS = 15
+LEVELS = ("low", "medium", "high")  # low: over-engineering only; medium: and small bugs; high: and risky code
+MAX_BUGS = {"medium": 5, "high": 10}
+HIGH_TAGS = (
+    "- security: injection, a secret in code, a missing authorization check, unsafe handling of user input.\n"
+    "- risk: possible data loss, a race, a resource that is never released.\n"
+)
+BUGS_PROMPT = (resources.files("proofmerge") / "prompts" / "ponytail_bugs.md").read_text()
 
 
 class PonytailFinding(BaseModel):
@@ -27,9 +34,17 @@ class PonytailFinding(BaseModel):
     replacement: str
 
 
+class PonytailBug(BaseModel):
+    location: str
+    tag: Literal["logic", "edge-case", "error", "security", "risk"]
+    what: str
+    fix: str
+
+
 class PonytailReview(BaseModel):
     findings: list[PonytailFinding]
     net_lines: int = 0
+    bugs: list[PonytailBug] = []  # only asked for at the medium and high levels
 
 
 class PonytailReport(PonytailReview):
@@ -40,6 +55,7 @@ class PonytailReport(PonytailReview):
     calls: int = 0
     truncated: bool = False  # the diff was longer than the model was shown
     posted_url: str | None = None  # the GitHub review made from these findings, once posted
+    level: Literal["low", "medium", "high"] = "low"
 
 
 def ponytail_dir(evidence_dir: Path) -> Path:
@@ -55,12 +71,21 @@ def load_report(evidence_dir: Path) -> PonytailReport | None:
         return None
 
 
-def review_text(intent: str, client: MetaClient, diff_text: str) -> tuple[PonytailReview, DiffView]:
+def instructions(level: str) -> str:
+    if level not in LEVELS:
+        raise ValueError(f"level must be one of {', '.join(LEVELS)}")
+    if level == "low":
+        return PROMPT
+    extra = BUGS_PROMPT.replace("{high}", HIGH_TAGS if level == "high" else "").replace("{limit}", str(MAX_BUGS[level]))
+    return PROMPT + "\n" + extra
+
+
+def review_text(intent: str, client: MetaClient, diff_text: str, level: str = "low") -> tuple[PonytailReview, DiffView]:
     """One model call on the diff. Raises MetaError when the model fails."""
     shown = view_diff(diff_text)
     review = client.structured(
         SPARK_MODEL,
-        developer=PROMPT,
+        developer=instructions(level),
         user=f"What the pull request intends:\n{intent.strip() or '(no description)'}\n\nUnified diff:\n{shown.text}",
         schema=PonytailReview,
         reasoning_effort="medium",
@@ -68,9 +93,13 @@ def review_text(intent: str, client: MetaClient, diff_text: str) -> tuple[Ponyta
     return review, shown
 
 
-def _report(review: PonytailReview, shown: DiffView, client: MetaClient, run_id: str, base: str, head: str) -> PonytailReport:
+def _report(
+    review: PonytailReview, shown: DiffView, client: MetaClient, run_id: str, base: str, head: str, level: str = "low"
+) -> PonytailReport:
     return PonytailReport(
         findings=review.findings[:MAX_FINDINGS],
+        bugs=review.bugs[: MAX_BUGS.get(level, 0)],
+        level=level,
         net_lines=max(0, review.net_lines),
         run_id=run_id,
         base_sha=base,
@@ -81,11 +110,11 @@ def _report(review: PonytailReview, shown: DiffView, client: MetaClient, run_id:
     )
 
 
-def review_diff(proof: Proof, evidence_dir: Path, client: MetaClient, diff_text: str) -> PonytailReport:
+def review_diff(proof: Proof, evidence_dir: Path, client: MetaClient, diff_text: str, level: str = "low") -> PonytailReport:
     """The review of a finished run's diff, written beside its evidence."""
     intent = "\n".join(f"- {claim.statement}" for claim in proof.intent.claims)
-    review, shown = review_text(intent, client, diff_text)
-    report = _report(review, shown, client, proof.run_id, proof.base_sha, proof.head_sha)
+    review, shown = review_text(intent, client, diff_text, level)
+    report = _report(review, shown, client, proof.run_id, proof.base_sha, proof.head_sha, level)
     out = ponytail_dir(evidence_dir)
     out.mkdir(exist_ok=True)
     (out / "ponytail.json").write_text(json.dumps(report.model_dump(mode="json"), indent=2), encoding="utf-8")
@@ -93,11 +122,12 @@ def review_diff(proof: Proof, evidence_dir: Path, client: MetaClient, diff_text:
 
 
 def review_pull_request(
-    label: str, base_sha: str, head_sha: str, intent: str, client: MetaClient, diff_text: str, out: Path
+    label: str, base_sha: str, head_sha: str, intent: str, client: MetaClient, diff_text: str, out: Path,
+    level: str = "low",
 ) -> PonytailReport:
     """The review of a pull request's diff, with no run needed, written to `out`."""
-    review, shown = review_text(intent, client, diff_text)
-    report = _report(review, shown, client, label, base_sha, head_sha)
+    review, shown = review_text(intent, client, diff_text, level)
+    report = _report(review, shown, client, label, base_sha, head_sha, level)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report.model_dump(mode="json"), indent=2), encoding="utf-8")
     return report

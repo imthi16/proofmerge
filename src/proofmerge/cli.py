@@ -508,22 +508,28 @@ def ponytail_diff(
     out: Annotated[Path, typer.Option(help="Where to write the review (JSON)")],
     intent_file: Annotated[Path | None, typer.Option(help="The pull request description")] = None,
     label: Annotated[str, typer.Option(help="Name recorded in the review")] = "diff",
+    level: Annotated[str, typer.Option(help="low: over-engineering; medium: and small bugs; high: and risky code")] = "low",
 ) -> None:
     """Review base..head for over-engineering: what to delete, what replaces it. No run needed.
 
     Reads the diff only and never runs code. This is what the Pull requests page runs."""
-    from proofmerge.ponytail import review_pull_request
+    from proofmerge.ponytail import LEVELS, review_pull_request
 
+    if level not in LEVELS:
+        typer.echo(f"ponytail failed: level must be one of {', '.join(LEVELS)}", err=True)
+        raise typer.Exit(1)
     try:
         context = get_context(repo, base, head)
         intent = intent_file.read_text(encoding="utf-8") if intent_file else ""
         report = review_pull_request(label, context.base_sha, context.head_sha, intent, MetaClient(max_calls=1),
-                                     context.diff_text, out)
+                                     context.diff_text, out, level)
     except (OSError, ValueError, ContextError, MetaError) as error:
         typer.echo(f"ponytail failed: {error}", err=True)
         raise typer.Exit(1) from None
     for finding in report.findings:
         typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    for bug in report.bugs:
+        typer.echo(f"{bug.location}: possible bug ({bug.tag}): {bug.what} {bug.fix}")
     typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
     typer.echo(f"written: {out}")
 
@@ -532,22 +538,28 @@ def ponytail_diff(
 def ponytail(
     proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
     repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    level: Annotated[str, typer.Option(help="low: over-engineering; medium: and small bugs; high: and risky code")] = "low",
 ) -> None:
     """Review the run's diff for over-engineering: what to delete, what replaces it.
 
     Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
-    from proofmerge.ponytail import ponytail_dir, review_diff
+    from proofmerge.ponytail import LEVELS, ponytail_dir, review_diff
 
+    if level not in LEVELS:
+        typer.echo(f"ponytail failed: level must be one of {', '.join(LEVELS)}", err=True)
+        raise typer.Exit(1)
     try:
         proof = Proof.model_validate_json(proof_json.read_text())
         _checked_commits(proof, repo)
         context = get_context(repo, proof.base_sha, proof.head_sha)
-        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text)
+        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text, level)
     except (OSError, ValueError, ContextError, MetaError) as error:
         typer.echo(f"ponytail failed: {error}", err=True)
         raise typer.Exit(1) from None
     for finding in report.findings:
         typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    for bug in report.bugs:
+        typer.echo(f"{bug.location}: possible bug ({bug.tag}): {bug.what} {bug.fix}")
     typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
     typer.echo(f"written: {ponytail_dir(proof_json.parent) / 'ponytail.json'}")
 

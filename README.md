@@ -412,15 +412,19 @@ like any other plugin:
 |---|---|
 | **Claude Code** | `/plugin marketplace add imthi16/proofmerge`, then `/plugin install proofmerge@proofmerge` |
 | **Codex CLI** | `codex plugin marketplace add imthi16/proofmerge`, then `codex plugin add proofmerge@proofmerge` |
+| **Muse Code** | `muse plugins marketplace add proofmerge https://github.com/imthi16/proofmerge`, then `muse plugins install proofmerge@proofmerge` |
+| **Grok CLI** | `grok plugin install https://github.com/imthi16/proofmerge --trust` |
+| **Gemini CLI** | `gemini skills install https://github.com/imthi16/proofmerge --path skills/proofmerge` |
+| **OpenCode, Cursor** | the copy below; both read skills from `~/.agents/skills/` |
 | **Any agent that reads Agent Skills** | copy [`skills/proofmerge`](skills/proofmerge) into that agent's skills folder |
 
-For a plain copy without a clone, for example into Claude Code's personal
-skills:
+For a plain copy without a clone, into `~/.agents/skills/` (OpenCode and
+Cursor; for Claude Code's personal skills use `~/.claude/skills/` instead):
 
 ```bash
-mkdir -p ~/.claude/skills/proofmerge
+mkdir -p ~/.agents/skills/proofmerge
 curl -fsSL https://raw.githubusercontent.com/imthi16/proofmerge/main/skills/proofmerge/SKILL.md \
-  -o ~/.claude/skills/proofmerge/SKILL.md
+  -o ~/.agents/skills/proofmerge/SKILL.md
 ```
 
 The skill needs `proofmerge` installed and `MODEL_API_KEY` set in the agent's
@@ -648,7 +652,7 @@ docker/runner/   the image probes run in (Python + pytest only)
 demo/            the demo shop, its three PRs and hand-written ground truth
 bench/           28 benchmark PRs, ground truth, runner and results
 action.yml       the GitHub Action
-skills/          the Agent Skill; .claude-plugin/, .codex-plugin/ and .agents/plugins/ make this repo a plugin marketplace for Claude Code and Codex
+skills/          the Agent Skill; .claude-plugin/, .codex-plugin/ and .agents/plugins/ make this repo a plugin marketplace for Claude Code, Codex and Muse Code; Grok and Gemini CLI install it from the repo URL
 docs/            spec, plan, Meta API notes, model backends, prior art, Action guide
 BUILDLOG.md      what was actually built, and when
 ORIGINALITY.md   what counts as new work for this hackathon

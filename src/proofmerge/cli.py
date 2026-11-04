@@ -459,26 +459,109 @@ def approve(
     typer.echo(f"approved {name}#{pr}: review {url}")
 
 
-@app.command()
-def ponytail(
-    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
-    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+@app.command("ponytail-post")
+def ponytail_post(
+    report_file: Annotated[Path, typer.Argument(help="A review written by ponytail-diff")],
+    pr: Annotated[int, typer.Option(help="Pull request number")],
+    repo: Annotated[Path, typer.Option(help="Git repository the review came from")],
+    dry_run: Annotated[bool, typer.Option(help="Print the review instead of posting it")] = False,
 ) -> None:
-    """Review the run's diff for over-engineering: what to delete, what replaces it.
-
-    Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
-    from proofmerge.ponytail import ponytail_dir, review_diff
+    """Post a Ponytail review to the pull request as one GitHub review comment (never an approval)."""
+    from proofmerge.ponytail import load_report_file
+    from proofmerge.pr_review import ReviewError, build_ponytail_review, post_review
 
     try:
-        proof = Proof.model_validate_json(proof_json.read_text())
-        _checked_commits(proof, repo)
-        context = get_context(repo, proof.base_sha, proof.head_sha)
-        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text)
+        report = load_report_file(report_file)
+        if report is None:
+            raise ReviewError("That review could not be read.")
+        if report.posted_url:
+            raise ReviewError("These findings were already posted. Review the pull request again to post new ones.")
+        name = subprocess.run(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
+        view = subprocess.run(["gh", "pr", "view", str(pr), "--repo", name, "--json", "state,headRefOid"],
+                              cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        diff = subprocess.run(["gh", "pr", "diff", str(pr), "--repo", name], cwd=repo,
+                              capture_output=True, text=True, timeout=60, check=False)
+        if not name or view.returncode or diff.returncode:
+            raise ReviewError("Could not read the pull request from GitHub. Check that gh is signed in.")
+        current = json.loads(view.stdout)
+        if current["state"] != "OPEN":
+            raise ReviewError(f"PR #{pr} is {current['state'].lower()}, so there is nothing to comment on.")
+        if current["headRefOid"] != report.head_sha:
+            raise ReviewError(f"PR #{pr} changed since this review (head {current['headRefOid'][:7]}, "
+                              f"reviewed {report.head_sha[:7]}). Review it again first.")
+        review = build_ponytail_review(report, diff.stdout)
+        if dry_run:
+            typer.echo(json.dumps(review, indent=2))
+            return
+        url = post_review(name, pr, review)
+        report_file.write_text(report.model_copy(update={"posted_url": url}).model_dump_json(indent=2), encoding="utf-8")
+    except (OSError, ValueError, KeyError, ReviewError, subprocess.TimeoutExpired) as error:
+        typer.echo(f"post failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"posted to {name}#{pr}: {len(review.get('comments', []))} comment(s) on lines, review {url}")
+
+
+@app.command("ponytail-diff")
+def ponytail_diff(
+    repo: Annotated[Path, typer.Argument(help="Git repository")],
+    base: Annotated[str, typer.Option(help="Base ref or SHA")],
+    head: Annotated[str, typer.Option(help="Head ref or SHA")],
+    out: Annotated[Path, typer.Option(help="Where to write the review (JSON)")],
+    intent_file: Annotated[Path | None, typer.Option(help="The pull request description")] = None,
+    label: Annotated[str, typer.Option(help="Name recorded in the review")] = "diff",
+    level: Annotated[str, typer.Option(help="low: over-engineering; medium: and small bugs; high: and risky code")] = "low",
+) -> None:
+    """Review base..head for over-engineering: what to delete, what replaces it. No run needed.
+
+    Reads the diff only and never runs code. This is what the Pull requests page runs."""
+    from proofmerge.ponytail import LEVELS, review_pull_request
+
+    if level not in LEVELS:
+        typer.echo(f"ponytail failed: level must be one of {', '.join(LEVELS)}", err=True)
+        raise typer.Exit(1)
+    try:
+        context = get_context(repo, base, head)
+        intent = intent_file.read_text(encoding="utf-8") if intent_file else ""
+        report = review_pull_request(label, context.base_sha, context.head_sha, intent, MetaClient(max_calls=1),
+                                     context.diff_text, out, level)
     except (OSError, ValueError, ContextError, MetaError) as error:
         typer.echo(f"ponytail failed: {error}", err=True)
         raise typer.Exit(1) from None
     for finding in report.findings:
         typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    for bug in report.bugs:
+        typer.echo(f"{bug.location}: possible bug ({bug.tag}): {bug.what} {bug.fix}")
+    typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
+    typer.echo(f"written: {out}")
+
+
+@app.command()
+def ponytail(
+    proof_json: Annotated[Path, typer.Argument(help="Path to a proof.json file")],
+    repo: Annotated[Path, typer.Option(help="Git repository the run checked")],
+    level: Annotated[str, typer.Option(help="low: over-engineering; medium: and small bugs; high: and risky code")] = "low",
+) -> None:
+    """Review the run's diff for over-engineering: what to delete, what replaces it.
+
+    Reads the diff only and never changes the verdict. Writes <evidence dir>.ponytail/ponytail.json."""
+    from proofmerge.ponytail import LEVELS, ponytail_dir, review_diff
+
+    if level not in LEVELS:
+        typer.echo(f"ponytail failed: level must be one of {', '.join(LEVELS)}", err=True)
+        raise typer.Exit(1)
+    try:
+        proof = Proof.model_validate_json(proof_json.read_text())
+        _checked_commits(proof, repo)
+        context = get_context(repo, proof.base_sha, proof.head_sha)
+        report = review_diff(proof, proof_json.parent, MetaClient(max_calls=1), context.diff_text, level)
+    except (OSError, ValueError, ContextError, MetaError) as error:
+        typer.echo(f"ponytail failed: {error}", err=True)
+        raise typer.Exit(1) from None
+    for finding in report.findings:
+        typer.echo(f"{finding.location}: {finding.tag}: {finding.what} {finding.replacement}")
+    for bug in report.bugs:
+        typer.echo(f"{bug.location}: possible bug ({bug.tag}): {bug.what} {bug.fix}")
     typer.echo(f"net: -{report.net_lines} lines possible." if report.findings else "Lean already. Ship.")
     typer.echo(f"written: {ponytail_dir(proof_json.parent) / 'ponytail.json'}")
 

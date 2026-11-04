@@ -96,10 +96,12 @@ are `proofmerge fix <proof.json> --repo <repo>` and
 `proofmerge post <proof.json> --pr <n> --repo <repo> --mode inline|overall`
 (`--dry-run` prints the review instead of posting it).
 
-Any run also has a **Ponytail review** button (`proofmerge ponytail <proof.json> --repo <repo>`). One model call
-reads the pull request's diff and lists what could be deleted or shortened, in the form `location: tag: what.
-replacement`, using the rules of the [ponytail-review](https://github.com/DietrichGebert/ponytail) skill (MIT). It
-looks at over-engineering only, never runs code and never changes the verdict.
+Every open pull request on the Pull requests page has a **Ponytail review** button; it needs no verify run and no
+sandbox. One model call reads the pull request's diff and lists what could be deleted or shortened, in the form
+`location: tag: what. replacement`, using the rules of the [ponytail-review](https://github.com/DietrichGebert/ponytail)
+skill (MIT). It looks at over-engineering only, never runs code and never changes a verdict. From a terminal:
+`proofmerge ponytail-diff <repo> --base <ref> --head <ref> --out <file>`, or `proofmerge ponytail <proof.json> --repo
+<repo>` for a finished run.
 
 A **PASS** run shows **Approve PR #n** instead. After you confirm, ProofMerge approves the pull request as your
 GitHub account, but only on the commit it checked: if the PR has new commits, nothing is posted. From a terminal:
@@ -553,7 +555,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Suggested fix for a BLOCK, checked by re-running its probe (`proofmerge fix`) | Built and tested; real run on the demo shop's PR #1 with the Claude backend: both verified regressions got a fix that passes its probe 3/3 on base and on the fixed head |
 | Posting a run to its PR, inline suggestions or one comment (`proofmerge post`) | Built and tested; the inline review for PR #1 was built against GitHub's own PR diff with `--dry-run` and has not been posted |
 | Approving a PASS run on its PR (`proofmerge approve`, **Approve PR #n** in the app) | Built and tested offline: it refuses a run whose evidence changed or whose PASS does not follow from it, a PR that is not open, and a PR whose head or base moved since the run. It has never posted a real review |
-| Ponytail review, an over-engineering pass over a run's diff (`proofmerge ponytail`, **Ponytail review** in the app) | Built and tested offline; one real call with the Claude Code backend on a real diff returned four findings. The rules adapt the ponytail-review skill (MIT), credited in `ORIGINALITY.md`. It never changes the verdict |
+| Ponytail review, an over-engineering pass over a pull request's diff (**Ponytail review** on the app's Pull requests page, `proofmerge ponytail-diff`; `proofmerge ponytail` for a finished run) | Built and tested offline; one real call with the Claude Code backend on a real diff returned four findings. The rules adapt the ponytail-review skill (MIT), credited in `ORIGINALITY.md`. It never changes the verdict |
 | Muse Wonder cross-check of claims and probes | Built and tested |
 | Plain-code verdict, `report.html`, `proof.json`, hashed manifest, `replay` | Built and tested |
 | `replay` recomputes findings and the verdict from the recorded evidence (proofs from T56 on) | Built and tested; an edited and resealed verdict or outcome fails; older proofs get a notice |

@@ -508,3 +508,23 @@ def test_the_ponytail_block_can_post_its_findings_after_a_confirm_that_names_the
     dialog = js.split("function ConfirmPonyPost(", 1)[1].split("\n  function ", 1)[0]
     assert "<${ActingAs}" in dialog and "never approves or requests changes" in dialog
     assert "/api/ponytail/post" in js and "useGitHub()" in js.split("function PullsView(", 1)[1].split("if (error && !data)", 1)[0]
+
+
+def test_a_pr_run_carries_the_ponytail_review_of_its_own_commit(tmp_path) -> None:
+    from proofmerge.dashboard import _pony_of_run
+    from proofmerge.ponytail import PonytailFinding, PonytailReport
+
+    finding = PonytailFinding(location="a.py:L1-3", tag="shrink", what="w", replacement="r")
+    review = PonytailReport(findings=[finding, finding], net_lines=12, run_id="pr-7", base_sha="b", head_sha="abcdef0123")
+    (tmp_path / "ponytail").mkdir()
+    (tmp_path / "ponytail" / "pr-7-abcdef0.json").write_text(review.model_dump_json())
+    assert _pony_of_run(tmp_path, "pr-7-abcdef0-1793719841") == {"pr": 7, "findings": 2, "net_lines": 12}
+    assert _pony_of_run(tmp_path, "owner/repo/pr-7-abcdef0-1793719841")["pr"] == 7  # ids can be nested
+    assert _pony_of_run(tmp_path, "pr-7-1234567-1793719841") is None  # a different commit
+    assert _pony_of_run(tmp_path, "tenant-cache-take2") is None  # not started from a pull request
+
+
+def test_the_runs_page_tags_runs_that_have_a_ponytail_review_and_links_to_it() -> None:
+    js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
+    assert 'class="pony-tag"' in js and "See it on PR #" in js
+    assert 'ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })' in js

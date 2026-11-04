@@ -17,6 +17,7 @@ a path. All evidence text is untrusted and is rendered as text by the page.
 
 import json
 import mimetypes
+import re
 import secrets
 import subprocess
 import threading
@@ -37,6 +38,7 @@ from proofmerge.evidence import Proof
 from proofmerge.fixes import load_report
 from proofmerge.manifest import verify_manifest
 from proofmerge.ponytail import load_report as load_ponytail
+from proofmerge.ponytail import load_report_file
 from proofmerge.rederive import rederive
 from proofmerge.report import MAX_FAILURE_LINES, _read_evidence
 
@@ -166,6 +168,21 @@ def _disagrees(decision: str | None, benchmark: dict[str, Any] | None) -> bool:
     if not benchmark or not decision:
         return False
     return decision != "BLOCK" if benchmark["label"] == "BLOCK" else decision == "BLOCK"
+
+
+PR_RUN = re.compile(r"^pr-(\d+)-([0-9a-f]{7})-\d+$")
+
+
+def _pony_of_run(root: Path, run_id: str) -> dict[str, Any] | None:
+    """The saved Ponytail review of the pull request this run checked, at the same commit.
+
+    Runs started from the Pull requests page are named pr-<number>-<sha>-<time>; the review sits
+    in <runs>/ponytail/pr-<number>-<sha>.json. Other runs have none."""
+    match = PR_RUN.match(run_id.rsplit("/", 1)[-1])
+    report = match and load_report_file(root / "ponytail" / f"pr-{match[1]}-{match[2]}.json")
+    if not report:
+        return None
+    return {"pr": int(match[1]), "findings": len(report.findings), "net_lines": report.net_lines}
 
 
 def _summary(run_id: str, run_dir: Path) -> dict[str, Any]:
@@ -379,7 +396,7 @@ class _Handler(BaseHTTPRequestHandler):
                                 "ponytail_post_job": self.prs.pony_post})
         elif url.path == "/api/index":
             runs = scan(self.root)
-            self._json({"root": self.root.name, "runs": [_summary(k, v) for k, v in runs.items()],
+            self._json({"root": self.root.name, "runs": [_summary(k, v) | {"ponytail": _pony_of_run(self.root, k)} for k, v in runs.items()],
                         "benchmarks": _benchmarks(self.root)})
         elif url.path in ("/api/run", "/report"):
             run_dir = scan(self.root).get(query.get("id", [""])[0])
@@ -389,7 +406,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._report(run_dir)
             else:
                 try:
-                    self._json(_detail(query["id"][0], run_dir))
+                    detail = _detail(query["id"][0], run_dir)
+                    detail["summary"]["ponytail"] = _pony_of_run(self.root, query["id"][0])
+                    self._json(detail)
                 except (OSError, ValueError):
                     self._json({"error": "proof.json could not be read"}, HTTPStatus.UNPROCESSABLE_ENTITY)
         else:

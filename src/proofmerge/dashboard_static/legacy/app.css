@@ -716,6 +716,7 @@ pre.diff .hunk { color: var(--brand); }
 .pony-chip { display: flex; align-items: center; gap: .4rem; margin-top: .35rem; font-size: .78rem; color: var(--muted); }
 .pony-chip .spinner.small { margin-left: 0; }
 .pony-chip.done { color: var(--fg); }
+.pony-tag { color: var(--fg); font-weight: 500; }
 .ponytail { margin-top: 1rem; padding: .95rem 1.05rem 1rem; border: 1px solid var(--rule); border-radius: var(--r-md); }
 .ponytail .pony-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .75rem; }
 .ponytail .pony-head h4 { margin: 0; font-size: .95rem; }

@@ -827,3 +827,10 @@ release-stock-guard                  NOT_BLOCK  FAIL       PASS
 - The Ponytail findings could be read but not acted on. The block now has **Post N findings to the PR** (with "as @account"), then a confirm dialog that names the account (**Acting as @account**, **Use another account**) and says it is a comment only. `proofmerge ponytail-post <review.json> --pr N --repo R [--dry-run]` builds one GitHub review (event COMMENT): each finding becomes a comment on its lines (a range when the whole range is in the PR's diff, else the last line of it that is), and findings outside the diff go in the review summary. Model text has `@` defused so nobody is pinged. It refuses a closed PR, a PR whose head moved since the review, and a review with no findings. After a post the review file records `posted_url`, the block shows "Posted to the pull request" with the link instead of the button, and **Review again** starts clean, so one review cannot be posted twice. Route `/api/ponytail/post`, its own job state; account switching is refused while it runs.
 - Checked: `ponytail-post --dry-run` on the real saved review of the author's PR #75 with the real `gh` built two line comments (ranges 26-77 and 48-77) and a summary; in real Chrome the button read "Post 2 findings to the PR as @mdimthi", the dialog named the account, and a faked failing request showed the failure alert, no page errors.
 - Not checked: a real post to GitHub (nothing was posted in any test), how GitHub shows the comments, and the Control Center (`/`).
+
+## T93: Ponytail on the Runs page
+
+A run started from the Pull requests page now shows the Ponytail review of its own commit: a
+"Ponytail: N" (or "lean") tag in the Runs list and a fact row in the run's detail that links to the
+pull request. The findings stay on the Pull requests page, so they are not shown twice. The backend
+matches `pr-<number>-<sha>-<time>` runs to `<runs>/ponytail/pr-<number>-<sha>.json`.

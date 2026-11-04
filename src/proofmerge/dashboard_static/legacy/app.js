@@ -170,6 +170,7 @@
                 <div class="run-name">${run.id}</div>
                 <div class="run-sub">
                   ${run.integrity ? html`<${Seal} integrity=${run.integrity} />` : null}
+                  ${run.ponytail ? html`, <span class="pony-tag" title=${ponyTitle(run.ponytail)}>Ponytail: ${run.ponytail.findings || "lean"}</span>` : null}
                   ${run.benchmark ? html`, label ${run.benchmark.label}${run.benchmark.held_out ? ", held out" : ""}${disagrees(run)
                     ? html`, <span class="disagree">disagrees</span>` : null}` : null}
                   ${run.error ? run.error : null}
@@ -298,6 +299,8 @@
             ? html`<span class="muted">${summary.integrity.problems.length} problem(s)</span>` : null}</dd>
         <dt>base</dt><dd><code>${short(proof.base_sha)}</code><${Copy} text=${proof.base_sha} label="base SHA" /></dd>
         <dt>head</dt><dd><code>${short(proof.head_sha)}</code><${Copy} text=${proof.head_sha} label="head SHA" /></dd>
+        ${summary.ponytail ? html`<dt>ponytail</dt><dd>${ponyTitle(summary.ponytail)}.
+          <button class="link" type="button" onClick=${() => ctx.go({ tab: "prs", pr: String(summary.ponytail.pr) })}>See it on PR #${summary.ponytail.pr}</button></dd>` : null}
         <dt>model calls</dt><dd>${usage.calls} calls, ${usage.prompt_tokens + usage.completion_tokens} tokens</dd>
         <dt>models</dt><dd>${models}${usage.endpoint ? html` via <code>${usage.endpoint}</code>` : null}</dd>
         ${summary.benchmark ? html`<dt>label</dt><dd>${summary.benchmark.label}${summary.benchmark.held_out ? ", held out" : ""}
@@ -1013,6 +1016,11 @@
       <span class="muted">${Math.max(0, Math.round(now - (job.created || now)))} s</span>
     </section>`;
   }
+
+  // One line for a saved Ponytail review: what the Runs list and a run's facts say about it.
+  const ponyTitle = ({ findings, net_lines }) => findings
+    ? `${findings} Ponytail finding${findings === 1 ? "" : "s"}${net_lines ? `, about ${net_lines} line${net_lines === 1 ? "" : "s"} could go` : ""}`
+    : "Ponytail found nothing to cut";
 
   // The list's view of a pull request's Ponytail review.
   function PonyChip({ pr, pony }) {

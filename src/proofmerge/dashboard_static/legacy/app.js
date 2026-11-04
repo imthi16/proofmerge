@@ -636,8 +636,8 @@
     const [ponyGone, setPonyGone] = useState(0);
     const [postGone, setPostGone] = useState(0);
     const [postAsk, setPostAsk] = useState(false);
-    const [level, setLevel] = useState(() => PONY_LEVELS.some((l) => l.id === store.get("pm-pony-level", "low")) ? store.get("pm-pony-level", "low") : "low");
-    const pickLevel = (id) => { setLevel(id); store.set("pm-pony-level", id); };
+    const [lastLevel, setLastLevel] = useState(() => PONY_LEVELS.some((l) => l.id === store.get("pm-pony-level", "low")) ? store.get("pm-pony-level", "low") : "low");
+    const [pickFor, setPickFor] = useState(0);  // the pull request whose Ponytail level is being chosen
     const { gh } = useGitHub();  // read with the other hooks: who the post would be made as
     const goSetup = () => { location.hash = "tab=setup"; };
     useEffect(() => {
@@ -674,8 +674,11 @@
         .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
         .then(() => load(false)).catch((e) => setPosting(e.message));
     };
-    const startPony = () => {
+    const startPony = (level) => {
       setPosting("");
+      setPickFor(0);
+      setLastLevel(level);
+      store.set("pm-pony-level", level);
       fetch("/api/ponytail", { method: "POST", headers: { "Content-Type": "application/json", "X-ProofMerge-Token": token },
         body: JSON.stringify({ number: pr.number, level }) })
         .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); })
@@ -721,12 +724,13 @@
             <button class="primary" type="button" disabled=${running || pr.state !== "OPEN"} onClick=${() => setAsking(true)}
               title=${pr.state !== "OPEN" ? "Only open pull requests can be verified" : undefined}>
               ${running ? `Verifying PR #${job.number}…` : "Verify this PR"}</button>
-            <button class="ghost" type="button" disabled=${ponyRunning || pr.state !== "OPEN"} onClick=${startPony}
-              title="One model call reads the diff and lists what could be deleted or shortened. No sandbox, and no verdict.">
+            <button class="ghost" type="button" disabled=${ponyRunning || pr.state !== "OPEN"}
+              aria-expanded=${pickFor === pr.number} aria-controls="pony-picker" onClick=${() => setPickFor(pickFor === pr.number ? 0 : pr.number)}
+              title="One model call reads the diff. You choose how closely it looks. No sandbox, and no verdict.">
               <${Icon} name="spark" />${ponyOnThis ? "Reviewing…" : pr.ponytail ? "Review again" : "Ponytail review"}</button>
             <a class="ghost" href=${pr.url} target="_blank" rel="noopener noreferrer">Open on GitHub</a>
           </div>
-          ${pr.state === "OPEN" ? html`<${PonyLevel} level=${level} onPick=${pickLevel} disabled=${ponyRunning} />` : null}
+          ${pickFor === pr.number && !ponyRunning ? html`<${PonyPicker} last=${lastLevel} onPick=${startPony} onClose=${() => setPickFor(0)} />` : null}
           ${ponyOnThis ? html`<${PonyProgress} job=${pony} />` : null}
           ${pony?.status === "failed" && pony.number === pr.number && pony.error && ponyGone !== pony.created
             ? html`<${Alert} message=${"The Ponytail review did not finish. " + pony.error} seconds=${60} onClose=${() => setPonyGone(pony.created)} style=${{ marginTop: ".75rem" }} />` : null}
@@ -1021,17 +1025,25 @@
 
   const PONY_LEVELS = [
     { id: "low", name: "Low", hint: "Over-engineering only: what to delete or shorten." },
-    { id: "medium", name: "Medium", hint: "Over-engineering, and small bugs on the lines the PR adds." },
+    { id: "medium", name: "Medium", hint: "Also small bugs on the lines the pull request adds." },
     { id: "high", name: "High", hint: "Also risky code: security, data loss and races." },
   ];
-  // How hard Ponytail looks. The bugs are read from the diff, so a higher level can be wrong more often.
-  function PonyLevel({ level, onPick, disabled }) {
-    const now = PONY_LEVELS.find((l) => l.id === level) || PONY_LEVELS[0];
-    return html`<div class="pony-level" role="radiogroup" aria-label="Ponytail level">
-      <span class="pony-level-name">Ponytail level</span>
-      <span class="pony-lv-group">${PONY_LEVELS.map((l) => html`<button key=${l.id} type="button" role="radio" class="pony-lv"
-        aria-checked=${l.id === level} disabled=${disabled} onClick=${() => onPick(l.id)}>${l.name}</button>`)}</span>
-      <span class="muted pony-level-hint">${now.hint}</span>
+  // Opens from the Ponytail button: choosing a level starts the review at once. Escape or the button closes it.
+  function PonyPicker({ last, onPick, onClose }) {
+    const first = useRef(null);
+    useEffect(() => {
+      first.current?.focus();
+      const onKey = (event) => { if (event.key === "Escape") onClose(); };
+      addEventListener("keydown", onKey);
+      return () => removeEventListener("keydown", onKey);
+    }, []);
+    return html`<div class="pony-picker" id="pony-picker" role="group" aria-labelledby="pony-picker-title">
+      <p class="pony-picker-title" id="pony-picker-title">How closely should Ponytail look?</p>
+      <ul>${PONY_LEVELS.map((l) => html`<li key=${l.id}><button type="button" class="pony-opt" ref=${l.id === last ? first : null}
+        onClick=${() => onPick(l.id)}>
+        <span class="pony-opt-name">${l.name}${l.id === last ? html`<span class="pony-opt-last">last used</span>` : null}</span>
+        <span class="pony-opt-hint">${l.hint}</span></button></li>`)}</ul>
+      <p class="pony-picker-note">Bugs are read from the diff and no test is run, so check each one.</p>
     </div>`;
   }
 

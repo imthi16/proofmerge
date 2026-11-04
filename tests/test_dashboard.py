@@ -543,7 +543,8 @@ def test_the_ponytail_level_reaches_the_review_and_a_bad_level_is_refused(pr_ser
 
 def test_the_pull_requests_page_has_a_ponytail_level_and_a_separate_list_of_possible_bugs() -> None:
     js = (Path(__file__).parents[1] / "src/proofmerge/dashboard_static/legacy/app.js").read_text()
-    assert 'role="radiogroup" aria-label="Ponytail level"' in js and 'store.set("pm-pony-level"' in js
+    assert "<${PonyPicker}" in js and "How closely should Ponytail look?" in js and 'store.set("pm-pony-level"' in js
+    assert "<${PonyLevel}" not in js  # the choice opens from the Ponytail button; it is not always on the page
     assert "JSON.stringify({ number: pr.number, level })" in js
     assert "Possible bugs" in js and "No test was run, so check each one." in js
     assert "pr.ponytail.bugs?.length" in js  # the list chip and the post button count the bugs too

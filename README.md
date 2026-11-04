@@ -38,7 +38,7 @@ tests; Muse Wonder 1.0 checks Spark's work. [MIT licensed](LICENSE).
 
 ## Use it without a terminal
 
-<img alt="The ProofMerge app in the browser: the Runs page. On the left, three BLOCK runs and one REVIEW run, every one marked 'evidence intact', with the selected run's verdict, BLOCK, below the list. On the right, its evidence: hypothesis H1, 'Cached SKU bypasses unknown-tenant check', whose probe passed on base 9dcc104 in all three attempts and failed on head 32dff53 in all three." src="docs/assets/app-runs.png" width="100%">
+<img alt="The ProofMerge app in the browser: the Runs page. Filter chips BLOCK 2 and REVIEW 1, a search box, and three runs, each marked 'evidence intact': pr-1-4812082 (BLOCK, 2 regressions), test-tamper (BLOCK) and intended-change (REVIEW). Below, the selected run's verdict: BLOCK, 'Verified regression — do not merge', with its reasons." src="docs/assets/app-runs.png" width="100%">
 
 `proofmerge app` opens ProofMerge in your browser and does everything the
 command line does. It was built for people who never open a terminal:
@@ -83,6 +83,16 @@ standard as the regression:
 - The fix never changes the verdict, and it is saved beside the sealed evidence
   (`<run>.fix/`), so `replay` still checks the run as it was.
 
+<img alt="A BLOCK run of pull request #1 in the app, under its actions: Suggest the fix again, Post to PR #1 as @imthi16, Push the fix to PR #1 as @imthi16, Verify PR #1 again, and '1 of 1 fix verified'. Below, Suggested fixes: H1, 'Cached SKU bypasses unknown-tenant check', marked Fix verified: the probe passes on base (PPP) and on the fixed head (PPP), with the model's explanation and the diff to src/demo_shop/pricing.py." src="docs/assets/app-fix.png" width="100%">
+
+**Push the fix to PR #n** puts the verified fixes on your own pull request's
+branch as one commit, after you confirm. It never force-pushes, and it only
+pushes when the pull request is open, still at the commit the run checked, not
+from a fork, and opened by the GitHub account you are signed in as. For anyone
+else's pull request, post the fix instead. Each fix was checked on its own, so
+press **Verify PR #n again** after the push; that checks the pull request's new
+head. From a terminal: `proofmerge push-fix <proof.json> --pr <n> --repo <repo> [--dry-run]`.
+
 For a run started from **Pull requests**, **Post to PR** posts one review
 comment as your GitHub account, after you confirm. Choose where it goes:
 
@@ -110,22 +120,18 @@ tested scope; it does not prove the change correct.
 
 ### Walkthrough video
 
-<a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, PR #12 'Cache SKU prices per tenant' is verified; ProofMerge asks before it runs, shows progress, then the run page shows BLOCK, 'Verified regression — do not merge'." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
+<a href="docs/assets/walkthrough.mp4"><img alt="Animated preview: on the Pull requests page, Verify PR #1 is confirmed in a dialog, the PR shows RUNNING while Muse Spark's probes run in the sandbox (sped up), then the PR's ProofMerge column turns BLOCK." src="docs/assets/walkthrough-preview.gif" width="100%"></a>
 
-[Watch the full walkthrough](docs/assets/walkthrough.mp4) (4 min 20 s, no
-sound, captions on screen). It was recorded before the app's 2026-11-03 visual
-refresh, so the colours and the Home layout differ from the screenshots above. It covers every use case in order: setup, GitHub
-sign-in, picking a repository, verifying a pull request, the evidence and the
-report, checking a local branch, runs and benchmarks, then the terminal
-(`verify`, `replay`) and the Agent Skill.
+[Watch the full walkthrough](docs/assets/walkthrough.mp4) (1 min 26 s, no
+sound, captions on screen), recorded on 2026-11-04 in the current app: Setup, the
+pull requests of [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr),
+**Verify this PR** on PR #1, the BLOCK verdict and its report, **Suggest a fix**,
+and the **Push the fix** confirm (cancelled, nothing was pushed).
 
-> [!NOTE]
-> The walkthrough uses a simulated outside world, so it shows no real account or
-> key: the GitHub account, its repositories and pull requests, and the progress of
-> each check are faked, and no model is called. The verdicts, reports and evidence
-> are the real recorded demo run in `demo/runs/2026-10-29`, and the terminal
-> output is real. For real runs on GitHub, see the three pull requests in
-> [proofmerge-demo-shop](https://github.com/imthi16/proofmerge-demo-shop/pulls?q=is%3Apr).
+> Nothing in it is simulated: a real GitHub account and repository, real Muse
+> Spark and Muse Wonder calls (the verify made 7, BLOCK; the fix verified both
+> regressions) and real sandbox runs. The two waits, for the verify and for the
+> fix, are sped up 12x and 6x and say so on screen.
 
 ## What a run looks like
 
@@ -561,6 +567,7 @@ python3 demo/check_demo.py           # compares the demo branches with the hand-
 | Test-tamper guard: original tests run on the patch | Built and tested |
 | Suggested fix for a BLOCK, checked by re-running its probe (`proofmerge fix`) | Built and tested; real run on the demo shop's PR #1 with the Claude backend: both verified regressions got a fix that passes its probe 3/3 on base and on the fixed head |
 | Posting a run to its PR, inline suggestions or one comment (`proofmerge post`) | Built and tested; the inline review for PR #1 was built against GitHub's own PR diff with `--dry-run` and has not been posted |
+| Pushing verified fixes to your own PR (`proofmerge push-fix`, **Push the fix to PR #n** in the app) | Built and tested offline: one non-forced commit on the checked head; refuses another author's PR, a fork, a moved head and a closed PR. The button and its confirm were checked in Chrome; a real push to GitHub was not run |
 | Approving a PASS run on its PR (`proofmerge approve`, **Approve PR #n** in the app) | Built and tested offline: it refuses a run whose evidence changed or whose PASS does not follow from it, a PR that is not open, and a PR whose head or base moved since the run. It has never posted a real review |
 | Ponytail review, an over-engineering pass over a pull request's diff (**Ponytail review** on the app's Pull requests page, `proofmerge ponytail-diff`; `proofmerge ponytail` for a finished run) | Built and tested offline; one real call with the Claude Code backend on a real diff returned four findings. The rules adapt the ponytail-review skill (MIT), credited in `ORIGINALITY.md`. It never changes the verdict |
 | Muse Wonder cross-check of claims and probes | Built and tested |

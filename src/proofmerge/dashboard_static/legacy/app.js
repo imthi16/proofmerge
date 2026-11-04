@@ -324,7 +324,7 @@
         ${prNumber ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project} onClick=${() => setPosting(true)}
           title="Posts the verdict and the suggested fix to the pull request, after you confirm"><${Icon} name="pull" />Post to PR #${prNumber}${account ? html`<span class="as-account">as @${account}</span>` : null}</button>` : null}
         ${prNumber && fix && fix.fixes.some((f) => f.verified) ? html`<button class="ghost" type="button" disabled=${ctx.busy || !ctx.settings.project}
-          onClick=${() => ctx.startPrVerify(prNumber)}
+          onClick=${() => ctx.startPrVerify(prNumber, id)}
           title=${ctx.settings.project ? "Verify the pull request again at its current head, after the fix is applied" : "Choose the project on Home first"}>
           <${Icon} name="refresh" />Verify the fixed commit</button>` : null}
         ${fix ? html`<span class="muted fix-note">${fix.fixes.filter((f) => f.verified).length} of ${fix.fixes.length} fix${fix.fixes.length === 1 ? "" : "es"} verified</span>` : null}
@@ -1528,8 +1528,8 @@
     useEffect(() => { if (!quitArmed) return; const t = setTimeout(() => setQuitArmed(false), 3000); return () => clearTimeout(t); }, [quitArmed]);
     const start = (body) => post("/api/jobs", body).then((d) => { setJob(d.job); setNotice(""); })
       .catch((e) => setNotice(e.message));
-    const startPrVerify = (number) => post("/api/verify", { number })
-      .then((d) => { setJob(d.job); setNotice(""); })
+    const startPrVerify = (number, run) => post("/api/verify", { number, run })
+      .then((d) => { setJob(d); setNotice(""); })
       .catch((e) => setNotice(e.message));
     const stop = () => post("/api/jobs/stop", {}).then((d) => setJob(d.job)).catch((e) => setNotice(e.message));
     const saveSettings = (body) => post("/api/settings", body).then((d) => {

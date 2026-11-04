@@ -33,7 +33,7 @@ from proofmerge.dashboard_events import sse_stream
 from proofmerge.dashboard_github import GitHub, GitHubError
 from proofmerge.dashboard_jobs import JobError, Jobs, branches, browse, git_project
 from proofmerge.dashboard_models import ApiError, VerificationRequest
-from proofmerge.dashboard_prs import PrError, PullRequests
+from proofmerge.dashboard_prs import PrError, PullRequests, Runner
 from proofmerge.evidence import Proof
 from proofmerge.fixes import load_report
 from proofmerge.manifest import verify_manifest
@@ -262,6 +262,24 @@ def _runs_by_head(runs: dict[str, Path]) -> dict[str, list[str]]:
     return by_head
 
 
+def _run_belongs_to_repo(run_id: str, repo: Path, root: Path, runner: Runner) -> bool:
+    """The run's proof commits must exist in the repository that would verify it."""
+    run_dir = root / run_id
+    try:
+        run_dir = run_dir.resolve()
+        if not run_dir.is_relative_to(root.resolve()):
+            return False
+        proof = Proof.model_validate_json((run_dir / "proof.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    for sha in (proof.base_sha, proof.head_sha):
+        done = runner(["git", "-C", str(repo), "cat-file", "-t", sha],
+                      capture_output=True, text=True, timeout=10, check=False)
+        if done.returncode != 0 or done.stdout.strip() != "commit":
+            return False
+    return True
+
+
 def _detail(run_id: str, run_dir: Path) -> dict[str, Any]:
     proof = CACHE.proof(run_dir / "proof.json")
     probes, failures, logs = {}, {}, {}
@@ -361,7 +379,10 @@ class _Handler(BaseHTTPRequestHandler):
                     project = git_project(query.get("project", [""])[0], self.runner)
                     self._json(branches(project, self.runner))
                 else:
-                    self._json({"job": self.jobs.progress()})
+                    if self.prs and self.prs.job and self.prs.job["status"] == "running":
+                        self._json({"job": self.prs.job})
+                    else:
+                        self._json({"job": self.jobs.progress()})
             except (JobError, GitHubError) as error:
                 self._json({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         elif url.path.startswith("/api/v1/"):
@@ -571,15 +592,19 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path in ("/api/verify", "/api/v1/verifications"):
             try:
-                number = VerificationRequest.model_validate(body).number
+                request = VerificationRequest.model_validate(body)
             except ValidationError:
                 self._json({"error": "send {\"number\": <PR number>}"}, HTTPStatus.BAD_REQUEST)
                 return
             if self.jobs.job and self.jobs.job["status"] == "running":
                 self._json({"error": "Another action is still running."}, HTTPStatus.CONFLICT)
                 return
+            if request.run and not _run_belongs_to_repo(request.run, self.prs.repo, self.root, self.runner):
+                self._json({"error": "That run does not belong to the selected project. Switch to the run's project first."},
+                           HTTPStatus.CONFLICT)
+                return
             try:
-                job = self.prs.start(number)
+                job = self.prs.start(request.number)
                 if path == "/api/verify":
                     self._json(job, HTTPStatus.ACCEPTED)
                 else:

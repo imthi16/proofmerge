@@ -555,3 +555,39 @@ def test_the_pull_request_detail_never_shows_a_pull_request_the_search_hides() -
     assert "const pr = prs.find((p) => p.number === Number(selected)) || prs[0];" in js  # prs is the filtered list
     assert "data.prs.find((p) => p.number === Number(selected))" not in js
     assert "The repository has none yet." in js and "once the search finds one." in js  # a search with no match is not an empty repository
+
+
+def test_bug_only_ponytail_report_can_be_posted(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    assert post_json(base, token, "/api/ponytail", {"number": 7})[0] == 202
+    wait_for(lambda: json.loads(fetch(base + "/api/prs")[2])["ponytail_job"]["status"] == "done")
+    # Replace the saved review with one that has only possible bugs.
+    pr = json.loads(fetch(base + "/api/prs")[2])["prs"][0]
+    path = next(Path(runner.pony_argv[runner.pony_argv.index("--out") + 1]).parent.glob("pr-7-*.json"))
+    path.write_text(json.dumps({
+        **pr["ponytail"],
+        "findings": [],
+        "bugs": [{"location": "shop.py:L3", "tag": "logic", "what": "Off by one.", "fix": "Use <=."}],
+    }))
+    assert post_json(base, token, "/api/ponytail/post", {"number": 7})[0] == 202
+
+
+def test_pr_verify_returns_job_directly_and_api_job_follows_it(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    runner.gate = threading.Event()
+    status, job = post_json(base, token, "/api/verify", {"number": 7})
+    assert status == 202 and job["status"] == "running" and job["number"] == 7
+    status, _, body = fetch(base + "/api/job", headers={"X-ProofMerge-Token": token})
+    assert status == 200 and json.loads(body)["job"]["number"] == 7
+    runner.gate.set()
+
+
+def test_pr_verify_rejects_a_run_from_a_different_project(pr_server) -> None:
+    base, runner, _ = pr_server
+    token = json.loads(fetch(base + "/api/session")[2])["token"]
+    # A demo run's commits are not in the test repository, so the request must be refused.
+    status, reply = post_json(base, token, "/api/verify", {"number": 7, "run": "tenant-cache-take2"})
+    assert status == 409 and "does not belong to the selected project" in reply["error"]
+    assert not any("fetch" in call for call in runner.calls)

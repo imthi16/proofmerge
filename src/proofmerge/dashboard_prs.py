@@ -226,7 +226,7 @@ class PullRequests:
         if pr["state"] != "OPEN":
             raise PrError(f"PR #{number} is {pr['state'].lower()}; only open pull requests can be commented on.")
         report = self.ponytail_report(pr)
-        if report is None or not report["findings"]:
+        if report is None or (not report["findings"] and not report.get("bugs")):
             raise PrError("Review the pull request first; there are no findings to post.")
         if report.get("posted_url"):
             raise PrError("These findings were already posted. Review the pull request again to post new ones.")

@@ -887,3 +887,11 @@ Not fixed: a changed test's outcome is recorded per test file, so a test that pa
 ### 2026-11-03 — T89 GitHub accounts as a list on Setup (Claude)
 - With two or more accounts the Setup row showed one name and a row of small buttons, so the accounts could not be told apart. It is now a list, one row per account, the active one first: a filled monogram, the `@login`, an **Active** chip and **Sign out**; every other account is quieter, with **Use this account**. **Add another account** stays at the top right and the note about `gh` in a terminal sits under the list. The buttons keep their routes (`/api/github/switch`, `logout`, `add`); no backend change.
 - Checked in real Chrome with the author's real `gh` (two accounts) on this branch's dashboard: light, dark and 390 px wide, no horizontal overflow and no page errors; at 390 px the account button drops under the name. Not checked: clicking Use this account or Sign out, which would change the account `gh` uses on this machine.
+
+## T100: the Claude plan backend on Windows
+
+A Windows tester chose **Claude plan** on Setup and **Test connection** said only `smoke failed: claude-cli exited with code 1`.
+
+- The CLI gets a minimal environment, and its list held only Unix names (`HOME`, `XDG_*`). On Windows Claude Code finds its login under `USERPROFILE`/`APPDATA` and Node needs `SYSTEMROOT` and `TEMP`, so the call ran signed out. The list now also passes `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `SYSTEMDRIVE`, `TEMP`, `TMP`, `PATHEXT`, `COMSPEC`, `HOMEDRIVE`, `HOMEPATH` and `USERNAME`; none is a secret.
+- A failing call now shows the CLI's own JSON `result` (up to 200 characters); stderr is still never shown. Checked for real on Linux with an empty `CLAUDE_CONFIG_DIR`: `claude-cli exited with code 1: Not logged in · Please run /login`.
+- Not checked: a run on Windows. The cause is read from the code and the symptom, not reproduced there.
